@@ -1,0 +1,22 @@
+{
+  "name": "ghostos",
+  "version": "1.0.0",
+  "description": "A reference LEAF graph parser implementation used by leafgon.com",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leafgon/ghostos.git"
+  },
+  "keywords": [
+    "LEAF"
+  ],
+  "author": "Sunny Park",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/leafgon/ghostos/issues"
+  },
+  "homepage": "https://github.com/leafgon/ghostos#readme"
+}
