@@ -1,0 +1,20 @@
+
+> reactflow@11.10.4 build
+> rollup --config node:@reactflow/rollup-config --environment NODE_ENV:production && npm run css
+
+[36m
+[1msrc/index.ts[22m → [1mdist/esm/index.js[22m...[39m
+[32mcreated [1mdist/esm/index.js[22m in [1m2s[22m[39m
+[36m
+[1msrc/index.ts[22m → [1mdist/esm/index.mjs[22m...[39m
+[32mcreated [1mdist/esm/index.mjs[22m in [1m1.3s[22m[39m
+[36m
+[1msrc/index.ts[22m → [1mdist/umd/index.js[22m...[39m
+[32mcreated [1mdist/umd/index.js[22m in [1m6s[22m[39m
+
+> reactflow@11.10.4 css
+> postcss src/*.css --config ../../tooling/postcss-config/postcss.config.js --dir dist
+
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme

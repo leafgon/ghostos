@@ -1,0 +1,38 @@
+.root {
+    position: "absolute";
+    z-index: '0';
+}
+
+.planetContent {
+    position: "relative";
+    z-index: '0';
+}
+
+.satCenterNormal {
+    position: "absolute";
+    z-index: '0';
+}
+
+.satCenterPromoted {
+    position: "absolute";
+    z-index: '30';
+}
+
+.satContentNormal {
+    position: "absolute";
+    z-index: 5;
+}
+
+.satContentPromoted {
+    position: "absolute";
+    z-index: '-1';
+}
+
+.orbitDefaultStyle  {
+	position: 'absolute';
+	border-radius: '100%';
+	border-width: 2;
+	border-style: 'dotted';
+	border-color: 'lightgrey';
+	z-index: 0;
+}

@@ -1,0 +1,77 @@
+; below is a sample uidefs (short for UI definitions) to be
+; used by the "prompt" element. The data is represented in LEAFlisp. 
+; it features three text inputs, one date, one time, followed by two buttons.
+; as you might have guessed, this bit of text preceded by the semicolon in front of
+; each line is how comments are written in LEAFlisp. 
+; 
+[ ; an open square bracket [ denotes the beginning of a list, followed by a matching 
+  ; close square bracket ] appearing at the end of this page. you can bring your blinking cursor
+  ; to one of the brackets and type Shift-5 (or %) to jump the cursor in between a pair of matching brackets. 
+  ; please give it a go, it is a fun way to navigate your eyes around LEAFlisp. 
+  ; other helpful command keys to help you navigate LEAFlisp include h j k l with which the blinking cursor
+  ; can be moved to the left, down, up and right respectively. 
+  {
+    :prompt "setting"
+    :backgroundColor "primary.light" 
+    ; "primary.dark" | "secondary.light" "secondary.dark"
+    :margin "1" 
+    ; please note that any positive number in between quotes is accepted here.  
+    ; the recommended value however would range from 0 to 20 in almost all general 
+    ; usage scenarios where 0 to 5 whould perhaps comprise about 90% of the cases. 
+    :fieldWidth "15ch" 
+    ; ch is a unit length represented in terms of the width of the letter 0 (zero).
+    ; so "15ch" would result in the width as wide as 15 zeros for all the text inputs below. 
+    ; please refer to the following site for units in html/css lingo, if you have all the time in the world.
+    ; https://www.w3schools.com/cssref/css_units.asp for units
+    :buttonWidth "20ch"
+    ; likewise, buttonWidth specify the width of all the buttons declared below. 
+  }
+  {
+    :prompt "text"
+    :key "text1" ; :key is a user-defined string value, that should be unique within the context of the UI definition.
+    :label "text label" ; a user-defined string label to be displayed on the text input.
+    :type "number" ; a special text input type useful for gathering numbers. 
+    :variant "standard" ; 
+  }
+  {
+    :prompt "text"
+    :required false
+    :key "text2"
+    :label "name?"
+    :variant "standard"
+  }
+  {
+    :prompt "text"
+    :key "text3"
+    :required true
+    :label "email"
+    :type "email"
+    :variant "standard"
+  }
+  {
+    :prompt "date"
+    :key "date1"
+    :required true
+    :label "date"
+    :inputFormat "dd/MMM/yyyy"
+  }
+  {
+    :prompt "time"
+    :key "time1"
+    :label "time"
+    :required false
+  }
+  {
+    :prompt "button"
+    :variant "contained"
+    :key "btn1"
+    :label "buttn label1"
+  }
+  {
+    :prompt "button"
+    :color "secondary"
+    :variant "outlined"
+    :key "btn2"
+    :label "buttn label2"
+  }
+]

@@ -1,0 +1,33 @@
+.container {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    height: 100%;
+    -webkit-overflow-scrolling: touch;
+    overflow-y: scroll;
+}
+.loading {
+    /* Absolute position */
+    position: absolute;
+    left: 0;
+    top: 0;
+
+    /* Take full size */
+    height: 100%;
+    width: 100%;
+
+    border: none;
+    /* Center */
+    align-items: center;
+    justify-content: center;
+}
+.dispwrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    height: 100%;
+    width: 100%;
+    border: none;
+}
