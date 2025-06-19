@@ -12,4 +12,9 @@ import { doBottle, doUnbottle } from "./api/parser/nodelogic/datautils/bottling.
 
 import { runtimeEtaTree } from "./api/parser/eta.js";
 
-export { runtimeEtaTree, useGosVolatileStateIO, useGosPersistentStateIO, useMVIframework, useLEAFIOapi, initLEAFIOapi, initializeMasterSubsDirectory, reconstructLEAFGraph, analyzeLEAFGraph, LEAFIOmetamodel, _leafstdlib_dataflow_api, _breezyforeststdlib_hierarchy, createGQLClient, executeLEAFGraph, doBottle, doUnbottle };
+import { init_gRuntimeLEAFlisp } from "./api/parser/nodelogic/wizardry/leaflisp.js";
+import { initializeLEAFlakeGQLClient } from "./api/leafio/leaflake.js";
+import { _leafgraph } from "./api/parser/nodelogic/abstraction/leafgraph.js";
+import { executeLEAFLogic, executeLEAFLogicInSync } from "./api/parser/leaf.js";
+
+export { executeLEAFLogic, executeLEAFLogicInSync, initializeLEAFlakeGQLClient, init_gRuntimeLEAFlisp, runtimeEtaTree, useGosVolatileStateIO, useGosPersistentStateIO, useMVIframework, useLEAFIOapi, initLEAFIOapi, initializeMasterSubsDirectory, reconstructLEAFGraph, analyzeLEAFGraph, LEAFIOmetamodel, _leafstdlib_dataflow_api, _breezyforeststdlib_hierarchy, createGQLClient, executeLEAFGraph, doBottle, doUnbottle };
