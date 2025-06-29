@@ -51,7 +51,8 @@ const _leafmemoryio = {
 
         const ismarkedglobal = ("global" in reduced_lambda_obj) ? true : false;
         const issubscription = ("subscribe" in reduced_lambda_obj) ? true : false;
-        const is_nobottle = ("nobottle" in reduced_lambda_obj) ? true : false;
+        const is_on-tap = ("on-tap" in reduced_lambda_obj) ? true : false;
+        const is_proxy = ("proxy" in reduced_lambda_obj) ? true : false;
         const is_generic_memory = (memoryname === GENERIC_MEMORYNAME);
 
         const thespadeuuid = lambdactrl.gos.etaTree.leafgraph.thespade?.uuid;
@@ -101,9 +102,10 @@ const _leafmemoryio = {
                     false
                 );
             };
-            const domemoryio = (_data) => {
-                if (memoryname === 'csrf_token')
-                    console.log(memorykey);
+            const domemoryio = (_data, _proxy_memkey=undefined) => {
+                //if (memoryname === 'csrf_token')
+                //    console.log(memorykey);
+                const cur_memkey = _proxy_memkey ? _proxy_memkey : memorykey;
                 if (_data !== undefined && !isEmptyBottle(_data)) {
                     //const resolved_data = await Promise.resolve(_data); // as per the discussion in https://stackoverflow.com/questions/27746304/how-do-i-tell-if-an-object-is-a-promise
 
@@ -121,7 +123,7 @@ const _leafmemoryio = {
                         //        _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                         //    }
                         //};
-                        const _payload = is_nobottle ? doBottle("nothing", null, {
+                        const _payload = is_on-tap ? doBottle("nothing", null, {
                                 _type: "memoryio",
                                 _command: "io",
                                 _memoryname: memoryname, _refnode: refnode, 
@@ -129,7 +131,7 @@ const _leafmemoryio = {
                             }) : null;
                         const serialized_data = safeStringify(_payload);
                         const mnemosyne_data = {signature: SHA1(serialized_data), payload: serialized_data, raw: _payload};
-                        lambdactrl.gos.etaTree.mnemosyne.current = {...lambdactrl.gos.etaTree.mnemosyne.current, [memorykey]: mnemosyne_data}; // store in the local main mnemosyne.
+                        lambdactrl.gos.etaTree.mnemosyne.current = {...lambdactrl.gos.etaTree.mnemosyne.current, [cur_memkey]: mnemosyne_data}; // store in the local main mnemosyne.
 
                         // spark_dev_note: 19/Jun/2023
                         // #databus
@@ -141,7 +143,7 @@ const _leafmemoryio = {
                         //        _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                         //    }
                         //);
-                        return is_nobottle ? _payload : doBottle(
+                        return is_on-tap ? _payload : doBottle(
                             memoryname,
                             _payload, 
                             {
@@ -157,7 +159,7 @@ const _leafmemoryio = {
                         const _payload = _data;
                         const serialized_data = safeStringify(_payload);
                         const mnemosyne_data = {signature: SHA1(serialized_data), payload: serialized_data, raw: _payload};
-                        lambdactrl.gos.etaTree.mnemosyne.current = {...lambdactrl.gos.etaTree.mnemosyne.current, [memorykey]: mnemosyne_data}; // store in the local main mnemosyne.
+                        lambdactrl.gos.etaTree.mnemosyne.current = {...lambdactrl.gos.etaTree.mnemosyne.current, [cur_memkey]: mnemosyne_data}; // store in the local main mnemosyne.
 
                         // spark_dev_note: 19/Jun/2023
                         // #databus
@@ -169,7 +171,7 @@ const _leafmemoryio = {
                         //        _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                         //    }
                         //);
-                        return is_nobottle ? _payload : doBottle(
+                        return is_on-tap ? _payload : doBottle(
                             memoryname,
                             _payload, 
                             {
@@ -184,8 +186,8 @@ const _leafmemoryio = {
                 else {
                     if (memoryname === "backdrop")
                         console.log("start debugging");
-                    if (memorykey in lambdactrl.gos.etaTree.mnemosyne.current) {
-                        const mnemosyne_data = lambdactrl.gos.etaTree.mnemosyne.current[memorykey];
+                    if (cur_memkey in lambdactrl.gos.etaTree.mnemosyne.current) {
+                        const mnemosyne_data = lambdactrl.gos.etaTree.mnemosyne.current[cur_memkey];
 
                         // spark_dev_note: 19/Jun/2023
                         // #databus
@@ -197,7 +199,7 @@ const _leafmemoryio = {
                         //        _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                         //    }
                         //);
-                        return is_nobottle ? mnemosyne_data.raw : doBottle(
+                        return is_on-tap ? mnemosyne_data.raw : doBottle(
                             memoryname,
                             mnemosyne_data.raw, 
                             {
@@ -219,13 +221,13 @@ const _leafmemoryio = {
                         //        _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                         //    }
                         //);
-                        const _payload = is_nobottle ? doBottle("nothing", null, {
+                        const _payload = is_on-tap ? doBottle("nothing", null, {
                                 _type: "memoryio",
                                 _command: "forget",
                                 _memoryname: memoryname, _refnode: refnode, 
                                 _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                             }) : null;
-                        return is_nobottle ? _payload : doBottle(
+                        return is_on-tap ? _payload : doBottle(
                             memoryname,
                             _payload, 
                             {
@@ -270,8 +272,20 @@ const _leafmemoryio = {
                         //    _outflow_data$.next(memorybottle); // publish the next available post-processed data via the data flow subject channel
                         //}
                         //return new BehaviorSubject(_combined_in[0]); // only pass the ctrl data in the flow;
-                        const memorybottle = domemoryio(_combined_in[1]);
-                        _outflow_data$.next(memorybottle); // publish the next available post-processed data via the data flow subject channel
+
+                        if (is_proxy) {
+                            const cur_sid = _combined_in[0].sid.slice(-1).pop(); // current sid
+                            const proxymemkey_uri = `www.leafgon.com/mnemosyne/${domain}/${appid}/${memoryname}/${cur_sid}`;
+                            const proxy_memkey = uuid5(proxymemkey_uri, uuid5.URL) // uuid deterministically generated based on domain and appid  
+
+                            const memorybottle = domemoryio(_combined_in[1], proxy_memkey);
+                            _outflow_data$.next(memorybottle); // publish the next available post-processed data via the data flow subject channel
+                        }
+                        else {
+                            const memorybottle = domemoryio(_combined_in[1]);
+                            _outflow_data$.next(memorybottle); // publish the next available post-processed data via the data flow subject channel
+                        }
+
                         return _combined_in[0];
                     }),
                     share()
