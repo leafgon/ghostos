@@ -5,6 +5,7 @@ import { interval, of, take, timeout, catchError, combineLatest, Subject, Behavi
 import { driveDataflowByCtrlflow, executeLEAFLogicInSync, timeoutPromise } from '../../leaf.js';
 import { mergeDataflows } from '../../../utils/leafdataflow.js';
 import { isBottle } from '../../predicates.js';
+import { _common_methods } from '../common.js';
 
 const getEtaContext = (_lambda_obj) => {
     const keywordlist = Object.keys(_lambda_obj).map(_key => { 
@@ -318,6 +319,14 @@ const _leafspell = {
                 return _data_out;
             };
 
+            const postprocessfunc = (_data_in) => {
+                if (refnode === "b5a20ce3-3e67-42cd-9f60-3f70c6acd269")
+                    console.log("start debugging");
+                const _data_out = _data_in;
+                return _data_out;
+            };
+            
+
             const _executeSpell = async (_spellprom, _ctrl$, _data$) => {
                 const _leaflogic = await _spellprom;
 
@@ -332,20 +341,31 @@ const _leafspell = {
                 }
 
                 const output$obj = driveDataflowByCtrlflow(
-                    {...controlflow$obj, _stream: _ctrl$}, [{_stream: _data$}], undefined, 
+                    {...controlflow$obj, _stream: _ctrl$.pipe(
+                        map(_ctrl_in => {
+                            if (_ctrl_in.sid === undefined) {
+                                _ctrl_in.sid = [refnode];
+                            }
+                            else if (!_ctrl_in.sid.includes(refnode)) { // avoid duplicates, which happens with multiple input streams
+                                _ctrl_in.sid.push(refnode);
+                            }
+                            return _ctrl_in;
+                        })
+                    )}, [{_stream: _data$}], undefined, 
                     {...node_context, metastep: "executing parsed spell in the flow: "+spellname}, 
                     {
                         leaflogic: _leaflogic._default, //spelldefProm, //spelldef._default, 
-                        //datalogic: {
-                        //    pre: preprocessfunc,
-                        //    post: postprocessfunc
-                        //}
+                        datalogic: {
+                            pre: preprocessfunc,
+                            post: postprocessfunc
+                        }
                     }
                 );
 
                 return output$obj._control._stream.pipe(
                     withLatestFrom(output$obj._stream),
                     map(_combined_in => {
+                        _combined_in[0].sid?.pop();
                         return _combined_in;
                     }),
                     finalize(() => { 
@@ -566,13 +586,6 @@ const _leafspell = {
                 return {_stream: _outflow_data$, _control: {..._controlflow$obj, _stream: _outflow_ctrl$}};
             };
 
-            const postprocessfunc = (_data_in) => {
-                if (refnode === "b5a20ce3-3e67-42cd-9f60-3f70c6acd269")
-                    console.log("start debugging");
-                const _data_out = _data_in;
-                return _data_out;
-            };
-            
             //const consolidated_input$objArr = [combineDataflows(refnode, input$objArr)];
             //const consolidated_input$objArr = [{_stream: chronosDataflow(controlflow$obj._stream, input$objArr.map(_$obj=>_$obj._stream), false, CHRONOSTYPE_SYNC, {time: 20000}, TIMEOUTBEHAVIOR_BESTEFFORT, {...node_context})}];
             const output$obj = driveDataflowByCtrlflow(
