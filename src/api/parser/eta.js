@@ -588,7 +588,17 @@ const doChronosSynchronize = (_stream$objArr, _gates={time: -1, count: -1}, _nod
                     }); //.filter(_in=>(!isBottle(_in)||!isEmptyBottle(_in))); 
                     _chronos_data_out$.next(synced_nonempty_data); // flow data array including []
 
-                    return _combined_inArr.map(_combined_in=>_combined_in[0]); // relay consolidated ctrl signal
+                    // consolidate ctrl signal
+                    const _consolidated_ctrl_signal = {..._combined_inArr[0][0]} // initialize consolidated ctrl signal with the first ctrl signal
+                    let _combined_traces = _combined_inArr.map(_combined_in=>{
+                        return _combined_in[0].traces; // collect traces from all lanes
+                    }); 
+                    if (_combined_traces.length === 1) // if only one trace, just return it
+                        _combined_traces = _combined_traces[0];
+
+                    // consolidate traces from all lanes into a single ctrl signal
+                    _consolidated_ctrl_signal.traces = [_combined_traces];
+                    return _consolidated_ctrl_signal // relay consolidated ctrl signal
                 }
                 // otherwise 
                 return undefined; 
