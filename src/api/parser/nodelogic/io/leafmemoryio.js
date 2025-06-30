@@ -51,7 +51,7 @@ const _leafmemoryio = {
 
         const ismarkedglobal = ("global" in reduced_lambda_obj) ? true : false;
         const issubscription = ("subscribe" in reduced_lambda_obj) ? true : false;
-        const is_on-tap = ("on-tap" in reduced_lambda_obj) ? true : false;
+        const is_on_tap = ("on-tap" in reduced_lambda_obj) ? true : false;
         const is_proxy = ("proxy" in reduced_lambda_obj) ? true : false;
         const is_generic_memory = (memoryname === GENERIC_MEMORYNAME);
 
@@ -123,7 +123,7 @@ const _leafmemoryio = {
                         //        _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                         //    }
                         //};
-                        const _payload = is_on-tap ? doBottle("nothing", null, {
+                        const _payload = is_on_tap ? doBottle("nothing", null, {
                                 _type: "memoryio",
                                 _command: "io",
                                 _memoryname: memoryname, _refnode: refnode, 
@@ -143,7 +143,7 @@ const _leafmemoryio = {
                         //        _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                         //    }
                         //);
-                        return is_on-tap ? _payload : doBottle(
+                        return is_on_tap ? _payload : doBottle(
                             memoryname,
                             _payload, 
                             {
@@ -171,7 +171,7 @@ const _leafmemoryio = {
                         //        _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                         //    }
                         //);
-                        return is_on-tap ? _payload : doBottle(
+                        return is_on_tap ? _payload : doBottle(
                             memoryname,
                             _payload, 
                             {
@@ -199,7 +199,7 @@ const _leafmemoryio = {
                         //        _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                         //    }
                         //);
-                        return is_on-tap ? mnemosyne_data.raw : doBottle(
+                        return is_on_tap ? mnemosyne_data.raw : doBottle(
                             memoryname,
                             mnemosyne_data.raw, 
                             {
@@ -221,13 +221,13 @@ const _leafmemoryio = {
                         //        _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                         //    }
                         //);
-                        const _payload = is_on-tap ? doBottle("nothing", null, {
+                        const _payload = is_on_tap ? doBottle("nothing", null, {
                                 _type: "memoryio",
                                 _command: "forget",
                                 _memoryname: memoryname, _refnode: refnode, 
                                 _nodelocation: {domain: lambdactrl.gos.etaTree.domain, appid: lambdactrl.gos.etaTree.appid}
                             }) : null;
-                        return is_on-tap ? _payload : doBottle(
+                        return is_on_tap ? _payload : doBottle(
                             memoryname,
                             _payload, 
                             {
