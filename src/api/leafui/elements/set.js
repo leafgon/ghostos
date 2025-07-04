@@ -1,20 +1,8 @@
 import 'date-fns';
 import React from 'react';
-//import Grid from '@material-ui/core/Grid';
 import DateFnsUtils from '@date-io/date-fns';
-//import {
-//  MuiPickersUtilsProvider,
-//  KeyboardTimePicker,
-//  KeyboardDatePicker,
-//} from '@material-ui/pickers';
-import ClickAwayListener from '@material-ui/core/ClickAwayListener';
-
-//import Button from "@material-ui/core/Button";
-
-//import LEAFUIPrompt from './textfield';
 import LEAFDatePicker from '../misc/datepicker';
 
-//import { createStore } from 'redux';
 import { useSelector } from 'react-redux';
 import { assertWrappingType } from 'graphql';
 

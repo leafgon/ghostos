@@ -1,7 +1,6 @@
 import React, { useState, memo, FC, CSSProperties, useEffect, useRef } from 'react';
 import Hammer, { defaults } from '@egjs/hammerjs';
 import {v4 as uuidv4} from 'uuid';
-import { Typography, Tooltip } from '@material-ui/core';
 import SystemMenuComponent from './sysmenu';
 import { useParams } from 'react-router-dom';
 import { Box, Button } from '@mui/material';

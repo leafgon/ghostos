@@ -25,13 +25,12 @@ import Hammer, { defaults } from '@egjs/hammerjs';
   
 import Draggable from 'react-draggable';
 
-import { TextField, Input } from '@material-ui/core';
-
 import { encodeUnicode, decodeUnicode } from '../../../../utils/leafbase64'; // '../../../ghostos/api/utils/leafbase64';
 import { fetchMultiKeyedData, setMultiKeyedData } from '../../../../utils/fetchnodedata'; //'../../../ghostos/api/utils/fetchnodedata';
 import {v4 as uuidv4} from 'uuid';
 
-import { Typography, Tooltip } from '@material-ui/core';
+import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import cloneDeep from 'lodash/cloneDeep';
 

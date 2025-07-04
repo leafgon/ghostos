@@ -1,7 +1,7 @@
-import { TextField, Input } from '@material-ui/core';
-import { withStyles, makeStyles } from '@material-ui/core/styles';
+import Paper from '@mui/material/Paper';
+import { styled } from '@mui/material/styles';
 
-const useStyles = makeStyles((theme) => ({
+const useStyles = styled(Paper)(({theme}) => ({
   root: {
     '& > *': {
       width: '100%',

@@ -18,10 +18,8 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { ForceDirectedLayout } from "../lib/layouts/force-directed-layout";
 
 import ReactDOM from "react-dom";
-import Tooltip from "@material-ui/core/Tooltip";
-import Button from "@material-ui/core/Button";
-//import { makeStyles } from "@material-ui/core/styles";
-//import { makeStyles } from "@mui/styles";
+import Tooltip from "@mui/material/Tooltip";
+import Button  from "@mui/material/Button";
 import { styled } from "@mui/system";
 import '../styles/App.css';
 import LEAFUISet from './set';

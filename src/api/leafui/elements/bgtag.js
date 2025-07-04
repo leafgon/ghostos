@@ -9,15 +9,7 @@ import propagating from 'propagating-hammerjs';
 //import BasicImageList from '../leafui/imagelist';
 //import PropTypes from 'prop-types';
 import BGTagYouTube from './bgtagyoutube';
-import { withStyles, makeStyles } from '@material-ui/core/styles';
-import { Typography, Tooltip } from '@material-ui/core';
 
-import PlayCircleOutlinedIcon from '@mui/icons-material/PlayCircleOutlined';
-import PauseCircleOutlinedIcon from '@mui/icons-material/PauseCircleOutlined';
-//import PlayCircleOutlineIcon from '@material-ui/icons/PlayCircleOutline';
-//import PauseCircleOutlineIcon from '@material-ui/icons/PauseCircleOutline';
-//import StopIcon from '@material-ui/icons/Stop';
-import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
 import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
 import FullscreenOutlinedIcon from '@mui/icons-material/FullscreenOutlined';
 import FullscreenExitOutlinedIcon from '@mui/icons-material/FullscreenExitOutlined';

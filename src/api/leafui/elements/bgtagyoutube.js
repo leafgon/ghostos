@@ -5,8 +5,6 @@ import { connect } from 'react-redux';
 //import LEAFUISet from '../leafui/set';
 import PropTypes from 'prop-types';
 import YouTube from 'react-youtube';
-import { withStyles, makeStyles } from '@material-ui/core/styles';
-import { Typography, Tooltip } from '@material-ui/core';
 
 import PlayCircleOutlinedIcon from '@mui/icons-material/PlayCircleOutlined';
 import PauseCircleOutlinedIcon from '@mui/icons-material/PauseCircleOutlined';
