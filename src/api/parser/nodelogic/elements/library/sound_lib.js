@@ -1,8 +1,8 @@
 //import tonepkg from "tone";
 //import { Tone } from "tone/build/esm/core/Tone";
-import * as tonepkg from "tone";
-
-const { Synth, AMSynth, DuoSynth, FMSynth, MembraneSynth, MetalSynth, MonoSynth, NoiseSynth, PluckSynth, PolySynth, Sampler, Transport } = tonepkg;
+//import * as tonepkg from "tone";
+//const { Synth, AMSynth, DuoSynth, FMSynth, MembraneSynth, MetalSynth, MonoSynth, NoiseSynth, PluckSynth, PolySynth, Sampler, Transport } = tonepkg;
+import { Synth, AMSynth, DuoSynth, FMSynth, MembraneSynth, MetalSynth, MonoSynth, NoiseSynth, PluckSynth, PolySynth, Sampler, Transport } from "tone";
 
 const toneinstrument_lut = {
     "synth": {
