@@ -2,7 +2,6 @@
 // modified by spark@leautomaton.com to function in leaf_editor
 // 
 import { cloneObject, wsScheme } from './utils.js';
-import fetch from 'isomorphic-fetch';
 import WebSocket from 'isomorphic-ws';
 import { GQL_CONNECTION_INIT, GQL_START, GQL_STOP, GRAPHQL_SUBSCRIPTIONS_PROTOCOL, handler as wsEventHandler } from './events.js';
 

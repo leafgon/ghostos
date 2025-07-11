@@ -6,7 +6,6 @@ import {ElemCacheKeyLUT, formatElementFlowdata} from "./index.js";
 import lodashpkg from 'lodash';
 
 import axios from 'axios';
-import fetch from 'isomorphic-fetch';
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
 import { doBottle } from "../../datautils/bottling.js";
 import { isBottle } from "../../../predicates.js";
