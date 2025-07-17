@@ -1,20 +1,6 @@
 import React, {useEffect, useState, useRef} from 'react';
 import Hammer from '@egjs/hammerjs';
 import propagating from 'propagating-hammerjs';
-//import { makeStyles } from '@material-ui/core/styles';
-
-//import Paper from '@material-ui/core/Paper';
-//import ImageList from '@material-ui/core/ImageList';
-//import ImageListItem from '@material-ui/core/ImageListItem';
-//import ImageListItemBar from '@material-ui/core/ImageListItemBar';
-//import IconButton from '@material-ui/core/IconButton';
-//import StarBorderIcon from '@material-ui/icons/StarBorder';
-//import ListSubheader from '@material-ui/core/ListSubheader';
-//import InfoIcon from '@material-ui/icons/Info';
-//import { Paper, ImageList, ImageListItem, ImageListItemBar, IconButton, ListSubheader, InfoIcon } from '@mui/material';
-//import StarBorderIcon from '@mui/icons-material/StarBorder';
-//import { makeStyles } from '@mui/styles';
-//import itemData from './itemData';
 import AddPhotoAlternateTwoToneIcon from '@mui/icons-material/AddPhotoAlternateTwoTone';
 import Tooltip from '@mui/material/Tooltip';
 import { useDropzone } from 'react-dropzone';

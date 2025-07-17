@@ -1,13 +1,7 @@
 import React, { useState, memo, FC, CSSProperties, useEffect, useRef } from 'react';
 import Hammer, { defaults } from '@egjs/hammerjs';
 import {v4 as uuidv4} from 'uuid';
-import { Typography, Tooltip } from '@mui/material';
-import { DebugPort } from './porthandle'
-//#reactflow #migration
-//import { Handle, Position, NodeProps, Connection, Edge } from '../lib/react-flow-renderer';
-import { Handle, Position, NodeProps, Connection, Edge } from '../lib/reactflow.11.10.4/core/dist/esm/index.js';
-import { debugHandleStyle } from './styles';
-import SystemMenuComponent from '../../sysmenu';
+import SystemMenuComponent from '../../sysmenu.js';
 
 const useLEAFNodeMenu = ({data, touchconfig}) => {
 

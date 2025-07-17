@@ -1,80 +1,88 @@
 import React from 'react';
-import { makeStyles } from '@material-ui/core/styles';
-import Grid from '@material-ui/core/Grid';
-import Paper from '@material-ui/core/Paper';
-import Typography from '@material-ui/core/Typography';
-import ButtonBase from '@material-ui/core/ButtonBase';
-
-const useStyles = makeStyles((theme) => ({
-  root: {
-    flexGrow: 1,
-  },
-  paper: {
-    padding: theme.spacing(2),
-    margin: 'auto',
-    maxWidth: 500,
-  },
-  image: {
-    width: 128,
-    height: 128,
-  },
-  img: {
-    margin: 'auto',
-    display: 'block',
-    maxWidth: '100%',
-    maxHeight: '100%',
-  },
-}));
+import { Box, Grid, Paper, Typography, ButtonBase } from '@mui/material';
 
 export default function LEAFUIComplexGrid(props) {
-  const {_leafjs, appprops} = props; // rid of the annoyance of adding 'props.' in every prop access
-  // define global context in its own world
-  const tagrectcoord = _leafjs.render.tagrectcoord;
-  const tagrectsize = _leafjs.render.tagrectsize;
-  const classes = useStyles();
+    const { _leafjs, appprops } = props;
 
-  return (
-  <React.Fragment>
-  {_leafjs &&
-  <div id="bg-tag-center" style={{zIndex:0, position: "absolute", top: tagrectcoord.y, left: tagrectcoord.x}}>
-    <div className={classes.root} style={{ width: tagrectsize.width, zIndex:0, position: "absolute", top: 35, left: 0}}>
-      <Paper className={classes.paper}>
-        <Grid container spacing={2}>
-          <Grid item>
-            <ButtonBase className={classes.image}>
-              <img className={classes.img} alt="complex" src="/static/images/grid/complex.jpg" />
-            </ButtonBase>
-          </Grid>
-          <Grid item xs={12} sm container>
-            <Grid item xs container direction="column" spacing={2}>
-              <Grid item xs>
-                <Typography gutterBottom variant="subtitle1">
-                  Standard license
-                </Typography>
-                <Typography variant="body2" gutterBottom>
-                  Full resolution 1920x1080 • JPEG
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  ID: 1030114
-                </Typography>
-              </Grid>
-              <Grid item>
-                <Typography variant="body2" style={{ cursor: 'pointer' }}>
-                  Remove
-                </Typography>
-              </Grid>
-            </Grid>
-            <Grid item>
-              <Typography variant="subtitle1">$19.00</Typography>
-            </Grid>
-          </Grid>
-        </Grid>
-      </Paper>
-    </div>
-  </div>
-  }
-  <div></div>
-  </React.Fragment>
-  );
+    if (!_leafjs) return <div />;
+
+    const tagrectcoord = _leafjs.render.tagrectcoord;
+    const tagrectsize = _leafjs.render.tagrectsize;
+
+    return (
+          <Box
+            id="bg-tag-center"
+            sx={{
+                      zIndex: 0,
+                        position: 'absolute',
+                        top: tagrectcoord.y,
+                        left: tagrectcoord.x,
+                      }}
+          >
+            <Box
+              sx={{
+                          width: tagrectsize.width,
+                            zIndex: 0,
+                            position: 'absolute',
+                            top: 35,
+                            left: 0,
+                            flexGrow: 1,
+                          }}
+            >
+              <Paper
+                sx={{
+                              p: 2,
+                                margin: 'auto',
+                                maxWidth: 500,
+                              }}
+              >
+                <Grid container spacing={2}>
+                  <Grid item>
+                    <ButtonBase
+                      sx={{
+                                          width: 128,
+                                            height: 128,
+                                          }}
+                    >
+                      <Box
+                        component="img"
+                        src="/static/images/grid/complex.jpg"
+                        alt="complex"
+                        sx={{
+                                              margin: 'auto',
+                                                display: 'block',
+                                                maxWidth: '100%',
+                                                maxHeight: '100%',
+                                              }}
+                      />
+                    </ButtonBase>
+                  </Grid>
+                  <Grid item xs={12} sm container>
+                    <Grid item xs container direction="column" spacing={2}>
+                      <Grid item xs>
+                        <Typography gutterBottom variant="subtitle1">
+                          Standard license
+                        </Typography>
+                        <Typography variant="body2" gutterBottom>
+                          Full resolution 1920x1080 • JPEG
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          ID: 1030114
+                        </Typography>
+                      </Grid>
+                      <Grid item>
+                        <Typography variant="body2" sx={{ cursor: 'pointer' }}>
+                          Remove
+                        </Typography>
+                      </Grid>
+                    </Grid>
+                    <Grid item>
+                      <Typography variant="subtitle1">$19.00</Typography>
+                    </Grid>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Box>
+          </Box>
+        );
 }
-

@@ -4,20 +4,20 @@
 //const { Synth, AMSynth, DuoSynth, FMSynth, MembraneSynth, MetalSynth, MonoSynth, NoiseSynth, PluckSynth, PolySynth, Sampler, Transport } = tonepkg;
 //import { Synth, AMSynth, DuoSynth, FMSynth, MembraneSynth, MetalSynth, MonoSynth, NoiseSynth, PluckSynth, PolySynth, Sampler, Transport } from "tone";
 // core clock & routing
-import { Transport }   from "tone";
+//import { Transport }   from "tone";
 
 // instruments  – every file exports a *named* class
-import { Synth }       from "tone/build/esm/instrument/Synth";
-import { AMSynth }     from "tone/build/esm/instrument/AMSynth";
-import { DuoSynth }    from "tone/build/esm/instrument/DuoSynth";
-import { FMSynth }     from "tone/build/esm/instrument/FMSynth";
-import { MembraneSynth } from "tone/build/esm/instrument/MembraneSynth";
-import { MetalSynth }  from "tone/build/esm/instrument/MetalSynth";
-import { MonoSynth }   from "tone/build/esm/instrument/MonoSynth";
-import { NoiseSynth }  from "tone/build/esm/instrument/NoiseSynth";
-import { PluckSynth }  from "tone/build/esm/instrument/PluckSynth";
-import { PolySynth }   from "tone/build/esm/instrument/PolySynth";
-import { Sampler }     from "tone/build/esm/instrument/Sampler";
+import { Synth }       from "tone/build/esm/instrument/Synth.js";
+import { AMSynth }     from "tone/build/esm/instrument/AMSynth.js";
+import { DuoSynth }    from "tone/build/esm/instrument/DuoSynth.js";
+import { FMSynth }     from "tone/build/esm/instrument/FMSynth.js";
+import { MembraneSynth } from "tone/build/esm/instrument/MembraneSynth.js";
+import { MetalSynth }  from "tone/build/esm/instrument/MetalSynth.js";
+import { MonoSynth }   from "tone/build/esm/instrument/MonoSynth.js";
+import { NoiseSynth }  from "tone/build/esm/instrument/NoiseSynth.js";
+import { PluckSynth }  from "tone/build/esm/instrument/PluckSynth.js";
+import { PolySynth }   from "tone/build/esm/instrument/PolySynth.js";
+import { Sampler }     from "tone/build/esm/instrument/Sampler.js";
 
 const toneinstrument_lut = {
     "synth": {

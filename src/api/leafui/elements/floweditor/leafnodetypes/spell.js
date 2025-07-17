@@ -1,31 +1,18 @@
 import React, { useState, memo, FC, CSSProperties, useEffect, useRef } from 'react';
-import { ReactDOM } from 'react';
 import Hammer from '@egjs/hammerjs';
 
-//#reactflow #migration
-//import { Handle, Position, NodeProps, Connection, Edge } from '../lib/react-flow-renderer';
 import { Handle, Position, NodeProps, Connection, Edge } from '../lib/reactflow.11.10.4/core/dist/esm/index.js';
-import { AnchorPort, DataPort, LambdaPort } from './porthandle'
+import { AnchorPort, DataPort, LambdaPort } from './porthandle/index.js'
   
-import Draggable from 'react-draggable';
+import { TextField, Box } from '@mui/material';
 
-import TextField from '@mui/material/TextField';
-//import { TextField, Input } from '@material-ui/core';
-//import { withStyles, makeStyles } from '@material-ui/core/styles';
-//import { textAlign } from '@material-ui/system';
-//import { NoEncryption } from '@material-ui/icons';
+import {targetAuxHandleStyle, sourceAuxHandleStyle, targetHandleStyle, targetAuxDataHandleStyle, targetAnchorHandleStyle, sourceHandleStyleA, sourceHandleStyleB, sourceHandleStyle, sourceAuxDataHandleStyle, sourceAnchorHandleStyle, boxStyles} from './styles.js';
+import {onConnect} from './uihandlers.js';
 
-import { useMutation } from 'graphql-hooks';
-//import { Base64 } from 'crypto-js/enc-base64';
-//import sjcl from 'sjcl';
-
-import {targetAuxHandleStyle, sourceAuxHandleStyle, targetHandleStyle, targetAuxDataHandleStyle, targetAnchorHandleStyle, sourceHandleStyleA, sourceHandleStyleB, sourceHandleStyle, sourceAuxDataHandleStyle, sourceAnchorHandleStyle, useStyles} from './styles';
-import {onConnect} from './uihandlers';
-
-import { fetchMultiKeyedData, setMultiKeyedData } from '../../../../utils/fetchnodedata'; // '../../../ghostos/api/utils/fetchnodedata';
+import { fetchMultiKeyedData, setMultiKeyedData } from '../../../../utils/fetchnodedata.js'; // '../../../ghostos/api/utils/fetchnodedata';
 import {v4 as uuidv4} from 'uuid';
-import {mutateUpdateNode} from '../leafgql';
-import { encodeUnicode, decodeUnicode } from '../../../../utils/leafbase64'; // '../../../ghostos/api/utils/leafbase64';
+import {mutateUpdateNode} from '../leafgql.js';
+import { encodeUnicode, decodeUnicode } from '../../../../utils/leafbase64.js'; // '../../../ghostos/api/utils/leafbase64';
 
 const svgfilepath = '/assets/svg/'; // spark_dev_note: this path is for testing only. make sure to change it for production
 
@@ -58,7 +45,6 @@ const LEAFEditorRectangularNamedNode = (apidef) => {
         //    <span style={{ pointerEvents: 'auto', fontSize: '8pt', color: 'black',}} >
         //      <input className="nodrag" type="text" size="8" onChange={data.onChange} defaultValue={data.datakey} />
         //    </span>
-        const classes = useStyles();
         
         const curNodeName = fetchMultiKeyedData(name_datakey, data.leaf.logic.args);
         const [renderstate, setRenderState] = useState(uuidv4());
@@ -92,7 +78,6 @@ const LEAFEditorRectangularNamedNode = (apidef) => {
             try {
                 event.preventDefault(); 
                 //event.stopPropagation(); 
-                //classes.root.display = 'none';{"standard-basic"+data.leaduuid}
                 //const copy_text = document.getElementById(data.leaduuid); 
                 //let edit_text = document.getElementById("standard-basic"+data.leaduuid); 
                 //let leafnodename = data.leafnodename ? data.leafnodename : '';
@@ -188,7 +173,6 @@ const LEAFEditorRectangularNamedNode = (apidef) => {
             try {
             event.preventDefault(); 
             //event.stopPropagation(); 
-            //classes.root.display = 'auto';
             //const copy_text = state.nameEntered; //document.getElementById('label'+data.leaduuid); 
             //setState({...state, nameEntered: '', nameDefault: copy_text });
             //data.leafnodename = '';
@@ -306,9 +290,9 @@ const LEAFEditorRectangularNamedNode = (apidef) => {
               {state.nameEntered}
               </span>
               {(!state.nameEntered && hammerInitialized) && (
-              <form onSubmit={handleTextChange} noValidate autoComplete="off" style={{height: "5"}}>
-              <TextField autoFocus onBlur={handleTextChange} defaultValue={state.nameDefault} InputProps={{ className: classes.root }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "4pt", textAlign: "center"}} label="name?" />
-              </form>)}
+              <Box component="form" onSubmit={handleTextChange} noValidate autoComplete="off" style={{height: "5"}}>
+              <TextField autoFocus onBlur={handleTextChange} defaultValue={state.nameDefault} InputProps={{ cx: boxStyles.root }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "4pt", textAlign: "center"}} label="name?" />
+              </Box>)}
             </div>
             {(leadconfig.mainoutput1 && leadconfig.mainoutput2) &&
             <>
@@ -362,7 +346,6 @@ const LEAFEditorRectangularNode = (apidef) => {
         //    <span style={{ pointerEvents: 'auto', fontSize: '8pt', color: 'black',}} >
         //      <input className="nodrag" type="text" size="8" onChange={data.onChange} defaultValue={data.datakey} />
         //    </span>
-        const classes = useStyles();
         
         const curNodeName = fetchMultiKeyedData(name_datakey, data.leaf.logic.args);
         const [renderstate, setRenderState] = useState(uuidv4());
@@ -396,7 +379,6 @@ const LEAFEditorRectangularNode = (apidef) => {
             try {
                 event.preventDefault(); 
                 //event.stopPropagation(); 
-                //classes.root.display = 'none';{"standard-basic"+data.leaduuid}
                 //const copy_text = document.getElementById(data.leaduuid); 
                 //let edit_text = document.getElementById("standard-basic"+data.leaduuid); 
                 //let leafnodename = data.leafnodename ? data.leafnodename : '';
@@ -492,7 +474,6 @@ const LEAFEditorRectangularNode = (apidef) => {
             try {
             event.preventDefault(); 
             //event.stopPropagation(); 
-            //classes.root.display = 'auto';
             //const copy_text = state.nameEntered; //document.getElementById('label'+data.leaduuid); 
             //setState({...state, nameEntered: '', nameDefault: copy_text });
             //data.leafnodename = '';
@@ -610,9 +591,9 @@ const LEAFEditorRectangularNode = (apidef) => {
               {state.nameEntered}
               </span>
               {(!state.nameEntered && hammerInitialized) && (
-              <form onSubmit={handleTextChange} noValidate autoComplete="off" style={{height: "5"}}>
-              <TextField autoFocus onBlur={handleTextChange} defaultValue={state.nameDefault} InputProps={{ className: classes.root }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "4pt", textAlign: "center"}} label="name?" />
-              </form>)}
+              <Box component="form" onSubmit={handleTextChange} noValidate autoComplete="off" style={{height: "5"}}>
+              <TextField autoFocus onBlur={handleTextChange} defaultValue={state.nameDefault} InputProps={{ cx: boxStyles.root }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "4pt", textAlign: "center"}} label="name?" />
+              </Box>)}
             </div>
             {(leadconfig.mainoutput1 && leadconfig.mainoutput2) &&
             <>

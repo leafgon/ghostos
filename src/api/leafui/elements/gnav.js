@@ -3,10 +3,9 @@ import React, { useState, useEffect, useRef, Fragment, useLayoutEffect, useCallb
 import Hammer from '@egjs/hammerjs';
 import propagating from 'propagating-hammerjs';
 import * as THREE from 'three';
-import ProjectedMaterial, { project } from '../lib/ProjectedMaterial';
+//import ProjectedMaterial, { project } from '../lib/ProjectedMaterial';
 import TWEEN from '@tweenjs/tween.js';
-import assets_manager from '../lib/assets/AssetManager';
-import {LEAFWebGLCubeRenderTarget} from '../lib/images/leafwebgl'
+import assets_manager from '../lib/assets/AssetManager.js';
 
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { OutlineEffect } from "three/examples/jsm/effects/OutlineEffect.js";
@@ -15,42 +14,42 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 
-import { ForceDirectedLayout } from "../lib/layouts/force-directed-layout";
+import { ForceDirectedLayout } from "../lib/layouts/force-directed-layout.js";
 
 import ReactDOM from "react-dom";
 import Tooltip from "@mui/material/Tooltip";
 import Button  from "@mui/material/Button";
 import { styled } from "@mui/system";
 import '../styles/App.css';
-import LEAFUISet from './set';
+import LEAFUISet from './set.js';
 
 //import { connect } from 'react-redux';
 import { Provider } from "react-redux";
 
-import GraphLabelComponent from './graphlabel'
-import UserPromptComponent from './userprompt'
-import SystemMenuComponent from './sysmenu'
-import { BGTagComponent } from './bgtag'
+import GraphLabelComponent from './graphlabel.js'
+import UserPromptComponent from './userprompt.js'
+import SystemMenuComponent from './sysmenu.js'
+import { BGTagComponent } from './bgtag.js'
 //import { PopupCenterWindow } from './leafui/popupwin'
-import { PopupCenterWindow } from './popupwin'
+//import { PopupCenterWindow } from './popupwin'
 //import { OscillatorAnimation } from 'react-spring/dist/addons'
-import DynamicScriptLoaderService from '../lib/DynScriptLoader'
+import DynamicScriptLoaderService from '../lib/DynScriptLoader.js'
 import axios from 'axios';
 import { v4 as uuid4 } from 'uuid';
 //import { filter3DNodes, filter3DEdges } from './leafapp/filters/gnav/3dview';
 
 //import { useLEAFIOapi, LEAFIOmetamodel } from '@lea/gosjs';
-import { useLEAFIOapi } from '../../leafio/core';
-import { LEAFIOmetamodel } from '../../metamodel';
-import Vector3 from '../lib/layouts/Vector3';
+import { useLEAFIOapi } from '../../leafio/core.js';
+import { LEAFIOmetamodel } from '../../metamodel.js';
+import Vector3 from '../lib/layouts/Vector3.js';
 
-import BasicImageList from './imagelist';
+//import BasicImageList from './imagelist.js';
 
-import { findAddedJSON, findRemovedJSON } from './stateutils';
+import { findAddedJSON, findRemovedJSON } from './stateutils.js';
 
 //import YouTubeToHtml5 from '@thelevicole/youtube-to-html5-loader';
 import ReactPlayer from 'react-player';
-import styles from './gnav.module.css';
+import * as styles from './gnav.module.css';
 import { MutatingDots } from 'react-loader-spinner';
 
 const ENV_RADIUS = 2000000
@@ -612,7 +611,7 @@ const LEAT3DNavigator = (props) => {
 
 
         const onBackgroundTextureLoadingCompleted = (_backgroundTexture) => {
-            _backgroundTexture.encoding = THREE.sRGBEncoding; // this line is necessary to make the color space dark as intended
+            _backgroundTexture.colorSpace = THREE.SRGBColorSpace; // this line is necessary to make the color space dark as intended
             const material = new THREE.MeshBasicMaterial({ map: _backgroundTexture });
             material.dithering = true;
             material.toneMapped = false;
@@ -674,7 +673,7 @@ const LEAT3DNavigator = (props) => {
         // invert the geometry on the x-axis so that all faces point inward
         geometry.scale(-1, 1, 1);
 
-        bgtexture.encoding = THREE.sRGBEncoding; // this line is necessary to make the color space dark as intended
+        bgtexture.colorSpace = THREE.SRGBColorSpace; // this line is necessary to make the color space dark as intended
         const material = new THREE.MeshBasicMaterial({ map: bgtexture });
         material.dithering = true;
         material.toneMapped = false;
@@ -1850,7 +1849,11 @@ const LEAT3DNavigator = (props) => {
         if (leafapp_props.current.curbgtexture > -1) {
             if (!leafapp_props.current.bganimrefreshed) {
             // the following block of code will be called every timeout
-            if (bgskyprops.color !== {r: 0, g: 0, b: 0, a: 1.0}) { // poor design, used for quick testing of concept
+            const isBlack = bgskyprops.color.r === 0 &&
+                bgskyprops.color.g === 0 &&
+                bgskyprops.color.b === 0 &&
+                bgskyprops.color.a === 1.0;
+            if (!isBlack) { // poor design, used for quick testing of concept
                 leafapp_props.current.bganimrefreshed = true;
 
                 const nextidx = (leafapp_props.current.curbgtexture + 1)%leafapp_props.current.bgtextureList.length;
@@ -2240,7 +2243,7 @@ const LEAT3DNavigator = (props) => {
     const createSysAdminSprite = (loader, position) => {
         let imgTexture = loader;
         imgTexture.wrapS = imgTexture.wrapT = THREE.RepeatWrapping;
-        imgTexture.encoding = THREE.sRGBEncoding;
+        imgTexture.colorSpace = THREE.SRGBColorSpace;
         imgTexture.anisotropy = 16;
         
         // work with HSL color space for node visualization
@@ -2348,7 +2351,7 @@ const LEAT3DNavigator = (props) => {
     const createTestNode = (loader, position) => {
         let imgTexture = loader;
         imgTexture.wrapS = imgTexture.wrapT = THREE.RepeatWrapping;
-        imgTexture.encoding = THREE.sRGBEncoding;
+        imgTexture.colorSpace = THREE.SRGBColorSpace;
         imgTexture.anisotropy = 16;
         
         // work with HSL color space for node visualization
@@ -2421,7 +2424,7 @@ const LEAT3DNavigator = (props) => {
         //const imgTexture = assets_manager.get(textureKey.current.images["lea_logo"]);
         const imgTexture = (new THREE.TextureLoader()).load("/assets/test/lea_logo.jpg");
         imgTexture.wrapS = imgTexture.wrapT = THREE.RepeatWrapping;
-        imgTexture.encoding = THREE.sRGBEncoding;
+        imgTexture.colorSpace = THREE.SRGBColorSpace;
         //imgTexture.anisotropy = 16;
         imgTexture.offset.set( 0, 0 );
         imgTexture.repeat.set( 2, 1 );
@@ -2655,7 +2658,7 @@ const LEAT3DNavigator = (props) => {
     
         let imgTexture = loader;
         imgTexture.wrapS = imgTexture.wrapT = THREE.RepeatWrapping;
-        imgTexture.encoding = THREE.sRGBEncoding;
+        imgTexture.colorSpace = THREE.SRGBColorSpace;
         imgTexture.anisotropy = 16;
         imgTexture = null; // assign null to drop the texture as needed, comment out if assigning a texture
     
@@ -2811,7 +2814,7 @@ const LEAT3DNavigator = (props) => {
     
         let imgTexture = loader;
         imgTexture.wrapS = imgTexture.wrapT = THREE.RepeatWrapping;
-        imgTexture.encoding = THREE.sRGBEncoding;
+        imgTexture.colorSpace = THREE.SRGBColorSpace;
         imgTexture.anisotropy = 16;
         imgTexture = null; // null to drop the texture, comment out if imgTexture is needed
     
@@ -3352,7 +3355,7 @@ const LEAT3DNavigator = (props) => {
                 antialias: true,
                 alpha: true,
             });
-            three_renderer.outputEncoding = THREE.sRGBEncoding;
+            three_renderer.outputColorSpace = THREE.SRGBColorSpace;
             //this.renderer.gammerOutput = true;
             //this.gammaFactor = 2.2;
             three_renderer.shadowMap.enabled = true;
@@ -3360,7 +3363,7 @@ const LEAT3DNavigator = (props) => {
             three_renderer.setClearColor(0xffffff, 0); // transparent
             //three_renderer.setClearColor(0xffffff, 1); // white color
             three_renderer.autoClear = true;
-            three_renderer.outputEncoding = THREE.sRGBEncoding;
+            three_renderer.outputColorSpace = THREE.SRGBColorSpace;
             threejs_props.current.renderer = three_renderer;
 
             loadasset_promise = preloadAssets();

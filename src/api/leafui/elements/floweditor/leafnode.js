@@ -10,10 +10,7 @@ import { AnchorHandle, DataHandle, LambdaHandle } from './handle'
   
 import Draggable from 'react-draggable';
 
-import { TextField, Input } from '@material-ui/core';
-import { withStyles, makeStyles } from '@material-ui/core/styles';
-import { textAlign } from '@material-ui/system';
-import { NoEncryption } from '@material-ui/icons';
+import { TextField, Box } from '@mui/material';
 
 import { useMutation } from 'graphql-hooks';
 //import { Base64 } from 'crypto-js/enc-base64';
@@ -21,55 +18,17 @@ import { useMutation } from 'graphql-hooks';
 
 import {mutateUpdateNode} from './leafgql';
 
-const useStyles = makeStyles((theme) => ({
+const formStyles = {
   root: {
     '& > *': {
       width: '100%',
     },
-    //fontSize: '6pt',
-    //background: 'linear-gradient(45deg,  #FE6B8B 30%, #FF8E53 90%)',
-    //border: 0,
-    //borderRadius: 3,
-    //boxShadow: '0 3px 5px 2px rgba(255, 105, 135, .3)',
-    //color: 'black',
     padding: '2px 0px',
     style: {alignItems: 'center'},
     width: '100%',
     height: '5',
-    // $labeled is a reference to the local "label" styling rules within the same style sheet
-    // by using &, we increase the specificity ? # ref https://material-ui.com/customization/components/#overriding-styles-with-classes
-    //'&$labeled': {
-    //  fontSize: '6pt',
-    //},
   },
-  //label: {
-  //  fontSize: '6pt',
-  //},
-}));
-
-const LEAFUICircularTextInputNode = withStyles({
-  root: {
-    '& > *': {
-    },
-    fontSize: '6pt',
-    //background: 'linear-gradient(45deg,  #FE6B8B 30%, #FF8E53 90%)',
-    //border: 0,
-    //borderRadius: 3,
-    //boxShadow: '0 3px 5px 2px rgba(255, 105, 135, .3)',
-    //color: 'black',
-    //height: 18,
-    //padding: '0 30px',
-    width: '100%',
-    // $labeled is a reference to the local "label" styling rules within the same style sheet
-    // by using &, we increase the specificity ? # ref https://material-ui.com/customization/components/#overriding-styles-with-classes
-    //'&$labeled': {
-    //  fontSize: '6pt',
-    //},
-  },
-  //label: {
-  //  fontSize: '6pt',
-  //},
-})(TextField);
+};
 
 const targetHandleStyle = { background: '#fff' , top: '50%'}; //: CSSProperties
 const targetAuxHandleStyle = { background: '#fff', left: '20%' }; //: CSSProperties
@@ -104,7 +63,6 @@ const LEAFDataFilterNode = memo(({ data }) => {
   //    <span style={{ pointerEvents: 'auto', fontSize: '8pt', color: 'black',}} >
   //      <input className="nodrag" type="text" size="8" onChange={data.onChange} defaultValue={data.datakey} />
   //    </span>
-  const classes = useStyles();
   const [state, setState] = useState(() => {return {
     leaduuid: data.leaduuid ? data.leaduuid : null,
     nameEntered: data.leafnodename ? data.leafnodename : '',
@@ -133,7 +91,6 @@ const LEAFDataFilterNode = memo(({ data }) => {
     try {
       event.preventDefault(); 
       //event.stopPropagation(); 
-      //classes.root.display = 'none';{"standard-basic"+data.leaduuid}
       //const copy_text = document.getElementById(data.leaduuid); 
       //let edit_text = document.getElementById("standard-basic"+data.leaduuid); 
       //let leafnodename = data.leafnodename ? data.leafnodename : '';
@@ -191,7 +148,6 @@ const LEAFDataFilterNode = memo(({ data }) => {
       console.debug("handleLogicToggle(): "+JSON.stringify(state.equality));
       try {
         event.preventDefault(); 
-        //classes.root.display = 'auto';
         //let copy_text = document.getElementById(data.leaduuid); 
         //setState({...state, equality: !state.equality }); // flip-flop of the equality flag
         //edit_text.defaultValue = copy_text.textContent;
@@ -241,7 +197,6 @@ const LEAFDataFilterNode = memo(({ data }) => {
       try {
         event.preventDefault(); 
         //event.stopPropagation(); 
-        //classes.root.display = 'auto';
         //const copy_text = state.nameEntered; //document.getElementById('label'+data.leaduuid); 
         //setState({...state, nameEntered: '', nameDefault: copy_text });
         //data.leafnodename = '';
@@ -367,9 +322,9 @@ const LEAFDataFilterNode = memo(({ data }) => {
         {state.nameEntered}
       </span>
       {(!state.nameEntered && hammerInitialized) && (
-      <form className={classes.root} onSubmit={handleTextChange} noValidate autoComplete="off" style={{height: "5"}}>
-        <TextField autoFocus onBlur={handleTextChange} defaultValue={state.nameDefault} InputProps={{ classes }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "6pt", textAlign: "center"}}  label="name?" />
-      </form>)}
+      <Box component="form" sx={formStyles.root} onSubmit={handleTextChange} noValidate autoComplete="off" style={{height: "5"}}>
+        <TextField autoFocus onBlur={handleTextChange} defaultValue={state.nameDefault} InputProps={{ sx: formStyles }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "6pt", textAlign: "center"}}  label="name?" />
+      </Box>)}
       </div>
       {(leadconfig.mainoutput1 && leadconfig.mainoutput2) &&
       <>
@@ -400,7 +355,6 @@ const LEAFDataCombineNode = memo(({ data }) => {
   //    <span style={{ pointerEvents: 'auto', fontSize: '8pt', color: 'black',}} >
   //      <input className="nodrag" type="text" size="8" onChange={data.onChange} defaultValue={data.datakey} />
   //    </span>
-  const classes = useStyles();
   const [state, setState] = useState(() => {return {
     leaduuid: data.leaduuid ? data.leaduuid : null,
     nameEntered: data.leafnodename ? data.leafnodename : '',
@@ -429,7 +383,6 @@ const LEAFDataCombineNode = memo(({ data }) => {
     try {
       event.preventDefault(); 
       //event.stopPropagation(); 
-      //classes.root.display = 'none';{"standard-basic"+data.leaduuid}
       //const copy_text = document.getElementById(data.leaduuid); 
       //let edit_text = document.getElementById("standard-basic"+data.leaduuid); 
       //let leafnodename = data.leafnodename ? data.leafnodename : '';
@@ -487,7 +440,6 @@ const LEAFDataCombineNode = memo(({ data }) => {
       console.debug("handleLogicToggle(): "+JSON.stringify(state.equality));
       try {
         event.preventDefault(); 
-        //classes.root.display = 'auto';
         //let copy_text = document.getElementById(data.leaduuid); 
         //setState({...state, equality: !state.equality }); // flip-flop of the equality flag
         //edit_text.defaultValue = copy_text.textContent;
@@ -537,7 +489,6 @@ const LEAFDataCombineNode = memo(({ data }) => {
       try {
         event.preventDefault(); 
         //event.stopPropagation(); 
-        //classes.root.display = 'auto';
         //const copy_text = state.nameEntered; //document.getElementById('label'+data.leaduuid); 
         //setState({...state, nameEntered: '', nameDefault: copy_text });
         //data.leafnodename = '';
@@ -556,7 +507,6 @@ const LEAFDataCombineNode = memo(({ data }) => {
       try {
         event.preventDefault(); 
         //event.stopPropagation(); 
-        //classes.root.display = 'auto';
         let copy_text = document.getElementById(data.leaduuid); 
         //setState({...state, nameEntered: '', nameDefault: copy_text.textContent });
         setState(prevState => {return {...prevState, nameEntered: '', nameDefault: copy_text.textContent }});
@@ -675,9 +625,9 @@ const LEAFDataCombineNode = memo(({ data }) => {
         {state.nameEntered}
       </span>
       {!state.nameEntered && (
-      <form className={classes.root} onSubmit={handleTextChange} noValidate autoComplete="off" style={{height: "5"}}>
-        <TextField autoFocus onBlur={handleTextChange} defaultValue={state.nameDefault} InputProps={{ classes }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "6pt", textAlign: "center"}}  label="name?" />
-      </form>)}
+      <Box component="form" sx={formStyles.root} onSubmit={handleTextChange} noValidate autoComplete="off" style={{height: "5"}}>
+        <TextField autoFocus onBlur={handleTextChange} defaultValue={state.nameDefault} InputProps={{ sx: formStyles }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "6pt", textAlign: "center"}}  label="name?" />
+      </Box>)}
       </div>
       {(leadconfig.mainoutput1 && leadconfig.mainoutput2) &&
       <>
@@ -705,7 +655,6 @@ const LEAFDataCombineNode = memo(({ data }) => {
   // here, depending on data.leaduuid, the number and respective positions of input/output handles will be 
   // determined and be reflected in the return construct.
   //const leadconfig = get_lead_config(data.leaduuid)
-  const classes = useStyles();
   const [state, setState] = useState({
     nameEntered: '',
   })
@@ -715,7 +664,6 @@ const LEAFDataCombineNode = memo(({ data }) => {
     try {
       event.preventDefault(); 
       event.stopPropagation(); 
-      //classes.root.display = 'none';{"standard-basic"+data.leaduuid}
       //const copy_text = document.getElementById(data.leaduuid); 
       let edit_text = document.getElementById("standard-basic"+data.leaduuid); 
       //edit_text.defaultValue = copy_text.textContent;
@@ -731,7 +679,6 @@ const LEAFDataCombineNode = memo(({ data }) => {
     try {
       event.preventDefault(); 
       event.stopPropagation(); 
-      //classes.root.display = 'auto';
       let copy_text = document.getElementById(data.leaduuid); 
       //setState({...state, nameEntered: '', nameDefault: copy_text.textContent });
       setState({nameEntered: '', nameDefault: copy_text.textContent });
@@ -759,9 +706,9 @@ const LEAFDataCombineNode = memo(({ data }) => {
         {state.nameEntered}
       </span>
       {!state.nameEntered && (
-      <form className={classes.root} onSubmit={handleTextChange} noValidate autoComplete="off" style={{height: "5"}}>
-        <TextField autoFocus onBlur={handleTextChange} defaultValue={state.nameDefault} InputProps={{ classes }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "6pt", textAlign: "center"}}  label="name?" />
-      </form>)}
+      <Box component="form" sx={formStyles.root} onSubmit={handleTextChange} noValidate autoComplete="off" style={{height: "5"}}>
+        <TextField autoFocus onBlur={handleTextChange} defaultValue={state.nameDefault} InputProps={{ sx: formStyles }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "6pt", textAlign: "center"}}  label="name?" />
+      </Box>)}
       </div>
       {(leadconfig.mainoutput1 && leadconfig.mainoutput2) &&
       <>
@@ -849,7 +796,6 @@ const LEAFNodeContextNode = memo(({ data }) => {
   //    <span style={{ pointerEvents: 'auto', fontSize: '8pt', color: 'black',}} >
   //      <input className="nodrag" type="text" size="8" onChange={data.onChange} defaultValue={data.datakey} />
   //    </span>
-  const classes = useStyles();
   const [state, setState] = useState({
     leaduuid: null,
     nameEntered: '',
@@ -878,7 +824,6 @@ const LEAFNodeContextNode = memo(({ data }) => {
       try {
         event.preventDefault(); 
         //event.stopPropagation(); 
-        //classes.root.display = 'none';{"standard-basic"+data.leaduuid}
         //const copy_text = document.getElementById(data.leaduuid); 
         let edit_text = document.getElementById("standard-basic"+data.leaduuid); 
         //edit_text.defaultValue = copy_text.textContent;
@@ -894,7 +839,6 @@ const LEAFNodeContextNode = memo(({ data }) => {
       console.debug("handleLogicToggle(): "+event);
       try {
         event.preventDefault(); 
-        //classes.root.display = 'auto';
         //let copy_text = document.getElementById(data.leaduuid); 
         //setState({...state, equality: !state.equality }); // flip-flop of the equality flag
         setState(prevState => {return {...prevState, equality: !prevState.equality }}); // flip-flop of the equality flag
@@ -908,7 +852,6 @@ const LEAFNodeContextNode = memo(({ data }) => {
       try {
         event.preventDefault(); 
         //event.stopPropagation(); 
-        //classes.root.display = 'auto';
         //const copy_text = state.nameEntered; //document.getElementById('label'+data.leaduuid); 
         //setState({...state, nameEntered: '', nameDefault: copy_text });
         setState(prevState => {return {...prevState, nameEntered: '', nameDefault: prevState.nameEntered }});
@@ -973,9 +916,9 @@ const LEAFNodeContextNode = memo(({ data }) => {
         {state.nameEntered}
       </span>
       {(!state.nameEntered && state.is_hammer_init) && (
-      <form className={classes.root} onSubmit={state.tchandle} noValidate autoComplete="off" style={{height: "5"}}>
-        <TextField autoFocus onBlur={state.tchandle} defaultValue={state.nameDefault} InputProps={{ classes }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "6pt", textAlign: "center"}}  label="name?" />
-      </form>)}
+      <Box component="form" sx={formStyles.root} onSubmit={state.tchandle} noValidate autoComplete="off" style={{height: "5"}}>
+        <TextField autoFocus onBlur={state.tchandle} defaultValue={state.nameDefault} InputProps={{ sx: formStyles }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "6pt", textAlign: "center"}}  label="name?" />
+      </Box>)}
       </div>
       {(leadconfig.mainoutput1 && leadconfig.mainoutput2) &&
       <>
@@ -1006,7 +949,6 @@ const LEAFEdgeContextNode = memo(({ data }) => {
   //    <span style={{ pointerEvents: 'auto', fontSize: '8pt', color: 'black',}} >
   //      <input className="nodrag" type="text" size="8" onChange={data.onChange} defaultValue={data.datakey} />
   //    </span>
-  const classes = useStyles();
   const [state, setState] = useState({
     leaduuid: null,
     nameEntered: '',
@@ -1036,7 +978,6 @@ const LEAFEdgeContextNode = memo(({ data }) => {
       try {
         event.preventDefault(); 
         //event.stopPropagation(); 
-        //classes.root.display = 'none';{"standard-basic"+data.leaduuid}
         //const copy_text = document.getElementById(data.leaduuid); 
         let edit_text = document.getElementById("standard-basic"+data.leaduuid); 
         //edit_text.defaultValue = copy_text.textContent;
@@ -1052,7 +993,6 @@ const LEAFEdgeContextNode = memo(({ data }) => {
       console.debug("handleLogicToggle(): "+event);
       try {
         event.preventDefault(); 
-        //classes.root.display = 'auto';
         //let copy_text = document.getElementById(data.leaduuid); 
         //setState({...state, equality: !state.equality }); // flip-flop of the equality flag
         setState(prevState => {return {...prevState, arrowdirection: !prevState.arrowdirection }}); // flip-flop of the arrowdirection flag
@@ -1066,7 +1006,6 @@ const LEAFEdgeContextNode = memo(({ data }) => {
       try {
         event.preventDefault(); 
         //event.stopPropagation(); 
-        //classes.root.display = 'auto';
         //const copy_text = state.nameEntered; //document.getElementById('label'+data.leaduuid); 
         //setState({...state, nameEntered: '', nameDefault: copy_text });
         setState(prevState => {return {...prevState, nameEntered: '', nameDefault: prevState.nameEntered }});
@@ -1132,9 +1071,9 @@ const LEAFEdgeContextNode = memo(({ data }) => {
         {state.nameEntered}
       </span>
       {(!state.nameEntered && state.is_hammer_init) && (
-      <form className={classes.root} onSubmit={state.tchandle} noValidate autoComplete="off" style={{height: "5"}}>
-        <TextField autoFocus onBlur={state.tchandle} defaultValue={state.nameDefault} InputProps={{ classes }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "6pt", textAlign: "center"}}  label="name?" />
-      </form>)}
+      <Box component="form" sx={formStyles.root} onSubmit={state.tchandle} noValidate autoComplete="off" style={{height: "5"}}>
+        <TextField autoFocus onBlur={state.tchandle} defaultValue={state.nameDefault} InputProps={{ sx: formStyles }} id={"standard-basic"+data.leaduuid} style={{ fontSize: "6pt", textAlign: "center"}}  label="name?" />
+      </Box>)}
       </div>
       {(leadconfig.mainoutput1 && leadconfig.mainoutput2) &&
       <>
@@ -1468,7 +1407,6 @@ const LEAFDeckTracker = memo(({ data }) => {
     try {
       event.preventDefault(); 
       event.stopPropagation(); 
-      //classes.root.display = 'auto';
       //let copy_text = document.getElementById(data.leaduuid); 
       //copy_text.textContent = await navigator.clipboard.readText();
       //setState({...state, nameEntered: '', nameDefault: copy_text.textContent });

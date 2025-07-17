@@ -1,15 +1,10 @@
 import React, { useState, memo, FC, CSSProperties, useEffect, useRef } from 'react';
-import Hammer, { defaults } from '@egjs/hammerjs';
 import {v4 as uuidv4} from 'uuid';
-//import { Typography, Tooltip } from '@material-ui/core';
-import { Tooltip, Typography } from '@mui/material';
-import { DebugPort } from './porthandle'
-//#reactflow #migration
-//import { Handle, Position, NodeProps, Connection, Edge } from '../lib/react-flow-renderer';
+import { DebugPort } from './porthandle/index.js'
 import { Handle, Position, NodeProps, Connection, Edge } from '../lib/reactflow.11.10.4/core/dist/esm/index.js';
-import { debugHandleStyle } from './styles';
+import { debugHandleStyle } from './styles.js';
 
-import { useLEAFNodeMenu } from './nodemenu';
+import { useLEAFNodeMenu } from './nodemenu.js';
 //import { getMenuGraph } from '../index';
 //import { executeLEAFLogic } from '../../../../parser/leaf';
 //import { memoize } from 'lodash';

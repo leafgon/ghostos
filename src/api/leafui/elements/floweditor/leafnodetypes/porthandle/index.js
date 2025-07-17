@@ -7,12 +7,11 @@ import { shallow } from 'zustand/shallow';
 //import { HandleProps, Connection, ReactFlowState, Position  } from '../../lib/react-flow-renderer'; ///types';
 //import { getHostForElement } from '../../lib/react-flow-renderer';
 //import NodeIdContext from '../../lib/react-flow-renderer'; ///contexts'; //.contexts';
-import { Handle, useStore, useStoreApi, Position, getHostForElement } from '../../lib/reactflow.11.10.4/core/dist/esm'; ///store/hooks'; //.store.hooks';
+import { Handle, useStore, useStoreApi, Position, getHostForElement } from '../../lib/reactflow.11.10.4/core/dist/esm/index.js'; ///store/hooks'; //.store.hooks';
 import '../../lib/reactflow.11.10.4/reactflow/dist/style.css';
 //import NodeIdContext from './context'; ///contexts'; //.contexts';
 
-import { onMouseDown, SetSourceIdFunc, SetPosition, checkElementBelowIsValid } from './handler';
-import { createContext } from 'react';
+import { onMouseDown, SetSourceIdFunc, SetPosition, checkElementBelowIsValid } from './handler.js';
 
 const svgfilepath = '/assets/svg/'
 const alwaysValid = () => true;

@@ -1,6 +1,6 @@
 import React from 'react';
 //import { connect } from 'react-redux';
-import LEAFUISet from './set';
+import LEAFUISet from './set.js';
 
 class GraphLabelComponent extends React.Component {
 

@@ -1,7 +1,7 @@
 import Paper from '@mui/material/Paper';
 import { styled } from '@mui/material/styles';
 
-const useStyles = styled(Paper)(({theme}) => ({
+const boxStyles = styled(Paper)(({theme}) => ({
   root: {
     '& > *': {
       width: '100%',
@@ -48,4 +48,4 @@ const sourceHandleStyle = { ...targetHandleStyle, top: '50%', left: '100%'}; //:
 const sourceHandleStyleA = { ...targetHandleStyle, top: '0%', left:'120%' }; //: CSSProperties
 const sourceHandleStyleB = { ...targetHandleStyle, bottom: '0%', top: 'auto', left:'120%' }; //: CSSProperties
 
-export {debugHandleStyle, targetHandleStyle, targetAuxHandleStyle, sourceAuxHandleStyle, targetAuxDataHandleStyle, sourceAuxDataHandleStyle, targetAnchorHandleStyle, sourceAnchorHandleStyle, sourceHandleStyle, sourceHandleStyleA, sourceHandleStyleB, useStyles }
+export {debugHandleStyle, targetHandleStyle, targetAuxHandleStyle, sourceAuxHandleStyle, targetAuxDataHandleStyle, sourceAuxDataHandleStyle, targetAnchorHandleStyle, sourceAnchorHandleStyle, sourceHandleStyle, sourceHandleStyleA, sourceHandleStyleB, boxStyles }

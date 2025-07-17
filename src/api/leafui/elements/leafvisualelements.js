@@ -1,29 +1,27 @@
 import React, { Component, Fragment, useState, useEffect, useRef, useLayoutEffect }  from 'react';
-import { LEAT3DNavigator } from './gnav';
-import { PopupCenterWindow } from './popupwin';
-import BasicImageList from './imagelist';
-import LEAFTextEditor from './texteditor';
-import LEAFUITextPrompt from './textprompt';
-import { LEAFEditor } from './floweditor';
+import { LEAT3DNavigator } from './gnav.js';
+import { PopupCenterWindow } from './popupwin.js';
+import BasicImageList from './imagelist.js';
+import LEAFTextEditor from './texteditor.js';
+import LEAFUITextPrompt from './textprompt.js';
+import { LEAFEditor } from './floweditor/index.js';
 import { cloneElement } from 'react';
 import safeStringify from 'fast-safe-stringify';
-import { findAddedJSON, findRemovedJSON } from './stateutils';
+import { findAddedJSON, findRemovedJSON } from './stateutils.js';
 import Hammer from '@egjs/hammerjs';
 import propagating from 'propagating-hammerjs';
 
 import { v4 as uuid4 } from 'uuid';
 
-import { _leafgraph } from '../../parser/nodelogic/abstraction';
-import { _leafelement } from '../../parser/nodelogic/elements';
-import { executeLEAFLogic } from '../../parser/leaf';
-import { etaTreeForest } from '../../parser/etatreeforest';
+import { _leafgraph } from '../../parser/nodelogic/abstraction/index.js';
+import { _leafelement } from '../../parser/nodelogic/elements/index.js';
+import { executeLEAFLogic } from '../../parser/leaf.js';
+import { etaTreeForest } from '../../parser/etatreeforest.js';
 
 import ReactPlayer from 'react-player';
-import LEAFImageDropzone from './dropzone';
-import { doUnbottle } from '../../parser/nodelogic/datautils/bottling';
-import { IFrame } from './iframe';
-import { LEAFDisplayLoadSpinner } from './loadspinner';
-import { Subject } from 'rxjs';
+import LEAFImageDropzone from './dropzone.js';
+import { doUnbottle } from '../../parser/nodelogic/datautils/bottling.js';
+import { IFrame } from './iframe.js';
 
 import { ErrorBoundary } from "react-error-boundary";
 

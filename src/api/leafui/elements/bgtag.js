@@ -2,19 +2,13 @@ import React, { useState, useRef, useEffect, Fragment, useLayoutEffect } from 'r
 import {Vector3, Vector2, Raycaster} from 'three';
 import Hammer from '@egjs/hammerjs';
 import propagating from 'propagating-hammerjs';
-//import { connect } from 'react-redux';
-//import LEAFUISet from '../leafui/set';
-//import LEAFUIPrompt from '../leafui/prompt';
-//import LEAFUIComplexGrid from '../leafui/complexgrid';
-//import BasicImageList from '../leafui/imagelist';
-//import PropTypes from 'prop-types';
-import BGTagYouTube from './bgtagyoutube';
+import BGTagYouTube from './bgtagyoutube.js';
 
 import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
 import FullscreenOutlinedIcon from '@mui/icons-material/FullscreenOutlined';
 import FullscreenExitOutlinedIcon from '@mui/icons-material/FullscreenExitOutlined';
 import MinimizeOutlinedIcon from '@mui/icons-material/MinimizeOutlined';
-import { setupRaycaster, calculateLineSphereIntersection, threeCameraCoordToSphericalCoord, sphericalCoordToTHREECameraCoord } from './gnav';
+import { setupRaycaster, calculateLineSphereIntersection, threeCameraCoordToSphericalCoord, sphericalCoordToTHREECameraCoord } from './gnav.js';
 
 import { v4 as uuid4 } from 'uuid';
 

@@ -3,7 +3,7 @@
 import { useRef } from 'react';
 import { animated, useSpring } from "react-spring";
 import useResizeObserver from "use-resize-observer";
-import { DragableContainer } from "./DragableContainer";
+import { DragableContainer } from "./DragableContainer.js";
 import { styled } from '@mui/system';
 
 import { v4 as uuid4 } from 'uuid';

@@ -6,9 +6,9 @@ import { ClickAwayListener } from "@mui/base";
 import { styled } from '@mui/system';
 import { ReactElement } from "react";
 import useResizeObserver from "use-resize-observer";
-import { DragableContainer } from "./DragableContainer";
-import { Orbit } from "./Orbit";
-import { Satellite } from "./Satellite";
+import { DragableContainer } from "./DragableContainer.js";
+import { Orbit } from "./Orbit.js";
+import { Satellite } from "./Satellite.js";
 
 import { v4 as uuid4 } from 'uuid';
 

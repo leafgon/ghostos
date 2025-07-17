@@ -22,21 +22,16 @@ import './texteditor.css';
 import CodeMirror from 'codemirror';
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/theme/dracula.css';
-import commonlisp from 'codemirror/mode/commonlisp/commonlisp';
-import clojure from 'codemirror/mode/clojure/clojure';
-import 'codemirror/keymap/vim'; // as per https://stackoverflow.com/questions/15152675/using-codemirror-in-vim-mode
+import 'codemirror/keymap/vim.js'; // as per https://stackoverflow.com/questions/15152675/using-codemirror-in-vim-mode
 //import js from 'codemirror/mode/javascript/javascript';
 
 import { useMemo, useEffect, useRef, useState } from 'react';
 
-import { vim } from '../lib/texteditor/cm-vim/index.js'; // '../lib/texteditor/cm-vim';
-import { setMultiKeyedData, fetchMultiKeyedData } from '../../utils/fetchnodedata';
-
 import { v4 as uuid4 } from 'uuid';
-import { SHA1 } from '../../utils/crypto';
+import { SHA1 } from '../../utils/crypto.js';
 import safeStringify from 'fast-safe-stringify';
-import { executeLEAFLogic } from '../../parser/leaf';
-import { parseJsonToLEAFlisp, runLEAFlispcode } from '../../parser/nodelogic/wizardry/leaflisp';
+import { executeLEAFLogic } from '../../parser/leaf.js';
+import { parseJsonToLEAFlisp, runLEAFlispcode } from '../../parser/nodelogic/wizardry/leaflisp.js';
 import { debounce } from 'lodash';
 import { of, from, interval, mergeMap, take, map, timeout, catchError } from 'rxjs';
 //import { debounce } from '../../utils/leafdataflow';

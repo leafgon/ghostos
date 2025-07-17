@@ -23,7 +23,7 @@ import {
   Connection,
   HandleType,
   ReactFlowState,
-} from '../../lib/reactflow.11.10.4/core/dist/esm'; //.types';
+} from '../../lib/reactflow.11.10.4/core/dist/esm/index.js'; //.types';
 
 //import {getHostForElement} from 'react-flow-renderer';
 // in lieu of the unexported react-flow_renderer defined getHostForElement

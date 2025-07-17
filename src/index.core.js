@@ -15,11 +15,6 @@ import { init_gRuntimeLEAFlisp } from "./api/parser/nodelogic/wizardry/leaflisp.
 import { initializeLEAFlakeGQLClient } from "./api/leafio/leaflake.js";
 import { executeLEAFLogic, executeLEAFLogicInSync } from "./api/parser/leaf.js";
 
-import { LEAT3DNavigator } from './api/leafui/elements/gnav.js';
-import { LEAFVisualElements } from './api/leafui/elements/leafvisualelements.js';
-import { LEAFEditor } from './api/leafui/elements/floweditor/index.js';
-import { LEAFDisplayLoadSpinner } from './api/leafui/elements/loadspinner.js';
-
 import { destroySoundStageNode, initializeSoundStage } from './api/parser/nodelogic/elements/library/sound_lib.js';
 
-export { parseAddressableGraph, executeLEAFLogic, executeLEAFLogicInSync, initializeLEAFlakeGQLClient, init_gRuntimeLEAFlisp, runtimeEtaTree, etaReduceDataflowComponent, useGosVolatileStateIO, useGosPersistentStateIO, useMVIframework, useLEAFIOapi, initLEAFIOapi, initializeMasterSubsDirectory, reconstructLEAFGraph, analyzeLEAFGraph, LEAFIOmetamodel, _leafstdlib_dataflow_api, _breezyforeststdlib_hierarchy, createGQLClient, doBottle, doUnbottle, LEAT3DNavigator, LEAFVisualElements, LEAFEditor, LEAFDisplayLoadSpinner, destroySoundStageNode, initializeSoundStage };
+export { parseAddressableGraph, executeLEAFLogic, executeLEAFLogicInSync, initializeLEAFlakeGQLClient, init_gRuntimeLEAFlisp, runtimeEtaTree, etaReduceDataflowComponent, useGosVolatileStateIO, useGosPersistentStateIO, useMVIframework, useLEAFIOapi, initLEAFIOapi, initializeMasterSubsDirectory, reconstructLEAFGraph, analyzeLEAFGraph, LEAFIOmetamodel, _leafstdlib_dataflow_api, _breezyforeststdlib_hierarchy, createGQLClient, doBottle, doUnbottle, destroySoundStageNode, initializeSoundStage };

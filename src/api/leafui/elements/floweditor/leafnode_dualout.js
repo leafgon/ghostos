@@ -4,22 +4,15 @@ import { Handle, Position, NodeProps, Connection, Edge } from './lib/react-flow-
   
 import Draggable from 'react-draggable';
 
-const targetHandleStyle: CSSProperties = { background: '#225' };
-const targetAuxHandleStyle: CSSProperties = { background: '#22f', left: '20%' };
-const sourceAuxHandleStyle: CSSProperties = { background: '#f25',  left: '80%'};
-const sourceHandleStyle: CSSProperties = { ...targetHandleStyle, top: '50%'};
-const sourceHandleStyleA: CSSProperties = { ...targetHandleStyle, top: 10 };
-const sourceHandleStyleB: CSSProperties = { ...targetHandleStyle, bottom: 10, top: 'auto' };
+//: CSSProperties
+const targetHandleStyle = { background: '#225' };
+const targetAuxHandleStyle = { background: '#22f', left: '20%' };
+const sourceAuxHandleStyle = { background: '#f25',  left: '80%'};
+const sourceHandleStyle = { ...targetHandleStyle, top: '50%'};
+const sourceHandleStyleA = { ...targetHandleStyle, top: 10 };
+const sourceHandleStyleB = { ...targetHandleStyle, bottom: 10, top: 'auto' };
 
-const onConnect = (params: Connection | Edge) => console.log('handle onConnect', params);
-
-const onHandleTouch = (event: React.MouseEvent): void => {
-  console.log("touch down on handle!")
-}
-
-const onTouchStart = (event: React.MouseEvent): void => {
-  console.log("handle dragging!")
-}
+const onConnect = (params) => console.log('handle onConnect', params);
 
 const LEAFNode = ({ data }) => {
   // here, depending on data.leaduuid, the number and respective positions of input/output handles will be 

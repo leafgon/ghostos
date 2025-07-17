@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useGosVolatileStateIO } from '../index.js';
+import { useGosVolatileStateIO } from '@ghostos/core';
 import { skip } from 'rxjs';
 
 // operators to work on model, view, or intent states

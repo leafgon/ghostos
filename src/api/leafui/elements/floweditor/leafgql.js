@@ -3,11 +3,11 @@
 //import sjcl from 'sjcl';
 //import gql from 'graphql-tag';
 import {v4 as uuidv4} from 'uuid';
-import {createGQLClient} from '../../../../graphql/client'; //'../../lib/graphql/client';
+import {createGQLClient} from '../../../../graphql/client.js'; //'../../lib/graphql/client';
 
-const endpoint_subs = process.env.LEAFGON_ENDPOINT_SUBS; // "http://localhost:10001/sgraphql";
-const websocket_subs = process.env.LEAFGON_WEBSOCKET_SUBS; // "ws://localhost:10001/sgraphql";
-const endpoint_qm = process.env.LEAFGON_ENDPOINT_QM; // "http://localhost:10001/qmgraphql";
+const endpoint_subs = process.env.LEAFGON_ENDPOINT_SUBS || "https://gdb.leafgon.com/sgraphql";
+const websocket_subs = process.env.LEAFGON_WEBSOCKET_SUBS || "wss://gdb.leafgon.com/sgraphql";
+const endpoint_qm = process.env.LEAFGON_ENDPOINT_QM || "https://gdb.leafgon.com/qmgraphql";
 //const endpoint_subs = "https://www.leafgon.com:10001/sgraphql";
 //const websocket_subs = "wss://www.leafgon.com:10001/sgraphql";
 //const endpoint_qm = "https://www.leafgon.com:10001/qmgraphql";

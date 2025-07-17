@@ -1,7 +1,5 @@
 import React from 'react';
-//#reactflow #migration
-//import { getBezierPath, getEdgeCenter, getMarkerEnd } from './lib/react-flow-renderer';
-import { BaseEdge, getBezierPath, getEdgeCenter, getMarkerEnd } from './lib/reactflow.11.10.4/core/dist/esm';
+import { BaseEdge, getBezierPath, getEdgeCenter, getMarkerEnd } from './lib/reactflow.11.10.4/core/dist/esm/index.js';
 
 const foreignObjectSize = 40;
 const onEdgeClick = (event, id) => {

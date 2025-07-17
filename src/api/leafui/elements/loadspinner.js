@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 
-import styles from './iframe.module.css';
+import * as styles from './iframe.module.css';
 import { MutatingDots } from "react-loader-spinner";
 import { Subject, firstValueFrom } from 'rxjs';
 
@@ -63,7 +63,7 @@ const LEAFDisplayLoadSpinner = (props) => {
                         wrapperClass=""
                     />
                 </div>
-                <div className={styles.dispwrapper} style={{opacity: dispLoadState.nodeopacity}}>
+                <div className={styles.container} style={{opacity: dispLoadState.nodeopacity}}>
                     {coreInstance && coreInstance}
                     {props.children}
                 </div>

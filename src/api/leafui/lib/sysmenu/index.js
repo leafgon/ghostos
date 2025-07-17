@@ -1,2 +1,2 @@
-export * from './Planet';
-export * from './Satellite';
+export * from './Planet.js';
+export * from './Satellite.js';

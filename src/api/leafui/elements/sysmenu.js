@@ -10,27 +10,20 @@ import PropTypes from 'prop-types';
 //import Measure from 'react-measure';
 import { Transition, animated, interpolate } from 'react-spring';
 //import { Planet } from 'react-planet';
-import { Planet, Satellite } from '../lib/sysmenu';
-//import { Typography, Tooltip } from '@material-ui/core';
-//import { withStyles, makeStyles } from '@material-ui/core/styles';
-//import AllInclusiveIcon from '@material-ui/icons/AllInclusive';
-//import BackupIcon from '@material-ui/icons/Backup';
-//import { Badge, Popover } from '@material-ui/core';
+import { Planet, Satellite } from '../lib/sysmenu/index.js';
 import { Badge, Popover, Typography, Tooltip } from '@mui/material';
 //import { makeStyles, propsToClassKey, withStyles } from '@mui/styles';
 import { styled } from '@mui/system';
 import { v4 as uuid4 } from 'uuid';
 import { ReplaySubject, from, take } from 'rxjs';
 
-//import { createSvgIcon } from '@material-ui/core/utils';
 import Icon from '@mui/material/Icon';
-import cloneDeep from 'lodash/cloneDeep';
+import cloneDeep from 'lodash/cloneDeep.js';
 import { throttle } from 'lodash';
 
-import {_breezyforeststdlib_name} from '../../metamodel';
-import { executeLEAFLogic, subscribeToLEAFLogic } from '../../parser/leaf';
-import { enterDataBus } from '../../utils/leafdataflow';
-import { doBottle } from '../../parser/nodelogic/datautils/bottling';
+import {_breezyforeststdlib_name} from '../../metamodel.js';
+import { executeLEAFLogic, subscribeToLEAFLogic } from '../../parser/leaf.js';
+import { doBottle } from '../../parser/nodelogic/datautils/bottling.js';
 
 //import '../styles/sysmenu.css';
 // spark_dev_note: 17/Nov/2022

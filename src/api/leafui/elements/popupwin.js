@@ -13,8 +13,7 @@ import Minimize from '@mui/icons-material/Minimize'
 
 import { of } from 'rxjs';
 
-import { useLEAFPopupMenu } from './popupmenu';
-import { executeLEAFLogic } from '../../parser/leaf';
+import { useLEAFPopupMenu } from './popupmenu.js';
 
 const PopupCenterWindow = (props) => {
     const popupcontentHeight = useRef(0);

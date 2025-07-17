@@ -1,28 +1,15 @@
 import React, { useState, memo, FC, CSSProperties, useEffect, useRef } from 'react';
-import { ReactDOM } from 'react';
 import Hammer from '@egjs/hammerjs';
 
-//#reactflow #migration
-//import { Handle, Position, NodeProps, Connection, Edge } from '../lib/react-flow-renderer';
 import { Handle, Position, NodeProps, Connection, Edge } from '../lib/reactflow.11.10.4/core/dist/esm/index.js';
-import { AnchorPort, DataPort, LambdaPort } from './porthandle'
-
-import Draggable from 'react-draggable';
+import { AnchorPort, DataPort, LambdaPort } from './porthandle/index.js'
 
 import TextField from '@mui/material/TextField';
-//import { TextField, Input } from '@material-ui/core';
-//import { withStyles, makeStyles } from '@material-ui/core/styles';
-//import { textAlign } from '@material-ui/system';
-//import { NoEncryption } from '@material-ui/icons';
 
-import { useMutation } from 'graphql-hooks';
-//import { Base64 } from 'crypto-js/enc-base64';
-//import sjcl from 'sjcl';
+import {mutateUpdateNode} from '../leafgql.js';
 
-import {mutateUpdateNode} from '../leafgql';
-
-import {targetHandleStyle, targetAuxDataHandleStyle, targetAnchorHandleStyle, sourceHandleStyleA, sourceHandleStyleB, sourceHandleStyle, sourceAuxDataHandleStyle, sourceAnchorHandleStyle, useStyles} from './styles';
-import {onConnect} from './uihandlers';
+import {targetHandleStyle, targetAuxDataHandleStyle, targetAnchorHandleStyle, sourceHandleStyleA, sourceHandleStyleB, sourceHandleStyle, sourceAuxDataHandleStyle, sourceAnchorHandleStyle, useStyles} from './styles.js';
+import {onConnect} from './uihandlers.js';
 
 const LEAFNodeContext = memo(({ data }) => {
   // here, depending on data.leaduuid, the number and respective positions of input/output handles will be

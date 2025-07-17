@@ -13,7 +13,6 @@ import { literals, runtime, utils, plHashMap, plVector, plString, plBool, plNumb
 import { encodeUnicode } from '../../../utils/leafbase64.js';
 //import { result } from 'lodash';
 import { etaReduceLambdaGraphs } from '../../eta.js';
-import assert from 'assert';
 //import { _leafLISPHelpText } from './leaflisphelp';
 import { executeLEAFLogic, executeLEAFLogicInSync } from '../../leaf.js';
 import { _leafgraph } from '../abstraction/index.js';

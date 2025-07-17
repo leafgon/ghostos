@@ -2,7 +2,7 @@
 
 import React, { Component } from 'react'
 import { createPortal } from 'react-dom'
-import styles from './iframe.module.css';
+import * as styles from './iframe.module.css';
 import { MutatingDots } from "react-loader-spinner";
 import { ErrorBoundary } from "react-error-boundary";
 

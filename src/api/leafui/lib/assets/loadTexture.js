@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import loadImage from 'image-promise'
 
 const onTextureLoadingCompleted = (_texture) => {
-    _texture.encoding = THREE.sRGBEncoding; // this line is necessary to make the color space dark as intended
+    _texture.colorSpace = THREE.SRGBColorSpace; // this line is necessary to make the color space dark as intended
     const material = new THREE.MeshBasicMaterial({ map: _texture });
     material.dithering = true;
     material.toneMapped = false;
@@ -42,7 +42,7 @@ export default async function loadTexture(url, options, onTextureLoadingComplete
     const texture = await textureloader.loadAsync(url);
 
     texture.name = url
-    texture.encoding = options.encoding || THREE.sRGBEncoding;
+    texture.colorSpace = options.colorSpace || 'srgb';
     //setTextureParams(url, texture, options)
 
     if (options.renderer) {
@@ -61,7 +61,7 @@ export default async function loadTexture(url, options, onTextureLoadingComplete
 async function loadTextureOld(url, options) {
   const texture = new THREE.Texture()
   texture.name = url
-  texture.encoding = options.encoding || THREE.LinearEncoding
+  texture.colorSpace = options.colorSpace || 'srgb-linear';
   setTextureParams(url, texture, options)
 
   try {
@@ -92,7 +92,8 @@ const setTextureParams = function setTextureParams(url, texture, opt) {
     const isJPEG = url.search(/\.(jpg|jpeg)$/) > 0 || url.search(/^data:image\/jpeg/) === 0
     //texture.format = isJPEG ? THREE.RGBFormat : THREE.RGBAFormat
     //texture.format = isJPEG ? THREE.RGBAFormat : THREE.RGBAFormat
-    texture.format = isJPEG ? THREE.sRGBEncoding : THREE.sRGBEncoding
+    //texture.format = isJPEG ? 'srgb' : THREE.sRGBEncoding
+    texture.colorSpace = THREE.SRGBColorSpace
   }
   if (opt.repeat) texture.repeat.copy(opt.repeat)
   texture.wrapS = opt.wrapS || THREE.ClampToEdgeWrapping

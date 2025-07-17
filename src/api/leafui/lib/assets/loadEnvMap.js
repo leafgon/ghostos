@@ -3,8 +3,8 @@
 // https://github.com/mattdesl/threejs-app/blob/master/src/util/loadEnvMap.js
 import * as THREE from 'three'
 import highestPowerOfTwo from 'highest-power-two'
-import { HDRCubeTextureLoader } from 'three/examples/jsm/loaders/HDRCubeTextureLoader'
-import loadTexture from './loadTexture'
+import { HDRCubeTextureLoader } from 'three/examples/jsm/loaders/HDRCubeTextureLoader.js'
+import loadTexture from './loadTexture.js'
 
 export default async function loadEnvMap(url, options) {
   const renderer = options.renderer

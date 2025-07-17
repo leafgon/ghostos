@@ -35,21 +35,16 @@ import './lib/reactflow.11.10.4/reactflow/dist/style.css';
 //import {useParams} from 'react-router-dom';
 
 import {v4 as uuidv4, v5 as uuidv5} from 'uuid';
-import { encodeUnicode, decodeUnicode } from '../../../utils/leafbase64';
-import cloneDeep from 'lodash/cloneDeep';
+import { encodeUnicode, decodeUnicode } from '../../../utils/leafbase64.js';
+import cloneDeep from 'lodash/cloneDeep.js';
 
 //import {Utility, LEAFOperatorNode, LEAFDataFilterNode, LEAFDataCombineNode, LEAFNodeContextNode, LEAFEdgeContextNode, LEAFAnchorPointNode, LEAFDeckSpade, LEAFDeckDiamond, LEAFDeckHeart, LEAFDeckClub, LEAFDeckTracker} from './leafnodes';
 //import {LEAFEditorCircularNode, LEAFEditorElementNode, LEAFUtility, LEAFSpell, LEAFDataFilter, LEAFDataCombine, LEAFNodeContext, LEAFEdgeContext, LEAFAnchorPoint, LEAFDeckSpade, LEAFDeckDiamond, LEAFDeckHeart, LEAFDeckClub, LEAFDeckTracker} from './leafnodetypes';
-import { constructEditorNodeTypes, LEAFEditorCircularNode, LEAFEditorElementNode, LEAFEditorCircularNamedNode, LEAFEditorCircularNamedBooleanNode } from './leafnodetypes';
-import { _leafstdlib_dataflow_api, LEAFIOmetamodel } from '../../../metamodel';// '../../ghostos';
-import {LEAFEdge, LEAFLambdaEdge, LEAFAnchorEdge} from './leafedge';
-import LEAFSidebar from './sidebar';
+import { constructEditorNodeTypes, LEAFEditorCircularNode, LEAFEditorElementNode, LEAFEditorCircularNamedNode, LEAFEditorCircularNamedBooleanNode } from './leafnodetypes/index.js';
+import { _leafstdlib_dataflow_api, LEAFIOmetamodel } from '../../../metamodel.js';// '../../ghostos';
+import {LEAFEdge, LEAFLambdaEdge, LEAFAnchorEdge} from './leafedge.js';
 //import GRAPHQL_CLIENT from './GraphQLSetup';
 
-import { ClientContext } from 'graphql-hooks'
-import { useSubscription, useMutation } from 'graphql-hooks';
-
-import { memoize } from 'lodash';
 import dagre from 'dagre';
 //import SHA256 from 'crypto-js/sha256';
 //import Base64 from 'crypto-js/enc-base64';
@@ -57,26 +52,20 @@ import dagre from 'dagre';
 //import { sha256 } from 'sjcl/core/sha256'
 //import sjcl from 'sjcl';
 
-import {mutateUpdateNode, mutateAddNode, mutateDelNode, mutateAddEdge, mutateDelEdge, getLEAFgqlSubs, getLEAFgqlStrAddNode, getLEAFgqlStrUpdateNode, getLEAFgqlStrDelNode, MUT_UPDATENODE, MUT_ADDNODE, MUT_DELNODE} from './leafgql';
-import { isNullableType } from 'graphql';
+import {mutateUpdateNode, mutateAddNode, mutateDelNode, mutateAddEdge, mutateDelEdge, getLEAFgqlSubs, getLEAFgqlStrAddNode, getLEAFgqlStrUpdateNode, getLEAFgqlStrDelNode, MUT_UPDATENODE, MUT_ADDNODE, MUT_DELNODE} from './leafgql.js';
 
-//import createClient from '../../lib/graphql/client';
-import { endpoint_subs, websocket_subs, endpoint_qm } from './leafgql';
+import { fetchMultiKeyedData, setMultiKeyedData } from '../../../utils/fetchnodedata.js'; //'../../ghostos/api/utils/fetchnodedata';
 
-import { fetchMultiKeyedData, setMultiKeyedData } from '../../../utils/fetchnodedata'; //'../../ghostos/api/utils/fetchnodedata';
+import { _edge_handle_dict, _edge_style_dict } from '../../../metamodel.js';
 
-import { initializeLEAFlakeGQLClient } from '../../../leafio/leaflake';
-import { _edge_handle_dict, _edge_style_dict } from '../../../metamodel';
+import { _leafgraph } from '../../../parser/nodelogic/abstraction/leafgraph.js';
+import { driveDataflowByCtrlflow, executeLEAFLogic, parseAddressableGraph } from '../../../parser/leaf.js';
 
-import { _leafgraph } from '../../../parser/nodelogic/abstraction/leafgraph';
-import { useLEAFIOapi } from '../../../leafio/core';
-import { driveDataflowByCtrlflow, executeLEAFLogic, parseAddressableGraph } from '../../../parser/leaf';
-
-import { useLEAFPopupMenu } from '../popupmenu';
+import { useLEAFPopupMenu } from '../popupmenu.js';
 
 import './index.css';
 import { concatMap, firstValueFrom, ReplaySubject, combineLatest, of, map, withLatestFrom, takeUntil, filter } from "rxjs";
-import { doBottle, doUnbottle } from '../../../parser/nodelogic/datautils/bottling';
+import { doBottle, doUnbottle } from '../../../parser/nodelogic/datautils/bottling.js';
 
 const leafgon_url = process.env.LEAFGON_URL;
 const LEAF_VERSION = 'breezyforest';

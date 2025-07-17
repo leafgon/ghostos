@@ -1,7 +1,7 @@
 import 'date-fns';
 import React from 'react';
-import DateFnsUtils from '@date-io/date-fns';
-import LEAFDatePicker from '../misc/datepicker';
+//import DateFnsUtils from '@date-io/date-fns';
+import LEAFDatePicker from '../misc/datepicker.js';
 
 import { useSelector } from 'react-redux';
 import { assertWrappingType } from 'graphql';
