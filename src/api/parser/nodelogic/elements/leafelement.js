@@ -2,7 +2,6 @@ import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } fro
 import { concatMap, map, withLatestFrom, filter, multicast, share } from 'rxjs/operators';
 import { _leafbottle, _leafunbottle } from '../datautils/index.js';
 import { zipDataflows, combineDataflows, chronosDataflow, CHRONOSTYPE_SYNC } from '../../../utils/leafdataflow.js';
-//import { LEAT3DNavigator } from '../../../leafui/elements/gnav';
 import { of, BehaviorSubject, combineLatest, Subject, race } from 'rxjs';
 import { executeLEAFLogicInSync, executeLEAFLogic, driveDataflowByCtrlflow } from '../../leaf.js';
 import { v4 as uuid4 } from 'uuid';
@@ -11,7 +10,7 @@ import axios from 'axios';
 import _ from 'lodash';
 
 //https://www.npmjs.com/package/quickjs-emscripten
-import { newQuickJSAsyncWASMModule, newQuickJSWASMModule, shouldInterruptAfterDeadline } from "quickjs-emscripten";
+//import { newQuickJSAsyncWASMModule } from "quickjs-emscripten";
 
 import { ElemCacheKeyLUT, initStdElementProps } from './library/index.js';
 import { doBottle, doUnbottle } from '../datautils/bottling.js';
@@ -85,16 +84,16 @@ const elementapi = (elejs_context) => {
 };
 
 
-const initWASMModule = _.memoize(async (_refnode, _elemfunc) => {
-    const module = new Object();
-    module.wasm = await newQuickJSAsyncWASMModule();
-    module.jsruntime = module.wasm.newRuntime();
-    module.context = module.jsruntime.newContext();
-    module.refnode = _refnode;
-    //return module;
-    const elementconfig = await _elemfunc(module);
-    return elementconfig;
-});
+//const initWASMModule = _.memoize(async (_refnode, _elemfunc) => {
+//    const module = new Object();
+//    module.wasm = await newQuickJSAsyncWASMModule();
+//    module.jsruntime = module.wasm.newRuntime();
+//    module.context = module.jsruntime.newContext();
+//    module.refnode = _refnode;
+//    //return module;
+//    const elementconfig = await _elemfunc(module);
+//    return elementconfig;
+//});
 
 //let element_data_cache = {};
 const _leafelement = {
@@ -687,24 +686,6 @@ const _leafelement = {
                                 },
                                 graph_options
                             }
-                            //componentloader: (_leafio) => {
-                            //    //const mock_navnodeedges2 = [
-                            //    //// spark_dev_note: determine where the provenance of navnodeedges would be provided. in the bottle? or nowhere?
-                            //    //// the following structure is what's used in the leaf graph either for a node or for an edge
-                            //    ////        provenance: {  
-                            //    ////            graph: {domain: 'storm', appid: 'leafeditor'} // about the graph that initiated the creation of this edge
-                            //    ////        },
-                            //    //// for now (21 Feb 2022), we're sticking to the following structure for testing purposes
-                            //    //    {
-                            //    //        //label: '',
-                            //    //        source: {uuid: '308bd84f-3af2-478e-ae35-b2842a9bd3a2'}, 
-                            //    //        target: {uuid: '308bd84f-3af2-478e-ae35-b2842a9bd3a3'},
-                            //    //        uuid: 'aca6bb1e-44c6-41ff-94e6-742888cd8ff2', // an edge id unique in the domain
-                            //    //    },
-                            //    //];
-                            //    const graph_data = {"nodes": Array.isArray(x) ? x : [x], "edges": mock_navnodeedges};
-                            //    return <LEAT3DNavigator data={{graph_data: graph_data}} leafio={_leafio} graph_options={graph_options} />
-                            //}
                         }
                     }, "screenio");
                 }

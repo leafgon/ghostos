@@ -11,7 +11,7 @@ import { combineLatest, interval, zip, merge, concat, race, of, take, BehaviorSu
 import { LEAFIOmetamodel } from '../metamodel.js';
 //import { processLEAFNodeLogic } from './breezyforest';
 import Graph from 'graphology';
-import {connectedComponents} from 'graphology-components';
+import { connectedComponents } from '../../utils/connectedComponents.js';
 
 import { isSpellDefComponent, hasLambdaGraphNode, isDataflowPlaneScoped, isLambdaPlaneScoped, isLambdaComponent, isRuntimeComponent, isAnchoredComponent, isBottle, isLEAFConfigComponent } from './predicates.js';
 

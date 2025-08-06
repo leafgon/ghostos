@@ -20,9 +20,7 @@
     "node_modules", 
     "lib", 
     "**/*.test.ts", 
-    "src/api/leafui/elements/floweditor/lib/reactflow.11.10.4",
     "src/api/parser/leaflisp/stdlib",
     "src/api/parser/leaflisp/pocket-lisp",
-    "src/api/leafui/lib/texteditor/cm-vim",
   ]
 }

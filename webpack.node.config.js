@@ -30,7 +30,6 @@ export default {
         test: /\.(js|ts)$/,
         exclude: [
           /node_modules/,
-          /leafui/, // skip browser/React components
           /\.d\.ts$/, // skip .d.ts files
         ],
         use: {

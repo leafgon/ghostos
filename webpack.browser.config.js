@@ -62,7 +62,6 @@ export default {
     extensions: ['.js','.jsx','.ts','.tsx'],
     alias: {
       '@ghostos/core': path.resolve(__dirname, 'src/index.core.js'), // Alias for core module
-      '@ghostos/ui': path.resolve(__dirname, 'src/index.ui.js'),    // Alias for UI module
     },
     fallback: {
       // false makes require(...) return {}
@@ -82,7 +81,6 @@ export default {
         ],
         include: [
           path.resolve(__dirname, 'src'),
-          path.resolve(__dirname, 'src/api/leafui/elements/floweditor/lib/reactflow.11.10.4'),
         ],
         use: {
           loader: 'babel-loader',
