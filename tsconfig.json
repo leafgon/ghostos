@@ -1,26 +1,29 @@
 {
   "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
     "allowJs": true,
     "checkJs": false,
     "emitDeclarationOnly": true,
     "declaration": true,
     "declarationDir": "lib",
     "outDir": "lib",
-    "module": "ESNext",
-    "target": "ESNext",
     "jsx": "react-jsx",
     "moduleResolution": "node",
     "strict": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "include": ["src"],
+  "include": [
+    "src",
+    "tests"
+  ],
   "exclude": [
-    "node_modules", 
-    "lib", 
-    "**/*.test.ts", 
+    "node_modules",
+    "lib",
+    "**/*.test.ts",
     "src/api/parser/leaflisp/stdlib",
-    "src/api/parser/leaflisp/pocket-lisp",
+    "src/api/parser/leaflisp/pocket-lisp"
   ]
 }

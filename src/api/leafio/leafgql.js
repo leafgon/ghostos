@@ -12,14 +12,6 @@ const endpoint_qm = process.env.LEAFGON_ENDPOINT_QM || "https://gdb.leafgon.com/
 //const websocket_subs = "wss://www.leafgon.com:10001/sgraphql";
 //const endpoint_qm = "https://www.leafgon.com:10001/qmgraphql";
 
-const gql_qm_client = createGQLClient({
-  endpoint: endpoint_qm,
-  headers: {
-    //'Content-Type': 'application/json', // should never use this when using fetch
-    'Accept': 'application/json'
-  }
-});
-
 const getLEAFgqlSubs = (graph) => {
   //const nfilter = '{in_edges: {label: {eq: "Alice39-ala2"}}}'
   //const appid2 = SHA256('www.leafgon.com').toString();
@@ -122,10 +114,18 @@ const MUT_DELEDGE = `mutation DeleteEdge($uuid: String!) {
 //const MUT_ADDNODE = `mutation { addNode(input: [{label: "ala999", data: ""}]) {node {label}} }`;
 
 //const mutateAddNode2 = async ({uuid, type, position}) => {
-const mutateAddNode = async ({variables}) => {
+const mutateAddNode = async ({variables, endpoint=endpoint_qm}) => {
+
+  const gql_qm_client = createGQLClient({
+    endpoint,
+    headers: {
+      //'Content-Type': 'application/json', // should never use this when using fetch
+      'Accept': 'application/json'
+    }
+  });
 
   const mut_options = {
-    endpoint: endpoint_qm,
+    endpoint,
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id)}).replace(/\\n/g, ''),
     //query: JSON.stringify({"query": getLEAFgqlStrAddNode({id: uuid, type: type, position: position}), "variables": (variables || {})}),
     query: JSON.stringify({"query": MUT_ADDNODE, "variables": (variables || {})}),
@@ -161,13 +161,21 @@ const mutateAddNode = async ({variables}) => {
   }
 };
 
-const mutateDelNode = async ({node_uuid}) => {
+const mutateDelNode = async ({node_uuid, endpoint=endpoint_qm}) => {
+  const gql_qm_client = createGQLClient({
+    endpoint,
+    headers: {
+      //'Content-Type': 'application/json', // should never use this when using fetch
+      'Accept': 'application/json'
+    }
+  });
+
   //const querystr = MUT_DELNODE; // getLEAFgqlStrDelNode(el.id);
   //const variables = {};
   //const test_query_str1 = JSON.stringify({"query": getLEAFgqlStrDelNode(node_uuid), "variables": (variables || {})}); 
   //const test_query_str2 = JSON.stringify({"query": MUT_DELNODE, "variables": ({uuid: node_uuid} || {})}); 
   const mut_options = {
-    endpoint: endpoint_qm,
+    endpoint,
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id)}).replace(/\\n/g, ''),
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(node_uuid), "variables": (variables || {})}),
     query: JSON.stringify({"query": MUT_DELNODE, "variables": ({uuid: node_uuid} || {})}).replace(/\\n/g, ''),
@@ -202,10 +210,18 @@ const mutateDelNode = async ({node_uuid}) => {
   }
 }
 
-const mutateUpdateNode = async ({variables}) => {
+const mutateUpdateNode = async ({variables, endpoint=endpoint_qm}) => {
+
+  const gql_qm_client = createGQLClient({
+    endpoint,
+    headers: {
+      //'Content-Type': 'application/json', // should never use this when using fetch
+      'Accept': 'application/json'
+    }
+  });
 
   const mut_options = {
-    endpoint: endpoint_qm,
+    endpoint,
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id)}).replace(/\\n/g, ''),
     //query: JSON.stringify({"query": getLEAFgqlStrAddNode({id: uuid, type: type, position: position}), "variables": (variables || {})}),
     query: JSON.stringify({"query": MUT_UPDATENODE, "variables": (variables || {})}),
@@ -241,10 +257,18 @@ const mutateUpdateNode = async ({variables}) => {
 	}
 };
 
-const mutateAddEdge = async ({variables}) => {
+const mutateAddEdge = async ({variables, endpoint=endpoint_qm}) => {
+
+  const gql_qm_client = createGQLClient({
+    endpoint,
+    headers: {
+      //'Content-Type': 'application/json', // should never use this when using fetch
+      'Accept': 'application/json'
+    }
+  });
 
   const mut_options = {
-    endpoint: endpoint_qm,
+    endpoint,
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id)}).replace(/\\n/g, ''),
     //query: JSON.stringify({"query": getLEAFgqlStrAddNode({id: uuid, type: type, position: position}), "variables": (variables || {})}),
     query: JSON.stringify({"query": MUT_ADDEDGE, "variables": (variables || {})}),
@@ -280,13 +304,21 @@ const mutateAddEdge = async ({variables}) => {
   }
 };
 
-const mutateDelEdge = async ({edge_uuid}) => {
+const mutateDelEdge = async ({edge_uuid, endpoint=endpoint_qm}) => {
+  const gql_qm_client = createGQLClient({
+    endpoint,
+    headers: {
+      //'Content-Type': 'application/json', // should never use this when using fetch
+      'Accept': 'application/json'
+    }
+  });
+
   //const querystr = MUT_DELNODE; // getLEAFgqlStrDelNode(el.id);
   const variables = {};
   //const test_query_str1 = JSON.stringify({"query": getLEAFgqlStrDelEdge(edge_uuid), "variables": (variables || {})}); 
   //const query_str = JSON.stringify({"query": MUT_DELEDGE, "variables": ({uuid: edge_uuid} || {})}).replace(/\\n/g, ''); 
   const mut_options = {
-    endpoint: endpoint_qm,
+    endpoint,
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id)}).replace(/\\n/g, ''),
     //query: JSON.stringify({"query": getLEAFgqlStrDelEdge(edge_uuid), "variables": (variables || {})}),
     query: JSON.stringify({"query": MUT_DELEDGE, "variables": ({uuid: edge_uuid} || {})}).replace(/\\n/g, ''),

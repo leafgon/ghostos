@@ -1,22 +1,10 @@
 /*
  * author: spark@leautomaton.com
  * date: 8th Nov 2021
- */
-
-// a framework of functions and data types for establishing "inter-graph-logic" communication i/o in GhostOS
-
-// inter-graph-logic here means some logic that a (LEAF) programmer intends on establishing in between multiple disconnected graphs, 
-// where each graph bears some (LEAF) logic and context. 
-// "inter-graph-logic" communication means data/control communication between multiple (LEAF) graphs or logic involved.
-import { useEffect, useRef, useState } from "react";
-import { v4 as uuid4 } from 'uuid';
-
-import { LEAFIOmetamodel } from "../metamodel.js";
-
-import { BehaviorSubject, skip } from 'rxjs';
-
-import { initializeLEAFlakeGQLClient } from "./leaflake.js";
-
+ * description: a framework of functions and data types for establishing "inter-graph-logic" communication i/o in GhostOS
+ * inter-graph-logic here means some logic that a (LEAF) programmer intends on establishing in between multiple disconnected graphs, 
+ * where each graph bears some (LEAF) logic and context. 
+ * "inter-graph-logic" communication means data/control communication between multiple (LEAF) graphs or logic involved.
 // useLEAFIOapi is a react functional component exposing the leafio api.
 //
 // On a side note, for understanding ES6 argument destructuring, please refer to 
@@ -47,19 +35,22 @@ import { initializeLEAFlakeGQLClient } from "./leaflake.js";
 //
 // setLEAFIOCallback(key, callbackFunc);
 //
+ */
+
+import { useEffect, useRef, useState } from "react";
+import { v4 as uuid4 } from 'uuid';
+
+import { LEAFIOmetamodel } from "../metamodel.js";
+
+import { BehaviorSubject, skip } from 'rxjs';
+
+import { initializeLEAFlakeGQLClient } from "./leaflake.js";
+
 
 const useLEAFIOapi = ({_LEAFappList=[], stateObjInstanceID=uuid4(), dirOfSubjects = {}, permissions = {}, metamodel=LEAFIOmetamodel} = {}) => {
-    //const [value, setState] = useState(subject.getValue()); // decided NOT to use useState in favor of useRef
-    //const stateObjInstanceID = useRef(uuid4()); // assign a random uuid string as an instance ID
-    //const [state, setState] = useState(LEAFIOmetamodel.IOStateGroundZero); // state store
-    //const stateRef = useRef(state); 
     const [stateID, setStateID] = useState(uuid4()); 
-    //const stateRef = useRef({...LEAFIOmetamodel.IOStateGroundZero}); // state store, making a shallow copy failed to limit the state scope to the local context as intended.
     const stateRef = useRef(JSON.parse(JSON.stringify(metamodel.breezyforest.IOStateGroundZero))); // state store, deep-copy the initialization object
 
-    //useEffect(() => {
-    //    stateRef.current = state;
-    //}, [state]);
     const requestUpdate = () => { 
         setStateID(uuid4()); // request update by resetting the state ID
     };
@@ -163,8 +154,6 @@ const useLEAFIOapi = ({_LEAFappList=[], stateObjInstanceID=uuid4(), dirOfSubject
         }); 
     }, [dirOfSubjects, metamodel]); // rerun only if the master dirOfSubjects or metamodel changes
 
-    //const setNewState = (state) => subject.next(state);
-    //const setNewState = (state, dataOrigin=LEAFIOmetamodel.OriginType.FRONTEND) => subject.next({"control": {"provenance": {"stateObjInstanceID": stateObjInstanceID, "dataOrigin": dataOrigin}}, "data": state});
     const setNewLEAFIOState = (key, state, dataOrigin=LEAFIOmetamodel.breezyforest.originType.FRONTEND) => {
         try {
             if (stateRef.current.permissions[key] & metamodel.breezyforest.IOAccessPermission.Contributor) { // if permission exists to contribute to a subject.
@@ -192,15 +181,10 @@ const useLEAFIOapi = ({_LEAFappList=[], stateObjInstanceID=uuid4(), dirOfSubject
         }
     };
 
-    //const getCurrentState = (key) => {return key ? stateRef.current.subsCache[key] : stateRef.current.subsCache};
     const getCurLEAFIOState = () => stateRef.current.subsCache; 
-    //const getCurrentState = (key) => stateRef.current.subsCache[key];
-    //const getCurrentState = (key) => {return {'key': key, 'hello': 'world'}};
 
     const getMasterSubsDir = () => stateRef.current.dirOfSubjects;
 
-    //return [getCurrentState, setNewState, setCallback];
-    //getCurLEAFIOState, getMasterSubsDir, setNewLEAFIOState, setLEAFIOCallback
     return {getCurLEAFIOState, getMasterSubsDir, setNewLEAFIOState, setLEAFIOCallback};
 };
 
@@ -209,11 +193,6 @@ const useLEAFIOapi = ({_LEAFappList=[], stateObjInstanceID=uuid4(), dirOfSubject
 // all of the useRef(<data>) definitions have been replaced with the structurally compatible form of {current: <data>}
 // all useState(<data>) have been replaced with just <data> constants.
 const initLEAFIOapi = ({_LEAFappList=[], stateObjInstanceID=uuid4(), dirOfSubjects = {}, permissions = {}, metamodel=LEAFIOmetamodel} = {}) => {
-    //const [value, setState] = useState(subject.getValue()); // decided NOT to use useState in favor of useRef
-    //const stateObjInstanceID = useRef(uuid4()); // assign a random uuid string as an instance ID
-    //const [state, setState] = useState(LEAFIOmetamodel.IOStateGroundZero); // state store
-    //const stateRef = useRef(state); 
-    //const stateRef = useRef({...LEAFIOmetamodel.IOStateGroundZero}); // state store, making a shallow copy failed to limit the state scope to the local context as intended.
     const stateRef = {current: JSON.parse(JSON.stringify(metamodel.breezyforest.IOStateGroundZero))}; // state store, deep-copy the initialization object
 
     // a set of functions to offer switchboard functionalities to connect/disconnect leaf communication i/o 
@@ -317,8 +296,6 @@ const initLEAFIOapi = ({_LEAFappList=[], stateObjInstanceID=uuid4(), dirOfSubjec
     }; 
     // end of the "in lieu of a useEffect block"
 
-    //const setNewState = (state) => subject.next(state);
-    //const setNewState = (state, dataOrigin=LEAFIOmetamodel.OriginType.FRONTEND) => subject.next({"control": {"provenance": {"stateObjInstanceID": stateObjInstanceID, "dataOrigin": dataOrigin}}, "data": state});
     const setNewLEAFIOState = (key, state, dataOrigin=LEAFIOmetamodel.breezyforest.originType.FRONTEND) => {
         try {
             if (stateRef.current.permissions[key] & metamodel.breezyforest.IOAccessPermission.Contributor) { // if permission exists to contribute to a subject.
@@ -346,15 +323,10 @@ const initLEAFIOapi = ({_LEAFappList=[], stateObjInstanceID=uuid4(), dirOfSubjec
         }
     };
 
-    //const getCurrentState = (key) => {return key ? stateRef.current.subsCache[key] : stateRef.current.subsCache};
     const getCurLEAFIOState = () => stateRef.current.subsCache; 
-    //const getCurrentState = (key) => stateRef.current.subsCache[key];
-    //const getCurrentState = (key) => {return {'key': key, 'hello': 'world'}};
 
     const getMasterSubsDir = () => stateRef.current.dirOfSubjects;
 
-    //return [getCurrentState, setNewState, setCallback];
-    //getCurLEAFIOState, getMasterSubsDir, setNewLEAFIOState, setLEAFIOCallback
     return {getCurLEAFIOState, getMasterSubsDir, setNewLEAFIOState, setLEAFIOCallback, destructLEAFIOobj};
 };
 
@@ -454,44 +426,4 @@ const initializeMasterSubsDirectory = (_stateObjInstanceID, _LEAFappList=[], _me
     return [_stateObjInstanceID, subjectDirectory];
 };
 
-//const initializeSubsDirectory = () => {
-//    let subjectDirectory = {};
-//    // instantiate subscription subjects as listed in SubsDirectory
-//    Object.entries(metamodel.breezyforest.subsDirectory).forEach(([key, value]) => {
-//        // do instantiate
-//        //if (key in dirOfSubjects) {
-//        //    subjectDirectory[key] = dirOfSubjects[key]; // make a local reference of the value of global dirOfSubjects, under the same key
-//        //    stateRef.current.permissions[key] = (key in permissions) ? permissions[key] : metamodel.breezyforest.IOAccessPermission.Observer; // defaults to "Observer" permission for foreign subjects
-//        //}
-//        //else {
-//        subjectDirectory[key] = {
-//            main: initializeSubsMain(),
-//            bridges: {},//initializeSubsBridges(_LEAFappList, stateObjInstanceID, value['bridges'], () => {return subjectDirectory[key]}), 
-//        }; // create a new subject accessable using the key
-//        //stateRef.current.permissions[key] = (key in permissions) ? permissions[key] : metamodel.breezyforest.IOAccessPermission.All; // defaults to "All" permission for subjects created locally
-//        //}
-//
-//        // initialize bridges
-//        // go over subjectDirectory[key].bridges
-//
-//        // subscribe to the subject's main communication channel
-//        //stateRef.current.subscriptions[key] = subjectDirectory[key].main.pipe(skip(1)).subscribe(...);
-//        stateRef.current.subscriptions[key] = subjectDirectory[key].main.doSubscribe(
-//            ({control, data}) => {
-//                //console.log("got subscription message: " + key + " " + data);
-//                stateRef.current.subsCache[key] = {control, data}; // store the up-to-date {control, data} pair observed in subscription messaging
-//                // invoke a callback, if any, passing the new subscribed message as an argument
-//                invokeCallback(key, control, data);
-//                //if ( key in stateRef.current.callbacks ) {
-//                //    stateRef.current.callbacks({control, data});
-//                //}
-//            }
-//        );
-//        //stateRef.current.callbacks[key] = {}; // initialize callback state
-//    });
-//    return subjectDirectory;
-//};
-
-export { useLEAFIOapi, initLEAFIOapi, initializeMasterSubsDirectory }
-
-
+export { useLEAFIOapi, initLEAFIOapi, initializeMasterSubsDirectory, initializeSubsMain }
