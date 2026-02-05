@@ -34,3 +34,8 @@ make ci
 npm install
 make ci
 ```
+
+## getting graph data from leafgon.com
+```bash
+gq https://gdb.leafgon.com/qmgraphql -q 'query {graph: getGraph(domain: "breezyforest", appid: "testbed", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges { uuid source {uuid} target {uuid} } }}' > ./tests/breezyforest-testbed.json
+```
