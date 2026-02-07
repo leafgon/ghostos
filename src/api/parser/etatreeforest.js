@@ -2,6 +2,80 @@ import { runtimeEtaTree } from './eta.js';
 import { reconstructLEAFGraph, analyzeLEAFGraph } from './leaf.js';
 import { v5 as uuid5 } from 'uuid';
 
+const DEFAULT_GITHUB_REF = "main";
+const GITHUB_DOMAIN = "github";
+
+const normalizeGraphNodesPayload = (payload) => {
+    if (!payload) {
+        return [];
+    }
+    if (payload.graph?.nodes) {
+        return payload.graph.nodes;
+    }
+    if (payload.data?.graph?.nodes) {
+        return payload.data.graph.nodes;
+    }
+    if (payload.nodes) {
+        return payload.nodes;
+    }
+    return [];
+};
+
+const parseGithubGraphRef = (graphappid) => {
+    const [appid_path, appid_query] = graphappid.split("?");
+    const parts = appid_path.split("/");
+    if (parts[0] === GITHUB_DOMAIN) {
+        parts.shift();
+    }
+    if (parts.length < 3) {
+        return null;
+    }
+    const user = parts.shift();
+    const repo_part = parts.shift();
+    if (!user || !repo_part) {
+        return null;
+    }
+    const repo_segments = repo_part.split("@");
+    const repo = repo_segments[0];
+    const ref = repo_segments[1] || DEFAULT_GITHUB_REF;
+    let path = parts.join("/");
+    if (!repo || !path) {
+        return null;
+    }
+    if (!path.endsWith(".json")) {
+        path = `${path}.json`;
+    }
+    return {user, repo, ref, path, query: appid_query};
+};
+
+const isGithubGraphRef = (graphdomain, graphappid) => {
+    if (graphdomain === GITHUB_DOMAIN) {
+        return true;
+    }
+    return typeof graphappid === "string" &&
+        graphappid.startsWith(`${GITHUB_DOMAIN}/`) &&
+        graphappid.includes("/");
+};
+
+const fetchGithubGraph = async (graphdomain, graphappid) => {
+    const graph_ref = parseGithubGraphRef(graphappid);
+    if (!graph_ref) {
+        throw new Error(`Invalid GitHub graph reference: ${graphappid}`);
+    }
+    if (!globalThis.fetch) {
+        throw new Error("GitHub graph fetch requires global fetch.");
+    }
+    const {user, repo, ref, path, query} = graph_ref;
+    const url = `https://raw.githubusercontent.com/${user}/${repo}/refs/heads/${ref}/${path}${query ? `?${query}` : ""}`;
+    const response = await globalThis.fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch GitHub graph ${graphdomain}/${graphappid}: ${response.status}`);
+    }
+    const payload = await response.json();
+    const nodes = normalizeGraphNodesPayload(payload);
+    return {graph: {nodes}};
+};
+
 /*
  * etaTreeForest is a memory instance managing a bag of etatrees and information on their hierarchical relationships
  * to be stored in the master mnemosyne storage instance held by App.js, under the memory key "_etaTreeForest".
@@ -79,7 +153,9 @@ const etaTreeForest = (refEtaTree) => {
                     globalThis.trace[tracecoord].push("parsing") :
                     globalThis.trace[tracecoord] = ["parsing"];
             }
-            const graph_data = await rootEtaTree.leaflakeio.qm_methods.queryGraph({_appmode: appmode, _hostdomain: domain, _hostappid: appid, _domain: graphdomain, _appid: graphappid});
+            const graph_data = isGithubGraphRef(graphdomain, graphappid)
+                ? await fetchGithubGraph(graphdomain, graphappid)
+                : await rootEtaTree.leaflakeio.qm_methods.queryGraph({_appmode: appmode, _hostdomain: domain, _hostappid: appid, _domain: graphdomain, _appid: graphappid});
             //runtimeLEAFGraphFuncLUTPromise = graphRefUpdateHandler(lambdactrl, host_domain, host_appid, graph_domain, graph_appid, lambdactrl.gos.leafio, lambdactrl.gos.etaTree.mnemosyne, lambdactrl.gos.etaTree, contextuallambda)(graph_data);
             if (graph_data == {graph: null})
                 console.error("start debugging");

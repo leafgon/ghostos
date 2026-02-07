@@ -12,6 +12,41 @@ import { etaTreeForest } from '../../etatreeforest.js';
 
 const leafgraph_apidef = _leafstdlib_dataflow_api("leafgraph")
 
+const parseLeafgraphAddressStrict = (leafgraph_addr_str) => {
+    const slash_index = leafgraph_addr_str.indexOf("/");
+    if (slash_index <= 0 || slash_index === leafgraph_addr_str.length - 1) {
+        return null;
+    }
+    return {
+        graph_domain: leafgraph_addr_str.slice(0, slash_index),
+        graph_appid: leafgraph_addr_str.slice(slash_index + 1),
+    };
+};
+
+const parseLeafgraphAddressWithDefaults = (leafgraph_addr_str, host_domain) => {
+    if (!leafgraph_addr_str) {
+        return null;
+    }
+    if (leafgraph_addr_str.startsWith("/")) {
+        const graph_appid = leafgraph_addr_str.slice(1);
+        if (!graph_appid) {
+            return null;
+        }
+        return {graph_domain: host_domain, graph_appid};
+    }
+    const slash_index = leafgraph_addr_str.indexOf("/");
+    if (slash_index === -1) {
+        return {graph_domain: leafgraph_addr_str, graph_appid: "index"};
+    }
+    if (slash_index === 0 || slash_index === leafgraph_addr_str.length - 1) {
+        return null;
+    }
+    return {
+        graph_domain: leafgraph_addr_str.slice(0, slash_index),
+        graph_appid: leafgraph_addr_str.slice(slash_index + 1),
+    };
+};
+
 const graphRefUpdateHandler = async (lambdactrl, refnode, host_domain, host_appid, graph_domain, graph_appid, leafio, mnemosyneRef, hostEtaTree, contextuallambda, parseLEAFConfig=false) => { //({ graph: {nodes, edges }}={}) => {}
     //const leafgraph = reconstructLEAFGraph(nodes); //, masterSubsDirectory;
     ////leafgraph.graph.dataflow.mapEdges((edge, attributes, source, target, sourceAttributes, targetAttributes) => {
@@ -138,17 +173,17 @@ const _leafgraph = {
         const {type, args} = refnodedata.leaf.logic;
 
         // TBD: retrieve leafgraph from the lake as per the recorded domain and appid, reconstruct and analyze leafgraph
-        const leafgraph_addr_str = fetchMultiKeyedData(leafgraph_apidef.editorconfig.namedatakey, args).toLowerCase();
-        const addr_re = /([\w]+)\/([\w]+)/;
-        const re_match = leafgraph_addr_str.match(addr_re);
-        const isvalidmatch = (re_match && re_match[0] === leafgraph_addr_str) ? true : false;
-
-        if (!isvalidmatch) {
+        const leafgraph_addr_raw = fetchMultiKeyedData(leafgraph_apidef.editorconfig.namedatakey, args);
+        const leafgraph_addr_lower = leafgraph_addr_raw.toLowerCase();
+        const leafgraph_addr_str = leafgraph_addr_lower.startsWith("github/")
+            ? leafgraph_addr_raw
+            : leafgraph_addr_lower;
+        const parsed_address = parseLeafgraphAddressStrict(leafgraph_addr_str);
+        if (!parsed_address) {
             console.error(`LEAF Error: _leafgraph(): an invalid graph address (${leafgraph_addr_str}) entered.`);
             return {};
         }
-        const graph_domain = re_match[1]; // parse the domain/appid from refnodedata
-        const graph_appid = re_match[2];
+        const {graph_domain, graph_appid} = parsed_address;
         const host_domain = lambdactrl.gos.etaTree.domain; // current domain becomes the host domain of the leafgraph lookup
         const host_appid = lambdactrl.gos.etaTree.appid; // current appid becomes the host appid of the leafgraph lookup 
         
@@ -201,19 +236,19 @@ const _leafgraph = {
 
         //const reduced_lambda_obj = await etaReduceLambdaGraphs({refnode, nodelambda: contextuallambda, contextuallambda: nodelambda, etaTree: lambdactrl.gos.etaTree});
 
-        const leafgraph_addr_str = fetchMultiKeyedData(leafgraph_apidef.editorconfig.namedatakey, args).toLowerCase();
-        const addr_re = /([\w-]+){0,1}(\/([\w-]+)){0,1}/;
-        const re_match = leafgraph_addr_str.match(addr_re);
-        const isvalidmatch = (re_match && re_match[0] === leafgraph_addr_str) ? true : false;
-
-        if (!isvalidmatch) {
+        const leafgraph_addr_raw = fetchMultiKeyedData(leafgraph_apidef.editorconfig.namedatakey, args);
+        const leafgraph_addr_lower = leafgraph_addr_raw.toLowerCase();
+        const leafgraph_addr_str = leafgraph_addr_lower.startsWith("github/")
+            ? leafgraph_addr_raw
+            : leafgraph_addr_lower;
+        const host_domain = lambdactrl.gos.etaTree.domain; // current domain becomes the host domain of the leafgraph lookup
+        const parsed_address = parseLeafgraphAddressWithDefaults(leafgraph_addr_str, host_domain);
+        if (!parsed_address) {
             console.error(`LEAF Error: _leafgraph(): an invalid graph address (${leafgraph_addr_str}) entered.`);
             return {};
         }
-        const host_domain = lambdactrl.gos.etaTree.domain; // current domain becomes the host domain of the leafgraph lookup
         const host_appid = lambdactrl.gos.etaTree.appid; // current appid becomes the host appid of the leafgraph lookup 
-        const graph_domain = re_match[1] ? re_match[1] : host_domain; // parse the domain from the addr_str
-        const graph_appid = re_match[3] ? re_match[3] : 'index'; // parse the appid from the addr_str, where 'index' used as default
+        const {graph_domain, graph_appid} = parsed_address;
         
         if (graph_domain === 'breezyforest' || graph_domain+'/'+graph_appid !== host_domain+'/'+host_appid) {
             let runtimeLEAFGraphFuncLUTPromise;
@@ -271,19 +306,19 @@ const _leafgraph = {
 
         //const reduced_lambda_obj = await etaReduceLambdaGraphs({refnode, nodelambda: contextuallambda, contextuallambda: nodelambda, etaTree: lambdactrl.gos.etaTree});
 
-        const leafgraph_addr_str = fetchMultiKeyedData(leafgraph_apidef.editorconfig.namedatakey, args).toLowerCase();
-        const addr_re = /([\w-]+){0,1}(\/([\w-]+)){0,1}/;
-        const re_match = leafgraph_addr_str.match(addr_re);
-        const isvalidmatch = (re_match && re_match[0] === leafgraph_addr_str) ? true : false;
-
-        if (!isvalidmatch) {
+        const leafgraph_addr_raw = fetchMultiKeyedData(leafgraph_apidef.editorconfig.namedatakey, args);
+        const leafgraph_addr_lower = leafgraph_addr_raw.toLowerCase();
+        const leafgraph_addr_str = leafgraph_addr_lower.startsWith("github/")
+            ? leafgraph_addr_raw
+            : leafgraph_addr_lower;
+        const host_domain = lambdactrl.gos.etaTree.domain; // current domain becomes the host domain of the leafgraph lookup
+        const parsed_address = parseLeafgraphAddressWithDefaults(leafgraph_addr_str, host_domain);
+        if (!parsed_address) {
             console.error(`LEAF Error: _leafgraph(): an invalid graph address (${leafgraph_addr_str}) entered.`);
             return {};
         }
-        const host_domain = lambdactrl.gos.etaTree.domain; // current domain becomes the host domain of the leafgraph lookup
         const host_appid = lambdactrl.gos.etaTree.appid; // current appid becomes the host appid of the leafgraph lookup 
-        const graph_domain = re_match[1] ? re_match[1] : host_domain; // parse the domain from the addr_str
-        const graph_appid = re_match[3] ? re_match[3] : 'index'; // parse the appid from the addr_str, where 'index' used as default
+        const {graph_domain, graph_appid} = parsed_address;
         
         if (graph_domain === 'breezyforest' || graph_domain+'/'+graph_appid !== host_domain+'/'+host_appid) {
             let runtimeLEAFGraphFuncLUTPromise;
