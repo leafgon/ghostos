@@ -80,7 +80,7 @@ describe("runtime flow", () => {
       leafcomponents,
       leafio,
       leaflakeio,
-      mainMnemosyne
+      mainMnemosyne,
     );
 
     etaTree.gRuntimeLEAFlisp = init_gRuntimeLEAFlisp(etaTree, {
@@ -102,10 +102,7 @@ describe("runtime flow", () => {
     const ctrlinput$ = new BehaviorSubject(ctrlBottle);
 
     const controlflow = { _stream: ctrlinput$, _config: {} };
-    const mainloop_output_obj = leafGraphRuntime(
-      [{ _stream: datainput$ }],
-      controlflow
-    );
+    const mainloop_output_obj = leafGraphRuntime([{ _stream: datainput$ }], controlflow);
 
     const ctrlSubscription = mainloop_output_obj._control._stream.subscribe();
     const outputPromise = firstValueFrom(mainloop_output_obj._stream);

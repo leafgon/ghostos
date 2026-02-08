@@ -1,4 +1,4 @@
-import { SnippetPosition } from './SnippetPosition'
+import { SnippetPosition } from "./SnippetPosition";
 
 export enum TokenType {
   Init,
@@ -22,7 +22,11 @@ export enum TokenType {
 }
 
 export class Token {
-  public constructor(public type: TokenType, public value: string, public position: SnippetPosition) {}
+  public constructor(
+    public type: TokenType,
+    public value: string,
+    public position: SnippetPosition,
+  ) {}
 
-  public static INIT = new Token(TokenType.Init, '', new SnippetPosition('', 0, 0, 0))
+  public static INIT = new Token(TokenType.Init, "", new SnippetPosition("", 0, 0, 0));
 }

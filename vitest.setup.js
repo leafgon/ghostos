@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi } from "vitest";
 
 // Mock browser APIs that might not be available in jsdom
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
@@ -141,15 +141,15 @@ global.performance = {
 // Mock URL API
 global.URL = vi.fn().mockImplementation((url) => ({
   href: url,
-  origin: 'http://localhost',
-  protocol: 'http:',
-  host: 'localhost',
-  hostname: 'localhost',
-  port: '',
-  pathname: '/',
-  search: '',
+  origin: "http://localhost",
+  protocol: "http:",
+  host: "localhost",
+  hostname: "localhost",
+  port: "",
+  pathname: "/",
+  search: "",
   searchParams: new URLSearchParams(),
-  hash: '',
+  hash: "",
 }));
 
 // Mock URLSearchParams
@@ -159,7 +159,7 @@ global.URLSearchParams = vi.fn().mockImplementation(() => ({
   append: vi.fn(),
   delete: vi.fn(),
   has: vi.fn(),
-  toString: vi.fn(() => ''),
+  toString: vi.fn(() => ""),
 }));
 
 // Mock console methods to avoid noise in tests
@@ -170,4 +170,4 @@ global.console = {
   error: vi.fn(),
   info: vi.fn(),
   debug: vi.fn(),
-}; 
+};

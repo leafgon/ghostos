@@ -1,33 +1,40 @@
-import { StdRuntimeError } from './StdRuntimeError'
-import { isNothing } from './convert'
+import { StdRuntimeError } from "./StdRuntimeError";
+import { isNothing } from "./convert";
 
 ///
 
 export const assert = (val: boolean, msg: string): boolean => {
   if (val) {
-    throw new StdRuntimeError(msg)
+    throw new StdRuntimeError(msg);
   }
-  return true
-}
+  return true;
+};
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export const assertType = (a: any, b: any): boolean =>
-  assert(a.constructor !== b.constructor, `Type Error! Expected '${getObjectName(a)}', but got '${getObjectName(b)}'`)
+  assert(
+    a.constructor !== b.constructor,
+    `Type Error! Expected '${getObjectName(a)}', but got '${getObjectName(b)}'`,
+  );
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export const typeCheck = (type: any, value: any): boolean =>
-  assert(type !== value.constructor, `Expected '${type.kind ?? type.name}', but got '${getObjectName(value)}'.`)
+  assert(
+    type !== value.constructor,
+    `Expected '${type.kind ?? type.name}', but got '${getObjectName(value)}'.`,
+  );
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export const assertImpl = (instance: any, method: string): boolean =>
-  assert(!instance[method], `"${method.toString()}" is not defined on ${instance}`)
+  assert(!instance[method], `"${method.toString()}" is not defined on ${instance}`);
 
 export const assertInteger = (val: number): boolean =>
-  assert(!Number.isInteger(val), `Expected integer number', but got '${val}'.`)
+  assert(!Number.isInteger(val), `Expected integer number', but got '${val}'.`);
 
 export const assertNothing: <T>(value: T, msg: string) => T = (value, msg) => {
-  assert(isNothing(value), msg)
-  return value
-}
+  assert(isNothing(value), msg);
+  return value;
+};
 
-const getObjectName = (obj: any): string => obj?.constructor?.kind ?? obj?.constructor?.name ?? 'unknown'
+const getObjectName = (obj: any): string =>
+  obj?.constructor?.kind ?? obj?.constructor?.name ?? "unknown";

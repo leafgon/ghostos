@@ -7,180 +7,219 @@
 //import { Transport }   from "tone";
 
 // instruments  – every file exports a *named* class
-import { Synth }       from "tone/build/esm/instrument/Synth.js";
-import { AMSynth }     from "tone/build/esm/instrument/AMSynth.js";
-import { DuoSynth }    from "tone/build/esm/instrument/DuoSynth.js";
-import { FMSynth }     from "tone/build/esm/instrument/FMSynth.js";
+import { Synth } from "tone/build/esm/instrument/Synth.js";
+import { AMSynth } from "tone/build/esm/instrument/AMSynth.js";
+import { DuoSynth } from "tone/build/esm/instrument/DuoSynth.js";
+import { FMSynth } from "tone/build/esm/instrument/FMSynth.js";
 import { MembraneSynth } from "tone/build/esm/instrument/MembraneSynth.js";
-import { MetalSynth }  from "tone/build/esm/instrument/MetalSynth.js";
-import { MonoSynth }   from "tone/build/esm/instrument/MonoSynth.js";
-import { NoiseSynth }  from "tone/build/esm/instrument/NoiseSynth.js";
-import { PluckSynth }  from "tone/build/esm/instrument/PluckSynth.js";
-import { PolySynth }   from "tone/build/esm/instrument/PolySynth.js";
-import { Sampler }     from "tone/build/esm/instrument/Sampler.js";
+import { MetalSynth } from "tone/build/esm/instrument/MetalSynth.js";
+import { MonoSynth } from "tone/build/esm/instrument/MonoSynth.js";
+import { NoiseSynth } from "tone/build/esm/instrument/NoiseSynth.js";
+import { PluckSynth } from "tone/build/esm/instrument/PluckSynth.js";
+import { PolySynth } from "tone/build/esm/instrument/PolySynth.js";
+import { Sampler } from "tone/build/esm/instrument/Sampler.js";
 
 const toneinstrument_lut = {
-    "synth": {
-        "new": (options) => {return new Synth(options);}
+  synth: {
+    new: (options) => {
+      return new Synth(options);
     },
-    "amsynth": {
-        "new": (options) => {return new AMSynth(options);}
+  },
+  amsynth: {
+    new: (options) => {
+      return new AMSynth(options);
     },
-    "duosynth": {
-        "new": (options) => {return new DuoSynth(options);},
+  },
+  duosynth: {
+    new: (options) => {
+      return new DuoSynth(options);
     },
-    "fmsynth": {
-        "new": (options) => {return new FMSynth(options);},
+  },
+  fmsynth: {
+    new: (options) => {
+      return new FMSynth(options);
     },
-    "membranesynth": {
-        "new": (options) => {return new MembraneSynth(options);}
+  },
+  membranesynth: {
+    new: (options) => {
+      return new MembraneSynth(options);
     },
-    "metalsynth": {
-        "new": (options) => {return new MetalSynth(options);}
+  },
+  metalsynth: {
+    new: (options) => {
+      return new MetalSynth(options);
     },
-    "monosynth": {
-        "new": (options) => {return new MonoSynth(options);}
+  },
+  monosynth: {
+    new: (options) => {
+      return new MonoSynth(options);
     },
-    "noisesynth": {
-        "new": (options) => {return new NoiseSynth(options);}
+  },
+  noisesynth: {
+    new: (options) => {
+      return new NoiseSynth(options);
     },
-    "plucksynth": {
-        "new": (options) => {return new PluckSynth(options);}
+  },
+  plucksynth: {
+    new: (options) => {
+      return new PluckSynth(options);
     },
-    "polysynth": {
-        "new": (voice, options) => {return new PolySynth(voice, options);}
+  },
+  polysynth: {
+    new: (voice, options) => {
+      return new PolySynth(voice, options);
     },
-    "sampler": {
-        "new": (options) => {return new Sampler(options);}
+  },
+  sampler: {
+    new: (options) => {
+      return new Sampler(options);
     },
+  },
 };
 
 // "synth", "monosynth", "fmsynth", "duosynth", "amsynth"
 const tonevoice_lut = {
-    "synth": Synth, // default
-    "monosynth": MonoSynth,
-    "fmsynth": FMSynth,
-    "duosyntho": DuoSynth,
-    "amsynth": AMSynth
+  synth: Synth, // default
+  monosynth: MonoSynth,
+  fmsynth: FMSynth,
+  duosyntho: DuoSynth,
+  amsynth: AMSynth,
 };
 
 const toneeffect_lut = {
-    "autofilter": {
-        "new": (options) => {return new tonepkg.AutoFilter(options);}
+  autofilter: {
+    new: (options) => {
+      return new tonepkg.AutoFilter(options);
     },
-    "bitcrusher": {
-        "new": (options) => {return new tonepkg.BitCrusher(options);}
+  },
+  bitcrusher: {
+    new: (options) => {
+      return new tonepkg.BitCrusher(options);
     },
-    "chebyshev": {
-        "new": (options) => {return new tonepkg.Chebyshev(options);}
+  },
+  chebyshev: {
+    new: (options) => {
+      return new tonepkg.Chebyshev(options);
     },
-    "pitchshift": {
-        "new": (options) => {return new tonepkg.PitchShift(options);}
+  },
+  pitchshift: {
+    new: (options) => {
+      return new tonepkg.PitchShift(options);
     },
+  },
 };
 
-const doConfigureInstrument = (refnode, _config, is_reset=false) => {
-    // for instruments, _config should have "instrument" among its keys
+const doConfigureInstrument = (refnode, _config, is_reset = false) => {
+  // for instruments, _config should have "instrument" among its keys
 
-    try {
-        if (_config?.instrument) {
-            const _instrument = (!is_reset ? 
-                toneinstrument_lut[_config.instrument.type]?.new(
-                    (_config.instrument.voice ? tonevoice_lut[_config.instrument.voice] : Synth),
-                    _config.instrument.options
-                ) :
-                ((()=>{
-                    globalThis.sound[refnode].set(_config.instrument.options); 
-                    return globalThis.sound[refnode]; 
-                })())
-            );
-            return _instrument;
-        }
-
-        //return undefined;
-        throw "instrument is not defined in the config";
+  try {
+    if (_config?.instrument) {
+      const _instrument = !is_reset
+        ? toneinstrument_lut[_config.instrument.type]?.new(
+            _config.instrument.voice ? tonevoice_lut[_config.instrument.voice] : Synth,
+            _config.instrument.options,
+          )
+        : (() => {
+            globalThis.sound[refnode].set(_config.instrument.options);
+            return globalThis.sound[refnode];
+          })();
+      return _instrument;
     }
-    catch (err) {
-        console.error(`LEAF Error: a leafsound element ${refnode} could not be configured, returning error:`, err);
 
-        return undefined;
-    }
+    //return undefined;
+    throw "instrument is not defined in the config";
+  } catch (err) {
+    console.error(
+      `LEAF Error: a leafsound element ${refnode} could not be configured, returning error:`,
+      err,
+    );
+
     return undefined;
+  }
+  return undefined;
 };
 
-const doConfigureEffect = (refnode, _config, is_reset=false) => {
-    // for instruments, _config should have "instrument" among its keys
+const doConfigureEffect = (refnode, _config, is_reset = false) => {
+  // for instruments, _config should have "instrument" among its keys
 
-    try {
-        if (_config?.effect) {
-            
-            const _effect = (!is_reset ? 
-                toneeffect_lut[_config.effect.type]?.new(
-                    _config.effect.options
-                ) :
-                ((()=>{
-                    globalThis.sound[refnode].set(_config.effect.options); 
-                    return globalThis.sound[refnode]; 
-                })())
-            );
-            return _effect;
-        }
-
-        //return undefined;
-        throw "effect is not defined in the config";
+  try {
+    if (_config?.effect) {
+      const _effect = !is_reset
+        ? toneeffect_lut[_config.effect.type]?.new(_config.effect.options)
+        : (() => {
+            globalThis.sound[refnode].set(_config.effect.options);
+            return globalThis.sound[refnode];
+          })();
+      return _effect;
     }
-    catch (err) {
-        console.error("LEAF Error: a leafsound element `${refnode}` could not be configured, returning error:", err);
 
-        return undefined;
-    }
+    //return undefined;
+    throw "effect is not defined in the config";
+  } catch (err) {
+    console.error(
+      "LEAF Error: a leafsound element `${refnode}` could not be configured, returning error:",
+      err,
+    );
+
+    return undefined;
+  }
 };
 
 const doConfigureSource = (_config) => {
-    // TBI
-    return undefined;
+  // TBI
+  return undefined;
 };
 
 const doConfigureTarget = (nodeuuid) => {
-    globalThis.sound[nodeuuid].toDestination();
-    return undefined;
+  globalThis.sound[nodeuuid].toDestination();
+  return undefined;
 };
 
-
 const initializeSoundStage = () => {
-    globalThis.sound = {};
+  globalThis.sound = {};
 };
 
 const initializeToneState = () => {
-    if (tonepkg.Transport.state !== 'started') {
-        tonepkg.start();
-        tonepkg.Transport.start();
-    } else {
-        //Tone.Transport.stop();
-    }
-}
+  if (tonepkg.Transport.state !== "started") {
+    tonepkg.start();
+    tonepkg.Transport.start();
+  } else {
+    //Tone.Transport.stop();
+  }
+};
 
 const cacheSoundStageNode = (nodeuuid, _soundnode) => {
-    globalThis.sound[nodeuuid] = _soundnode;
-}
+  globalThis.sound[nodeuuid] = _soundnode;
+};
 
 // spark_dev_note: 15/Sep/2023
-// currently unsure whether web audio sound nodes would need to be 
+// currently unsure whether web audio sound nodes would need to be
 // explicitly disconnected from any connected nodes upon getting destroyed.
 // just assuming and hoping that the web audio api would handle this automtically.
 const connectCachedSoundStageNodes = (nodeuuid1, nodeuuid2) => {
-    globalThis.sound[nodeuuid1].connect(globalThis.sound[nodeuuid2])
-}
+  globalThis.sound[nodeuuid1].connect(globalThis.sound[nodeuuid2]);
+};
 
 const disconnectCachedSoundStageNodes = (nodeuuid1, nodeuuid2) => {
-    globalThis.sound[nodeuuid1].disconnect(globalThis.sound[nodeuuid2])
-}
+  globalThis.sound[nodeuuid1].disconnect(globalThis.sound[nodeuuid2]);
+};
 
 const destroySoundStageNode = (nodeuuid) => {
-    if (globalThis.sound[nodeuuid]) {
-        globalThis.sound[nodeuuid].dispose();
-        delete globalThis.sound[nodeuuid];
-    }
-}
+  if (globalThis.sound[nodeuuid]) {
+    globalThis.sound[nodeuuid].dispose();
+    delete globalThis.sound[nodeuuid];
+  }
+};
 
-export { doConfigureInstrument, doConfigureSource, doConfigureTarget, doConfigureEffect, initializeSoundStage, initializeToneState, cacheSoundStageNode, destroySoundStageNode, connectCachedSoundStageNodes, disconnectCachedSoundStageNodes };
+export {
+  doConfigureInstrument,
+  doConfigureSource,
+  doConfigureTarget,
+  doConfigureEffect,
+  initializeSoundStage,
+  initializeToneState,
+  cacheSoundStageNode,
+  destroySoundStageNode,
+  connectCachedSoundStageNodes,
+  disconnectCachedSoundStageNodes,
+};

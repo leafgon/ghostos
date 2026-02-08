@@ -1,6 +1,5 @@
-
-const _leafLISPHelpText = 
-"LEAFlisp cheatsheet: \n\
+const _leafLISPHelpText =
+  "LEAFlisp cheatsheet: \n\
 --------------------------------------------------------------------------\n\
 - type conversion: -------------------------------------------------------\n\
 -------------------\n\

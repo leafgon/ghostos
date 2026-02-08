@@ -5,9 +5,7 @@ describe("fetchnodedata", () => {
   it("fetches nested values by key path", () => {
     const data = { leaf: { logic: { type: "leafspell" } } };
 
-    expect(fetchMultiKeyedData(["leaf", "logic", "type"], data)).toBe(
-      "leafspell"
-    );
+    expect(fetchMultiKeyedData(["leaf", "logic", "type"], data)).toBe("leafspell");
   });
 
   it("returns undefined when keys are missing", () => {

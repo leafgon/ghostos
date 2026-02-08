@@ -1,3 +1,3 @@
-export const constFn = (fn: unknown) => (): unknown => fn
+export const constFn = (fn: unknown) => (): unknown => fn;
 
-export default { const: constFn }
+export default { const: constFn };
