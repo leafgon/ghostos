@@ -1864,12 +1864,21 @@ const etaReduceLambdaGraphs = async ({refnode, nodelambda, contextuallambda, eta
     const lambdaLUT = addnodelut ? {_nodelut: {}} : {};
     //if (!nodelambda)
     //    console.log(nodelambda);
-    const promiseArr = nodelambda.map((lambdanodeuuid) => {
+    const missingLambdaNodes = nodelambda.filter(
+        (lambdanodeuuid) => !(lambdanodeuuid in etaTree.graphcomponents.components.lut)
+    );
+    if (missingLambdaNodes.length > 0) {
+        console.warn(
+            "LEAF Warning: etaReduceLambdaGraphs() skipping unknown lambda nodes",
+            missingLambdaNodes
+        );
+    }
+    const promiseArr = nodelambda
+        .filter((lambdanodeuuid) => lambdanodeuuid in etaTree.graphcomponents.components.lut)
+        .map((lambdanodeuuid) => {
         //if (! etaTree.graphcomponents.components.lut[lambdanodeuuid] )
         //    console.log(lambdanodeuuid);
         //console.log(`etaReduceLambdaGraphs(): reading node scope for ${lambdanodeuuid}: ${etaTree.graphcomponents.components.lut[lambdanodeuuid]}`);
-        if (!(lambdanodeuuid in etaTree.graphcomponents.components.lut))
-            console.log("LEAF Error: etaTree lookup error");
 
         const {idx: lambdacomponent_idx, scope: lambdacomponent_scope} = etaTree.graphcomponents.components.lut[lambdanodeuuid]; // look up the matching component idx
         const lambda_component = etaTree.graphcomponents.components.nodegroups.lambda[lambdacomponent_idx]; 

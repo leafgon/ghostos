@@ -9,6 +9,17 @@ import { driveDataflowByCtrlflow, executeLEAFLogic } from '../../leaf.js';
 import { doBottle } from '../datautils/bottling.js';
 
 const raceConditionError = doBottle("error", {type: "critical", message: "LEAF core error: race condition detected in leafloopyspell.js", codebase:"/src/ghostos/api/parser/nodelogic/abstraction/leafloopyspell.js"}, {});
+const createThrottleGate = () => {
+    let lastCall = 0;
+    return (intervalMs) => {
+        const now = Date.now();
+        if (now - lastCall >= intervalMs) {
+            lastCall = now;
+            return true;
+        }
+        return false;
+    };
+};
 const getLargestCount = (dict) => {
     if (!dict)
         return 1; // defaults to 1 iteration
@@ -81,6 +92,8 @@ const _leafloopyspell = {
         const loopcount = getLargestCount(reduced_lambda_obj);
         const loopinterval = getLoopInterval(reduced_lambda_obj);
         const is_forever = "forever" in reduced_lambda_obj;
+        const ctrlflowThrottleGate = createThrottleGate();
+        const loopThrottleGate = createThrottleGate();
 
         if (reduced_lambda_obj && '_default' in reduced_lambda_obj) {
             //const mainloop$ = loopcount > 0 ? interval(loopinterval).pipe(take(loopcount)) : interval(loopinterval);
@@ -240,7 +253,7 @@ const _leafloopyspell = {
                 const throttled_ctrlflow$obj = {_stream: controlflow$obj._stream.pipe(map(
                     _ctrl_data => 
                     {
-                        if (_.throttle(()=>{}, 200)) {
+                        if (ctrlflowThrottleGate(200)) {
                             console.log("spell executed");
                             return _ctrl_data;
                         }
@@ -421,7 +434,7 @@ const _leafloopyspell = {
                 const throttled_ctrlflow$obj = {_stream: controlflow$obj._stream.pipe(map(
                     _ctrl_data => 
                     {
-                        if (_.throttle(()=>{}, 10)) {
+                        if (loopThrottleGate(10)) {
                             console.log("spell executed");
                             return _ctrl_data;
                         }
