@@ -38,6 +38,12 @@ git diff
 make ci
 ```
 
+To run tests locally during development:
+
+```bash
+make test
+```
+
 5. Commit (human-authored message)
 
 ```bash
