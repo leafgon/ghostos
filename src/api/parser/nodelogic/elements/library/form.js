@@ -2,25 +2,16 @@ import { Subject, BehaviorSubject, combineLatest, firstValueFrom, of, merge } fr
 import { switchMap, map, withLatestFrom, filter } from "rxjs/operators";
 import Handlebars from "handlebars";
 
-import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
+import { ElemCacheKeyLUT } from "./index.js";
 //import { exitDataBus } from "../../../../utils/leafdataflow.js";
 import { isBottle } from "../../../predicates.js";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
-import { doBottle, doUnbottle } from "../../datautils/bottling.js";
+import { doBottle } from "../../datautils/bottling.js";
 
 //import Form from '@rjsf/core';
 //import { createElement } from "react";
 //import { createRoot } from 'react-dom/client';
 
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in text.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/elements/library/text.js",
-  },
-  {},
-);
 const cachekeys = {
   TEMPLATE: "_html_template",
 };

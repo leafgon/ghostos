@@ -1,5 +1,6 @@
-import { BehaviorSubject, Subject, combineLatest, of } from "rxjs";
-import { concatMap, map, withLatestFrom } from "rxjs/operators";
+import { BehaviorSubject, Subject, of } from "rxjs";
+import { map, withLatestFrom } from "rxjs/operators";
+import { v4 as uuid4 } from "uuid";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 import { driveDataflowByCtrlflow, executeLEAFLogic } from "../../../leaf.js";
@@ -147,8 +148,6 @@ const initElementInterface = (_stream_cache) => {
   // of the current element node.
   const _datalogic_post = (data_in) => {
     const graph_options = { layout: "3d" };
-    const mock_navnodeedges = [];
-
     const navnodes = data_in;
     // spark_dev_note: (22/Mar/2023)
     // #bugreport #mar2023bug1
@@ -165,16 +164,6 @@ const initElementInterface = (_stream_cache) => {
 
     const navbackdrop = _stream_cache[ElemCacheKeyLUT.gnav.BACKDROP]; //.map(() => {return {...edge, uuid: uuid4()};});
     //const bgtagvectors = _metadata[6];
-
-    const recognizedLambdaConstants = [
-      "edges",
-      "backdrop",
-      "tagvectors",
-      "tagaction",
-      "blankaction",
-    ]; // a prompt of type "button" can be linked, by name, to a key-labelled lambda func
-    const curLambdaKeys = Object.keys(reduced_lambda_obj);
-    const validLambdaKeyList = recognizedLambdaConstants.filter((_) => curLambdaKeys.includes(_));
 
     const elementiosubject$ = new BehaviorSubject(raceConditionError);
     //const marginval = reduced_lambda_obj.margin ? Object.keys(reduced_lambda_obj.margin) : undefined;

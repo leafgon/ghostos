@@ -1,6 +1,7 @@
 import { Subject, BehaviorSubject, combineLatest, firstValueFrom, of, merge } from "rxjs";
 import { switchMap, map, withLatestFrom, filter } from "rxjs/operators";
 import Handlebars from "handlebars";
+import { Buffer } from "buffer";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 //import { exitDataBus } from "../../../../utils/leafdataflow.js";
@@ -8,15 +9,6 @@ import { isBottle } from "../../../predicates.js";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
 import { doBottle, doUnbottle } from "../../datautils/bottling.js";
 
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in text.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/elements/library/text.js",
-  },
-  {},
-);
 const cachekeys = {
   TEMPLATE: "_html_template",
 };
@@ -110,8 +102,8 @@ const initElementInterface = (_stream_cache) => {
         text = text.replace(/&lt;/gm, "<");
         text = text.replace(/&amp;/gm, "&");
         text = text.replace(/(\r\n|\n|\r)/gm, "\n");
-        text = text.replace(/\\&quot;/gm, '\\\"');
-        text = text.replace(/&quot;/gm, '\"');
+        text = text.replace(/\\&quot;/gm, '\\"');
+        text = text.replace(/&quot;/gm, '"');
         //return new Handlebars.SafeString(text);
         //return text;
 

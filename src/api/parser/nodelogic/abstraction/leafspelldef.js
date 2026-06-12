@@ -1,5 +1,4 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { _leafbottle } from "../datautils/index.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
 import { mergeDataflows } from "../../../utils/leafdataflow.js";
 
 const _leafspelldef = {

@@ -49,19 +49,6 @@ const getLargestCount = (dict) => {
   else return 1;
 };
 
-const getLoopInterval = (dict) => {
-  // default interval of 1000 ms
-  const is_stream = "stream" in dict;
-  if (!dict) return is_stream ? 1000 : 10;
-
-  if ("interval" in dict) {
-    const intervalstr = getLargestCount(dict.interval);
-    return isPositiveWholeNumberStr(intervalstr) ? parseInt(intervalstr) : undefined;
-  }
-
-  return is_stream ? 1000 : 10;
-};
-
 /*
  * _leafloopyspell() is a function in the leaf abstraction library to deal with
  * the concept of executing the logic of a set of lambda components (or lambda subgraphs) against

@@ -1,7 +1,7 @@
-import { BehaviorSubject, Subject, combineLatest, merge, of } from "rxjs";
-import { bufferTime, concatMap, map, share, filter, switchMap } from "rxjs/operators";
+import { Subject, merge } from "rxjs";
+import { map, share, switchMap } from "rxjs/operators";
 
-import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
+import { ElemCacheKeyLUT } from "./index.js";
 //import {JZZ} from 'jzz'; // midi interface
 import jzzpkg from "jzz";
 //import Wad from "web-audio-daw";
@@ -10,38 +10,6 @@ import { isBottle, isEmptyBottle } from "../../../predicates.js";
 import { doBottle, doUnbottle } from "../../datautils/bottling.js";
 
 const { JZZ } = jzzpkg; // nodejs friendly import
-
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in midi.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/elements/library/midi.js",
-  },
-  {},
-);
-const midi_base_notenum = 24;
-const midi_base_pitchnum = 1;
-const midi_base_notenum2pitch_lut = {
-  24: ["C"],
-  25: ["C#", "Db"],
-  26: ["D"],
-  27: ["D#", "Eb"],
-  28: ["E"],
-  29: ["F"],
-  30: ["F#", "Gb"],
-  31: ["G"],
-  32: ["G#", "Ab"],
-  33: ["A"],
-  34: ["A#", "Bb"],
-  35: ["B"],
-};
-const midi_notenum2pitchname = (_notenum, nameidx = 0) => {
-  const pitchnum = midi_base_pitchnum + Math.floor((_notenum - midi_base_notenum) / 12);
-  const corresponding_base_notenum = _notenum - 12 * (pitchnum - 1);
-
-  return midi_base_notenum2pitch_lut[corresponding_base_notenum][nameidx] + String(pitchnum);
-};
 
 /*
  * spark_dev_note: 25/Apr/2023
@@ -64,7 +32,6 @@ const midi_notenum2pitchname = (_notenum, nameidx = 0) => {
  *
  */
 const initElementInterface = (_stream_cache) => {
-  const reduced_lambda_obj = _stream_cache[ElemCacheKeyLUT.LAMBDA_OBJ];
   //const uidefsgen = (('uidefs' in reduced_lambda_obj) && ('_default' in reduced_lambda_obj.uidefs)) ? reduced_lambda_obj.uidefs._default : undefined;
   //const margingen = (('margin' in reduced_lambda_obj) && ('_default' in reduced_lambda_obj.margin)) ? reduced_lambda_obj.margin._default : undefined;
   //const fieldwidthgen = (('fieldwidth' in reduced_lambda_obj) && ('_default' in reduced_lambda_obj.fieldwidth)) ? reduced_lambda_obj.fieldwidth._default : undefined;
@@ -96,12 +63,11 @@ const initElementInterface = (_stream_cache) => {
     beats = (beats + 1) % 24; // https://en.wikipedia.org/wiki/MIDI_beat_clock
     if (beats === 0) {
       console.log("beat", Date.now(), ev);
-      const pitchname = "C4";
-      //beatwad.play({pitch: pitchname, label: pitchname});
+      //beatwad.play({pitch: "C4", label: "C4"});
       //wad.play();
     }
     console.log("midiMessageReceived", Date.now(), ev);
-    const [cmd, noteNumber, velocity, _from] = ev;
+    const [cmd, noteNumber, velocity] = ev;
     midiInput$.next(doBottle("_midi_in", { cmd, noteNumber, velocity }, { timestamp: Date.now() }));
     //if ([144].includes(ev[0]))
     //{
@@ -137,16 +103,6 @@ const initElementInterface = (_stream_cache) => {
     //}
   };
 
-  const onMIDISuccess = (midiAccess) => {
-    let inputs = midiAccess.inputs.values();
-    for (let input = inputs.next(); input && !input.done; input = inputs.next()) {
-      input.value.onmidimessage = midiMessageReceived;
-    }
-  };
-
-  const onMIDIFailure = () => console.log("Problem!");
-
-  //navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure)
   const midi_device = {};
   //const midiMap = (_event) => {
   //    console.log(_event.receivedTime, _event.receivedData);
@@ -236,11 +192,6 @@ const initElementInterface = (_stream_cache) => {
   // data postprocessed and returned from this function will continue to flow in the data domain
   // of the current element node.
   const _datalogic_post = (data_in) => {
-    const recognizedLambdaConstants = ["image", "audio", "video"];
-    const curLambdaKeys = Object.keys(reduced_lambda_obj);
-    const validLambdaKeyList = recognizedLambdaConstants.filter((_) => curLambdaKeys.includes(_));
-    const mediatype = validLambdaKeyList.length > 0 ? validLambdaKeyList[0] : "image"; // default to 'image' type
-
     //data_in.map(_in_bottle=> {
     //    if (_in_bottle._bname === "_midi_in") {
     //        if (_in_bottle._content.velocity > 0) {

@@ -40,7 +40,7 @@
     "build:node": "webpack --config webpack.node.config.js",
     "build:web": "webpack --config webpack.browser.config.js",
     "build:dev": "webpack --config webpack.browser.dev.config.mjs",
-    "build:cjs": "babel lib/index.core.js --out-file lib/index.cjs --presets=@babel/preset-env",
+    "build:cjs": "node ./scripts/build-cjs.mjs",
     "build:types": "tsc --project tsconfig.json --declaration --allowJs --emitDeclarationOnly --outDir lib",
     "build": "npm run build:web && npm run build:node && npm run build:cjs && npm run build:types"
   },

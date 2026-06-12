@@ -1,4 +1,4 @@
-//import tonepkg from "tone";
+import * as tonepkg from "tone";
 //import { Tone } from "tone/build/esm/core/Tone";
 //import * as tonepkg from "tone";
 //const { Synth, AMSynth, DuoSynth, FMSynth, MembraneSynth, MetalSynth, MonoSynth, NoiseSynth, PluckSynth, PolySynth, Sampler, Transport } = tonepkg;
@@ -136,7 +136,6 @@ const doConfigureInstrument = (refnode, _config, is_reset = false) => {
 
     return undefined;
   }
-  return undefined;
 };
 
 const doConfigureEffect = (refnode, _config, is_reset = false) => {

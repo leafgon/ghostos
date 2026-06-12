@@ -1,5 +1,5 @@
-import { BehaviorSubject, Subject, combineLatest, merge, of } from "rxjs";
-import { concatMap, filter, map, share, switchMap, withLatestFrom } from "rxjs/operators";
+import { Subject, merge, of } from "rxjs";
+import { filter, map, share, switchMap, withLatestFrom } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
@@ -46,15 +46,6 @@ const initElementInterface = (_stream_cache) => {
     "uidefs" in reduced_lambda_obj && "_default" in reduced_lambda_obj.uidefs
       ? reduced_lambda_obj.uidefs._default
       : undefined;
-  const margingen =
-    "margin" in reduced_lambda_obj && "_default" in reduced_lambda_obj.margin
-      ? reduced_lambda_obj.margin._default
-      : undefined;
-  const fieldwidthgen =
-    "fieldwidth" in reduced_lambda_obj && "_default" in reduced_lambda_obj.fieldwidth
-      ? reduced_lambda_obj.fieldwidth._default
-      : undefined;
-
   const elementioInput$ = new Subject();
 
   const _TEST_UIDEFS = `[ ; an open square bracket [ denotes the beginning of a list, followed by a matching 
@@ -131,9 +122,6 @@ const initElementInterface = (_stream_cache) => {
           :label "Subscribe"
         }
       ]`;
-  const _TEST_MARGIN = "";
-  const _TEST_FIELDWIDTH = "";
-
   const node_context = {
     codebase: "ghostos/api/parser/nodelogic/elements/library/prompt.js",
     refnode: _stream_cache[ElemCacheKeyLUT.REFNODE],
@@ -163,7 +151,6 @@ const initElementInterface = (_stream_cache) => {
     //const fieldwidth$obj = fieldwidthgen ? fieldwidthgen(input$objArr, controlflow$obj) :
     //    {_stream: of(_TEST_FIELDWIDTH)}; //executeLEAFLogicInSync(headergen, merged_input$, undefined, _ctrl_data$, {...controlflow$obj._config}) : {_stream: of([]), _control: {_stream: _ctrl_data$}};
 
-    let traffic_semaphore = false;
     const _ctrl_out$ = uidefs$obj._control._stream.pipe(
       //map(_ctrl_in => {
       //    _stream_cache[ElemCacheKeyLUT.CTRLIN] = _ctrl_in;
@@ -181,12 +168,6 @@ const initElementInterface = (_stream_cache) => {
 
         // perform basic sanity checks on the contents of _data_in
         // like that of _uidefs
-        const recognizedLambdaConstants = ["uidefs", "margin", "fieldwidth"]; // a prompt of type "button" can be linked, by name, to a key-labelled lambda func
-        const curLambdaKeys = Object.keys(reduced_lambda_obj);
-        const validLambdaKeyList = recognizedLambdaConstants.filter((_) =>
-          curLambdaKeys.includes(_),
-        );
-
         const marginval = reduced_lambda_obj.margin
           ? Object.keys(reduced_lambda_obj.margin)
           : undefined;

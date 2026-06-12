@@ -6,36 +6,8 @@
  * 16 Dec 2021
  *
  */
-import {
-  map,
-  concatMap,
-  combineLatestWith,
-  zipWith,
-  mergeWith,
-  concatWith,
-  raceWith,
-  skip,
-  multicast,
-  share,
-  takeUntil,
-  switchMap,
-  withLatestFrom,
-  filter,
-  skipUntil,
-  first,
-} from "rxjs/operators";
-import {
-  combineLatest,
-  interval,
-  zip,
-  merge,
-  concat,
-  race,
-  of,
-  take,
-  BehaviorSubject,
-  Subject,
-} from "rxjs";
+import { map, share, takeUntil, switchMap, withLatestFrom, filter } from "rxjs/operators";
+import { merge, BehaviorSubject, Subject } from "rxjs";
 import { LEAFIOmetamodel } from "../metamodel.js";
 //import { processLEAFNodeLogic } from './breezyforest';
 import Graph from "graphology";
@@ -43,13 +15,11 @@ import { connectedComponents } from "../../utils/connectedComponents.js";
 
 import {
   isSpellDefComponent,
-  hasLambdaGraphNode,
   isDataflowPlaneScoped,
   isLambdaPlaneScoped,
   isLambdaComponent,
   isRuntimeComponent,
   isAnchoredComponent,
-  isBottle,
   isLEAFConfigComponent,
 } from "./predicates.js";
 
@@ -64,43 +34,7 @@ const _version = LEAFIOmetamodel.breezyforest._version;
 
 // various combining mechanisms explained in
 // https://indepth.dev/posts/1114/learn-to-combine-rxjs-sequences-with-super-intuitive-interactive-diagrams
-const combineOpDictionary = {
-  merge: { indexed: mergeWith, unindexed: merge },
-  combine: { indexed: zipWith, unindexed: zip },
-  combineLatest: { indexed: combineLatestWith, unindexed: combineLatest },
-  concat: { indexed: concatWith, unindexed: concat },
-  race: { indexed: raceWith, unindexed: race },
-};
-//const postcombineOpDictionary = {
-//    merge: {indexed: null, unindexed: null},
-//    zip: {indexed: zipWith, unindexed: zip},
-//    zipLatest: {indexed: combineLatestWith, unindexed: combineLatest},
-//    concat: {indexed: concatWith, unindexed: concat},
-//    race: {indexed: raceWith, unindexed: race}
-//};
 
-const combineInputStreams = (config) => {
-  if (config.isIndexed) {
-    const operatorFunc = combineOpDictionary[config.combineOperator]["indexed"];
-    return (input$Arr) => {
-      return interval().pipe(
-        operatorFunc(...input$Arr),
-        //map(x => {
-        //    //console.log('indexed combineInputStreams: ' + x + ', config: ' + JSON.stringify(config));
-        //    return x;
-        //})
-      );
-    };
-  } else {
-    const operatorFunc = combineOpDictionary[config.combineOperator]["unindexed"];
-    return (input$Arr) => {
-      return operatorFunc(...input$Arr); //.pipe(map(x => {
-      //    //console.log('unindexed combineInputStreams: ' + x + ', config: ' + JSON.stringify(config));
-      //    return x;
-      //}));
-    };
-  }
-};
 /*
  * function parseLEAFNode() is used to parse a LEAF node
  * in order to set up its LEAF execution logic and to configure the mode of execution accordingly
@@ -209,8 +143,6 @@ const combineInputStreams = (config) => {
  * @masterSubsDirectory: is an object carrying the details for establishing LEAFIO protocols
  *                       (that support inter-component communication channels) between some leafnodes
  */
-const parseSpellBook = ({ spellbookgrapho, leaflib, masterSubsDirectory }) => {};
-
 /*
  * reconstructLEAFGraph() initializes a GOSjs-compatable graph data structure based on the @nodes passed in.
  * a single LEAF component is defined only within the context of nodes and data edges (i.e. leafdataedge).
@@ -224,8 +156,6 @@ const reconstructLEAFGraph = (nodes, masterSubsDirectory) => {
   const dataflowgraph = new Graph();
   const lambdagraph = new Graph();
   const combinedgraph = new Graph();
-  const spellbookgraph = new Graph();
-
   let thespadeuuid = undefined;
   // register start and end nodes
   //graph.addNode('leafstart');
@@ -298,7 +228,6 @@ const reconstructLEAFGraph = (nodes, masterSubsDirectory) => {
           datasources.add(an_edge.source.uuid);
           datatargets.add(an_edge.target.uuid);
         } else {
-          const _cache = { node };
           console.error(
             `duplicate edge data detected linking ${an_edge.source.uuid} and ${an_edge.target.uuid}`,
           );
@@ -659,20 +588,6 @@ const analyzeLEAFGraph = (leafgraph) => {
 //    };
 //};
 
-const parseLEAFEdges = (nodes) => {
-  const parsedEdges = {};
-
-  nodes.forEach((node) => {
-    node.out_edges
-      .filter((an_edge, idx) => {})
-      .forEach((an_edge, index) => {
-        // access and check the edge type, and filter in if of leafdataedge or leaflambdaedge
-      });
-    if (Object.keys(node.out_edges).length > 0) {
-    }
-  });
-};
-
 const raceConditionError = doBottle(
   "error",
   {
@@ -737,7 +652,6 @@ const subscribeToLEAFLogic = async (leaflogic, input, runtimeconfig, stopper$) =
   ctrl_input$.next(subs_ctrl_accio_bottle);
   const controldata$obj = { _stream: ctrl_input$, _config: runtimeconfig };
   const output$obj = leaflogic([{ _stream: data_input$ }], controldata$obj);
-  let output = undefined;
   let _ctrl_in_cache = undefined;
   const ret = output$obj
     ? output$obj._control._stream
@@ -898,7 +812,6 @@ const driveDataflowByCtrlflow = (
   context = {},
   transformation = { leaflogic: undefined, datalogic: { pre: undefined, post: undefined } },
 ) => {
-  const _local_cache = {};
   //const _outflow_data$ = outflow_data$ !== undefined ? outflow_data$ : new BehaviorSubject({...raceConditionError, _label: {at: "leaf.js driveDataflowByCtrlflow data stream"}});
   //const _outflow_data$ = outflow_data$ !== undefined ? outflow_data$ : new BehaviorSubject(raceConditionError);
   //const _outflow_data$ = outflow_data$ !== undefined ? outflow_data$ : new Subject();
@@ -909,11 +822,8 @@ const driveDataflowByCtrlflow = (
   //let _combined_bridge$ = undefined;
   //const _combined_bridge_ready$ = new Subject();
   //const _outflow_data_ctrl$ = new Subject();
-  const outer_relay_ctrl$ = new Subject();
-
   //const _outflow_data$ = outflow_data$ !== undefined ? outflow_data$ : new Subject();
   let _ctrl_data_cache = undefined;
-  let _data_cache = undefined;
   if (
     [
       "e9e6e44b-792b-46d0-b1d3-58ce2f46c45b",
@@ -1014,7 +924,6 @@ const driveDataflowByCtrlflow = (
           true,
         ),
       };
-      _data_cache = _data_in;
       //const endof_leaflogic_probe = firstValueFrom(leaflogic_out$obj._control._stream)
       setTimeout(() => {
         _data_bridge$.next(_data_in);

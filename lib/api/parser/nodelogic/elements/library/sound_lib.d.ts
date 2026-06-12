@@ -1,0 +1,10 @@
+export function doConfigureInstrument(refnode: any, _config: any, is_reset?: boolean): any;
+export function doConfigureSource(_config: any): undefined;
+export function doConfigureTarget(nodeuuid: any): undefined;
+export function doConfigureEffect(refnode: any, _config: any, is_reset?: boolean): any;
+export function initializeSoundStage(): void;
+export function initializeToneState(): void;
+export function cacheSoundStageNode(nodeuuid: any, _soundnode: any): void;
+export function destroySoundStageNode(nodeuuid: any): void;
+export function connectCachedSoundStageNodes(nodeuuid1: any, nodeuuid2: any): void;
+export function disconnectCachedSoundStageNodes(nodeuuid1: any, nodeuuid2: any): void;

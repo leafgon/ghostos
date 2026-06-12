@@ -3,33 +3,24 @@ import {
   delay,
   skip,
   bufferTime,
-  filter,
-  bufferCount,
   take,
-  repeat,
   interval,
   of,
-  from,
   zip,
   map,
   merge,
   mergeAll,
   switchAll,
-  mergeMap,
   combineLatest,
-  combineLatestWith,
   withLatestFrom,
   concatAll,
   BehaviorSubject,
   concatMap,
   Subject,
   switchMap,
-  share,
 } from "rxjs";
-import { isBottle, isCrate, isErrorBottle, isPrimitiveType } from "../parser/predicates.js";
-import { rxTimeoutStream } from "../parser/eta.js";
-import { v4 as uuid4, v5 as uuid5 } from "uuid";
-import { doBottle } from "../parser/nodelogic/datautils/bottling.js";
+import { isBottle, isCrate } from "../parser/predicates.js";
+import { v4 as uuid4 } from "uuid";
 
 const LEAFBufferTimeSpan = 200; // ms
 const LEAFBufferCreationInterval = 100; // ms
@@ -53,6 +44,25 @@ const isArrayOfArrays = (a) => {
 };
 
 const flattenArray = (x) => (Array.isArray(x) ? x.flatMap((_x) => _x) : x);
+
+const exitDataBus = ({ _bus, _cond = (_) => true, _flatten = false } = {}) => {
+  if (_flatten)
+    return Array.isArray(_bus)
+      ? _bus
+          .map((_b) => (isBottle(_b) && _b._bname === "_databus" && _cond(_b) ? _b._content : _b))
+          .flat()
+          .filter((_) => _)
+      : isBottle(_bus) && _bus._bname === "_databus" && _cond(_bus)
+        ? _bus._content
+        : _bus;
+  return Array.isArray(_bus)
+    ? _bus
+        .map((_b) => (isBottle(_b) && _b._bname === "_databus" && _cond(_b) ? _b._content : _b))
+        .filter((_) => _)
+    : isBottle(_bus) && _bus._bname === "_databus" && _cond(_bus)
+      ? _bus._content
+      : _bus;
+};
 
 const pickMainStream = (flow$Arr, mainlabel = "main") => {
   let mainstream$obj, auxstream$Arr;
@@ -419,8 +429,6 @@ const combineDataflows = (
       ...filtered$Arr[0],
       _stream: filtered$Arr[0]._stream.pipe(
         map((_data) => {
-          const _rt_cache = { ...context };
-
           if (nodeuuid?.slice(0, 4) === "9857")
             console.log("combineDataflows() stream content:", _data, isflatten);
 
@@ -540,15 +548,6 @@ const concatDataflows = (flow$Arr) => {
   }
 };
 
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in leafdataflow.js",
-    codebase: "/src/ghostos/api/utils/leafdataflow.js",
-  },
-  {},
-);
 const TIMEOUTBEHAVIOR_BESTEFFORT = 0; //"besteffort";
 const TIMEOUTBEHAVIOR_ALLORNOTHING = 1; //"allornothing";
 const CHRONOSTYPE_SYNC = 0;
@@ -639,8 +638,10 @@ const chronosDataflow = (
     const datain$arr =
       gates.time >= 0
         ? _flow$Arr.map((_nextflow$, _curidx) => {
-            if (_timerarr[_curidx]?.timerref) console.log("start debugging");
-            _timerarr[_curidx]?.timerref && clearTimeout(_timerarr[_curidx].timerref);
+            if (_timerarr[_curidx]?.timerref) {
+              console.log("start debugging");
+              clearTimeout(_timerarr[_curidx].timerref);
+            }
             _timerarr[_curidx] = {
               timeruuid: uuid4(),
               timerref: setTimeout(() => {
@@ -674,7 +675,9 @@ const chronosDataflow = (
                 }
 
                 if (_resolved._bname !== "error") {
-                  gates.count > -1 && (_pipe_cache.floodgates[_curidx] = 1);
+                  if (gates.count > -1) {
+                    _pipe_cache.floodgates[_curidx] = 1;
+                  }
                   console.log("midflow rxTimeoutStream: timed in.", _curidx, _resolved, metadata);
                   if (!_timerarr[_curidx]) console.log("start debugging");
                   if (_timerarr[_curidx]?.timerref) {
@@ -683,7 +686,9 @@ const chronosDataflow = (
                   }
                   return _resolved;
                 } else {
-                  gates.count > -1 && (_pipe_cache.floodgates[_curidx] = 1);
+                  if (gates.count > -1) {
+                    _pipe_cache.floodgates[_curidx] = 1;
+                  }
                   console.log(
                     "midflow rxTimeoutStream: timed out.",
                     _curidx,
@@ -741,7 +746,6 @@ const chronosDataflow = (
   // Somewhat repetitive a coding structure below, differentiating four different options offerred by the permutation of these parameters
   // is deliberately designed to be so, for the purpose of runtime efficiency that minimizes conditional branches
   // when data flow takes place.
-  const _sync_pipe_cache = {};
   const _empty_bottle = {
     _bname: "empty",
     _content: "empty_data",
@@ -789,8 +793,8 @@ const chronosDataflow = (
         )
       : ctrl$.pipe(
           map((_ctrl_in) => {
-            console.log("processing idx after timeout retrieval: ", _data_in, Date.now());
-            if (_data_in._bname === "error") console.log("error_bottle in, start debugging");
+            console.log("processing idx after timeout retrieval: ", _ctrl_in, Date.now());
+            if (_ctrl_in._bname === "error") console.log("error_bottle in, start debugging");
             return Array.isArray(_ctrl_in)
               ? [_ctrl_in[0], _empty_bottle]
               : [_ctrl_in, _empty_bottle];
@@ -830,8 +834,8 @@ const chronosDataflow = (
         )
       : ctrl$.pipe(
           map((_ctrl_in) => {
-            console.log("processing idx after timeout retrieval: ", _data_in, Date.now());
-            //if (_data_in._bname === "error")
+            console.log("processing idx after timeout retrieval: ", _ctrl_in, Date.now());
+            //if (_ctrl_in._bname === "error")
             //    console.log("error_bottle in, start debugging");
             return _empty_bottle;
           }),
@@ -872,64 +876,6 @@ const chronosDataflow = (
 // combineDataflows rely on rx.js combineLatest() to enforce this synchronous dataflow in multiple input streams
 // However, combineLatest() has a quirky behaviour, rather a feature than a bug, where
 // once multiple input data streams are synchronously combined and returned,
-// any subsequent dataflow multiples would fire each time any singole input data stream provides an instance of input data.
-// this behaviour is in fact not compatible with the intended data stream combining behaviour of LEAF nodes.
-// an alternative implementation strategy will be taken for enforcing this synchronous dataflow.
-// that is to skewer each stream from an array of streams in a series like so implemented in syncDataflows.
-// using a series of pipes on each stream.
-//const TIMEOUTBEHAVIOR_BESTEFFORT = "besteffort";
-//const TIMEOUTBEHAVIOR_ALLORNOTHING = "allornothing";
-const syncDataflows = (
-  ctrl$,
-  flow$Arr,
-  syncTimeSpan = LEAFBufferTimeSpan,
-  timeoutBehavior = TIMEOUTBEHAVIOR_BESTEFFORT,
-  metadata = {},
-) => {
-  //const filtered$Arr = flow$Arr.filter(x=>x);
-  const _pipe_cache = {
-    curpipe$Arr: [ctrl$],
-    data_in: [],
-  };
-
-  const numflows = flow$Arr.length;
-  if (numflows > 0) {
-    flow$Arr.map((_nextflow$, _curidx) => {
-      if (!_pipe_cache.curpipe$Arr[_curidx]) console.log("start debugging");
-      _pipe_cache.curpipe$Arr.push(
-        _pipe_cache.curpipe$Arr[_curidx].pipe(
-          switchMap((_nudge_in) => {
-            if (isErrorBottle(_nudge_in) && timeoutBehavior === TIMEOUTBEHAVIOR_ALLORNOTHING) {
-              // handle error condition here
-              _nudge_in._label.metadata = { ...metadata, flowidx: _curidx - 1 };
-              return of(_nudge_in); // just return the error bottle to fast track any downstream error handling
-            }
-            // otherwise
-            return rxTimeoutStream(
-              _nextflow$,
-              syncTimeSpan,
-              "/ghostos/api/utils/leafdataflow syncDataflows()",
-              "LEAF Error: flow being sync'ed timed out",
-              { ...metadata },
-            );
-          }),
-          map((_data_in) => {
-            if (isErrorBottle(_data_in)) console.log("start debugging");
-            _pipe_cache.data_in.push(_data_in);
-            if (numflows === _curidx + 1)
-              // last data checked in
-              return numflows === 1 ? _pipe_cache.data_in[0] : _pipe_cache.data_in; // return all the collated data
-            return _data_in;
-          }),
-        ),
-      );
-    });
-  }
-
-  //return _pipe_cache.curpipe$Arr.slice(-1)[0];
-  return _pipe_cache.curpipe$Arr.pop(); // faster
-};
-
 // implementation involving mergeAll as per https://indepth.dev/posts/1114/learn-to-combine-rxjs-sequences-with-super-intuitive-interactive-diagrams
 // this function is specifically useful when some of multiple streams in the dataflow
 // skip as in the case of leafgateflow.js, where the unskiped streams get salvaged here for
@@ -1020,38 +966,6 @@ function debounce(fn, ms) {
     }, ms);
   };
 }
-
-const enterDataBus = (_data, _metadata) => {
-  return doBottle("_databus", _data, { ..._metadata });
-};
-
-const _exitDataBus = (_bus, _cond = (_) => true) => {
-  if (isBottle(_bus) && _bus._bname === "_databus" && _cond(_bus)) return _bus._content;
-  else return _bus;
-};
-
-// spark_dev_note: 15/Jun/2023
-// enterDataBus/exitDataBus was introduced to make leaf debugging 'somewhat' easier from the language creator's perspective.
-// this modality of data carrier, when perceived by leaf programmers in the general population, is confusing, at best.
-// hence the decision to stop using it.
-// from now on the bottle/unbottle function pair is used to encapsulate any user-level
-// as well as any system-level data exchanges between nodes
-// the function definitions of enterDataBus/exitDataBus are left as is in the mean time, just in case, ;)
-// but their availability as a library function is taken down by
-// excluding their names from the export clause defined at the end of this file.
-const exitDataBus = ({ _bus, _cond = (_) => true, _flatten = false } = {}) => {
-  if (_flatten)
-    return Array.isArray(_bus)
-      ? _bus
-          .map((_b) => _exitDataBus(_b, _cond))
-          .flat()
-          .filter((_) => _)
-      : _exitDataBus(_bus, _cond);
-  else
-    return Array.isArray(_bus)
-      ? _bus.map((_b) => _exitDataBus(_b, _cond)).filter((_) => _)
-      : _exitDataBus(_bus, _cond);
-};
 
 export {
   naiveZipDataflows,

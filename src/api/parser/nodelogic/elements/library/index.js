@@ -11,8 +11,8 @@ import { props as _gnav, cachekeys as _gnav_cachekeys } from "./gnav.js";
 import { props as _http, cachekeys as _http_cachekeys } from "./http.js";
 import { props as _href, cachekeys as _href_cachekeys } from "./href.js";
 import { props as _html, cachekeys as _html_cachekeys } from "./html.js";
-import { props as _form, cachekeys as _form_cachekeys } from "./form.js";
-import { props as _directus, cachekeys as _directus_cachekeys } from "./directus.js";
+import { props as _form } from "./form.js";
+import { props as _directus } from "./directus.js";
 import { doBottle } from "../../datautils/bottling.js";
 
 const ElemCacheKeyLUT = {

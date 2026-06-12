@@ -1,21 +1,10 @@
-import { Subject, combineLatest, of } from "rxjs";
-import { switchMap, map, withLatestFrom } from "rxjs/operators";
+import { Subject } from "rxjs";
+import { map, withLatestFrom } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 //import { exitDataBus } from "../../../../utils/leafdataflow";
 import { isBottle } from "../../../predicates.js";
-import { driveDataflowByCtrlflow } from "../../../leaf.js";
-import { doBottle } from "../../datautils/bottling.js";
 
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in text.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/elements/library/text.js",
-  },
-  {},
-);
 /*
  * spark_dev_note: 25/Apr/2023
  * all leaflogic and datalogic functions must be designed to conform to the following spec,
@@ -41,11 +30,6 @@ const initElementInterface = (_stream_cache) => {
   //const uidefsgen = (('uidefs' in reduced_lambda_obj) && ('_default' in reduced_lambda_obj.uidefs)) ? reduced_lambda_obj.uidefs._default : undefined;
   //const margingen = (('margin' in reduced_lambda_obj) && ('_default' in reduced_lambda_obj.margin)) ? reduced_lambda_obj.margin._default : undefined;
   //const fieldwidthgen = (('fieldwidth' in reduced_lambda_obj) && ('_default' in reduced_lambda_obj.fieldwidth)) ? reduced_lambda_obj.fieldwidth._default : undefined;
-
-  const node_context = {
-    codebase: "ghostos/api/parser/nodelogic/elements/library/text.js",
-    ..._stream_cache,
-  };
 
   const _leaflogic = (input$objArr, controlflow$obj) => {
     //const _stream_cache = {};
@@ -159,10 +143,6 @@ const initElementInterface = (_stream_cache) => {
   // data postprocessed and returned from this function will continue to flow in the data domain
   // of the current element node.
   const _datalogic_post = (data_in) => {
-    const recognizedLambdaConstants = ["lambda", "onsave", "gspot"]; // lambda as in "lambda plane"
-    const curLambdaKeys = Object.keys(reduced_lambda_obj);
-    const validLambdaKeyList = recognizedLambdaConstants.filter((_) => curLambdaKeys.includes(_));
-
     const textsource = "lambda" in reduced_lambda_obj ? "lambda" : "dataflow"; // dataflow as in "dataflow plane"
 
     //const marginval = reduced_lambda_obj.margin ? Object.keys(reduced_lambda_obj.margin) : undefined;
@@ -192,10 +172,6 @@ const initElementInterface = (_stream_cache) => {
       _flowdatain = data_in; // [...input$objArr]
       //_flowdatain = _flowdatain.length === 1 ? _flowdatain[0] : _flowdatain; // take care of data plurality
     }
-
-    //const _lambdarefnodedata = _stream_cache[ElemCacheKeyLUT.]
-    // spark_dev_note: interim solution to compilation issue, need to sort this out in a proper fashion
-    const controlflow$obj = undefined;
 
     const node_output = formatElementFlowdata(
       {

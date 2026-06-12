@@ -10,13 +10,42 @@ import { etaTreeForest } from "../../etatreeforest.js";
 
 const leafgraph_apidef = _leafstdlib_dataflow_api("leafgraph");
 
+const hasGithubPrefix = (graphAddr) =>
+  typeof graphAddr === "string" && graphAddr.toLowerCase().startsWith("github/");
+
+const redactGraphQueryValues = (graphRef) => {
+  if (typeof graphRef !== "string") {
+    return graphRef;
+  }
+  const queryIndex = graphRef.indexOf("?");
+  if (queryIndex === -1) {
+    return graphRef;
+  }
+  const refPath = graphRef.slice(0, queryIndex);
+  const refQuery = graphRef.slice(queryIndex + 1);
+  if (refQuery.length === 0) {
+    return `${refPath}?`;
+  }
+  const redactedQuery = refQuery
+    .split("&")
+    .map((entry) => {
+      if (!entry) {
+        return entry;
+      }
+      const [key] = entry.split("=");
+      return key ? `${key}=REDACTED` : "REDACTED";
+    })
+    .join("&");
+  return `${refPath}?${redactedQuery}`;
+};
+
 const parseLeafgraphAddressStrict = (leafgraph_addr_str) => {
   const slash_index = leafgraph_addr_str.indexOf("/");
   if (slash_index <= 0 || slash_index === leafgraph_addr_str.length - 1) {
     return null;
   }
   return {
-    graph_domain: leafgraph_addr_str.slice(0, slash_index),
+    graph_domain: leafgraph_addr_str.slice(0, slash_index).toLowerCase(),
     graph_appid: leafgraph_addr_str.slice(slash_index + 1),
   };
 };
@@ -34,13 +63,13 @@ const parseLeafgraphAddressWithDefaults = (leafgraph_addr_str, host_domain) => {
   }
   const slash_index = leafgraph_addr_str.indexOf("/");
   if (slash_index === -1) {
-    return { graph_domain: leafgraph_addr_str, graph_appid: "index" };
+    return { graph_domain: leafgraph_addr_str.toLowerCase(), graph_appid: "index" };
   }
   if (slash_index === 0 || slash_index === leafgraph_addr_str.length - 1) {
     return null;
   }
   return {
-    graph_domain: leafgraph_addr_str.slice(0, slash_index),
+    graph_domain: leafgraph_addr_str.slice(0, slash_index).toLowerCase(),
     graph_appid: leafgraph_addr_str.slice(slash_index + 1),
   };
 };
@@ -78,7 +107,7 @@ const graphRefUpdateHandler = async (
   //const parentname = hostEtaTree ? host_domain+"/"+host_appid : undefined;
   //_leafmemoryio.methods(lambdactrl)({}).etatreeforest.setEtaTree(treename, etaTree, parentname);
 
-  console.log("graphRefUpdateHandler(): ", graph_domain, graph_appid);
+  console.log("graphRefUpdateHandler(): ", graph_domain, redactGraphQueryValues(graph_appid));
   const etaTree = await etaTreeForest(hostEtaTree)?.parseGraphEtaTree(graph_domain, graph_appid);
   if (etaTree === undefined) console.log("start debugging");
   const leafgraph = etaTree.leafgraph;
@@ -194,7 +223,7 @@ const _leafgraph = {
         args,
       );
       const leafgraph_addr_lower = leafgraph_addr_raw.toLowerCase();
-      const leafgraph_addr_str = leafgraph_addr_lower.startsWith("github/")
+      const leafgraph_addr_str = hasGithubPrefix(leafgraph_addr_raw)
         ? leafgraph_addr_raw
         : leafgraph_addr_lower;
       const parsed_address = parseLeafgraphAddressStrict(leafgraph_addr_str);
@@ -278,7 +307,7 @@ const _leafgraph = {
         args,
       );
       const leafgraph_addr_lower = leafgraph_addr_raw.toLowerCase();
-      const leafgraph_addr_str = leafgraph_addr_lower.startsWith("github/")
+      const leafgraph_addr_str = hasGithubPrefix(leafgraph_addr_raw)
         ? leafgraph_addr_raw
         : leafgraph_addr_lower;
       const host_domain = lambdactrl.gos.etaTree.domain; // current domain becomes the host domain of the leafgraph lookup
@@ -367,7 +396,7 @@ const _leafgraph = {
         args,
       );
       const leafgraph_addr_lower = leafgraph_addr_raw.toLowerCase();
-      const leafgraph_addr_str = leafgraph_addr_lower.startsWith("github/")
+      const leafgraph_addr_str = hasGithubPrefix(leafgraph_addr_raw)
         ? leafgraph_addr_raw
         : leafgraph_addr_lower;
       const host_domain = lambdactrl.gos.etaTree.domain; // current domain becomes the host domain of the leafgraph lookup

@@ -1,20 +1,11 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { map, concatMap, withLatestFrom, filter } from "rxjs/operators";
-import { BehaviorSubject, of, combineLatest } from "rxjs";
-import { _leafbottle, _leafunbottle } from "../datautils/index.js";
-import {
-  combineDataflows,
-  mergeDataflows,
-  chronosDataflow,
-  naiveZipDataflows,
-  CHRONOSTYPE_SYNC,
-} from "../../../utils/leafdataflow.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map } from "rxjs/operators";
+import { mergeDataflows } from "../../../utils/leafdataflow.js";
 import { fetchMultiKeyedData } from "../../../utils/fetchnodedata.js";
 import { _leafstdlib_dataflow_api } from "../../../metamodel.js";
 import { v4 as uuid4 } from "uuid";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { _leafmixflow } from "../dataflow/index.js";
-import { ElemCacheKeyLUT } from "./library/index.js";
 import { isBottle } from "../../predicates.js";
 import { doBottle, doUnbottle } from "../datautils/bottling.js";
 
@@ -71,7 +62,7 @@ const _leafdeckdiamond = {
       // spark_dev_note: I think _leafdataUnbottle currently only supports a single key, in the future it would be whole lot more useful
       // if it supported an array of keys to be unbottled in one go.
       //const filterDataOfInterest = await _leafunbottle.dataflow(lambdactrl)({refnodedata: {leaf: {logic: {args: {bottlekey:'_leafdeckclub'}}}}, nodelambda: [], contextuallambda});
-      const mixDataflow = await _leafmixflow.dataflow(lambdactrl)({
+      await _leafmixflow.dataflow(lambdactrl)({
         refnodedata: { leaf: { logic: { args: {} } } },
         nodelambda: [],
         contextuallambda,
@@ -98,15 +89,9 @@ const _leafdeckdiamond = {
         // cases to have them tested.
         //const filtered$obj = naiveZipDataflows(flowinput$Arr.map(x=>filterDataOfInterest([x])));
 
-        let idxcache = 0;
-        let loopydata_cache = [];
-        let ctrl_in_cache = undefined;
         let bottle_label = ["_leafdeckclub"];
 
-        const _stream_cache = {};
-
         const preprocessfunc = (_data_in) => {
-          const _rt_cache = { idxcache, loopydata_cache };
           const _data_in_arr = Array.isArray(_data_in) ? _data_in : [_data_in];
           const _data_out = { clubs: [], nodeinput: [] };
 
@@ -173,7 +158,7 @@ const _leafdeckdiamond = {
         //};
 
         const loopidx = controlflow$obj._config?.loopidx;
-        const { type, args } = refnodedata.leaf.logic;
+        const { args } = refnodedata.leaf.logic;
         const _defaultLambda =
           "_default" in reduced_lambda_obj
             ? (_input$objArr, _controlflow$obj) => {
@@ -232,13 +217,11 @@ const _leafdeckdiamond = {
                   };
                 }
               : (_input$objArr, _controlflow$obj) => {
-                  const _cache = { ...reduced_lambda_obj };
                   console.log("start debugging");
                   return { ...mergeDataflows(_input$objArr), _control: _controlflow$obj };
                 };
 
         const postprocessfunc = (_data_in) => {
-          const _rt_cache = { idxcache, loopydata_cache };
           if (!_data_in.clubs) console.log("start debugging");
           const a_club_list = _data_in.clubs.filter((_c) => _c); //Array.isArray(_data_in) ? _data_in : [_data_in];
           //const _nodeinput = _data_in.nodeinput.length === 1 ? _data_in.nodeinput[0] : _data_in.nodeinput;

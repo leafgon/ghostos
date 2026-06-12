@@ -1,15 +1,12 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { map, concatMap, withLatestFrom, filter } from "rxjs/operators";
-import { _leafbottle, _leafunbottle } from "../datautils/index.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { _leafbottle } from "../datautils/index.js";
 import { fetchMultiKeyedData } from "../../../utils/fetchnodedata.js";
 import { _leafstdlib_dataflow_api } from "../../../metamodel.js";
 //import { combineDataflows, naiveZipDataflows, mergeObservableDataflows, chronosDataflow, CHRONOSTYPE_SYNC } from '../../../utils/leafdataflow';
 import { v4 as uuid4 } from "uuid";
 import { mergeDataflows } from "../../../utils/leafdataflow.js";
-import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { _leafmixflow } from "../dataflow/index.js";
-import { ReplaySubject, combineLatest } from "rxjs";
-import { ElemCacheKeyLUT } from "./library/index.js";
+import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { doBottle, doUnbottle } from "../datautils/bottling.js";
 
 const leaf_apidef = _leafstdlib_dataflow_api("leafdeckheart");
@@ -56,29 +53,17 @@ const _leafdeckheart = {
         contextuallambda,
         etaTree: lambdactrl.gos.etaTree,
       });
-      const _defaultLambda =
-        "_default" in reduced_lambda_obj
-          ? (input$Arr, controlflow$obj) => {
-              return {
-                ...reduced_lambda_obj._default(input$Arr, controlflow$obj),
-                _control: controlflow$obj,
-              };
-            }
-          : (input$Arr, controlflow$obj) => {
-              return { ...mergeDataflows(input$Arr), _control: controlflow$obj };
-            };
-
       // spark_dev_note: I think _leafdataUnbottle currently only supports a single key, in the future it would be whole lot more useful
       // if it supported an array of keys to be unbottled in one go.
       //const filterDataOfInterestDiamond = await _leafunbottle.dataflow(lambdactrl)({refnodedata: {leaf: {logic: {args: {bottlekey:'_leafdeckdiamond'}}}}, nodelambda: [], contextuallambda});
-      const mixDataflow = await _leafmixflow.dataflow(lambdactrl)({
+      await _leafmixflow.dataflow(lambdactrl)({
         refnodedata: { leaf: { logic: { args: {} } } },
         nodelambda: [],
         contextuallambda,
       });
       //const filterDataOfInterestClub = await _leafunbottle.dataflow(lambdactrl)({refnodedata: {leaf: {logic: {args: {bottlekey:'_leafdeckclub'}}}}, nodelambda: [], contextuallambda});
       // lambdactrl.user.leaf.logic.args.bottlekey || lambdadata.lambdaFunc
-      const bottleUp = await _leafbottle.dataflow(lambdactrl)({
+      await _leafbottle.dataflow(lambdactrl)({
         refnodedata: { leaf: { logic: { args: { bottlekey: "_leafdeckheart" } } } },
         nodelambda: [],
         contextuallambda,
@@ -93,15 +78,9 @@ const _leafdeckheart = {
       };
 
       return (input$objArr, controlflow$obj) => {
-        let idxcache = 0;
-        let loopydata_cache = [];
-        let ctrl_in_cache = undefined;
         let bottle_label = ["_leafdeckdiamond"];
 
-        const _stream_cache = {};
-
         const preprocessfunc = (_data_in) => {
-          const _rt_cache = { idxcache, loopydata_cache };
           if (node_context.refnode === "02dda89a-6816-4e63-86eb-071b39d5fd51")
             console.log("start debugging");
           const _data_out = Array.isArray(_data_in)
@@ -154,7 +133,7 @@ const _leafdeckheart = {
         //};
 
         const loopidx = controlflow$obj._config?.loopidx;
-        const { type, args } = refnodedata.leaf.logic;
+        const { args } = refnodedata.leaf.logic;
         const _defaultLambda =
           "_default" in reduced_lambda_obj
             ? (_input$objArr, _controlflow$obj) => {
@@ -172,7 +151,6 @@ const _leafdeckheart = {
               };
 
         const postprocessfunc = (_data_in) => {
-          const _rt_cache = { idxcache, loopydata_cache };
           const a_diamond_list = Array.isArray(_data_in) ? _data_in : [_data_in];
           const _data_out = {
             type: "leafdeckheart",

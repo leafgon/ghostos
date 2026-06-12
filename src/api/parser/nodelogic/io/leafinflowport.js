@@ -1,14 +1,8 @@
 //import { etaReduceLambdaGraphs, etaReduceDataflowComponent, wrapInputStreamArrayHandler, runtimeEtaTree } from '../../eta';
-import { mergeMap, switchMap, map, tap, withLatestFrom, filter, share } from "rxjs/operators";
-import {
-  combineDataflows,
-  chronosDataflow,
-  CHRONOSTYPE_SYNC,
-  TIMEOUTBEHAVIOR_BESTEFFORT,
-} from "../../../utils/leafdataflow.js";
+import { map, withLatestFrom, share } from "rxjs/operators";
+import { combineDataflows } from "../../../utils/leafdataflow.js";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
-import { BehaviorSubject, Subject } from "rxjs";
-import { doBottle } from "../datautils/bottling.js";
+import { Subject } from "rxjs";
 
 /*
  * _leafinflowport() is a dataflow-plane-scoped function for the LEAF node of logic type 'leafinflowport'.
@@ -55,7 +49,6 @@ const _leafinflowport = {
       return (input$objArr, controlflow$obj) => {
         // identify function
         const preprocessfunc = (_data_in) => {
-          const _rt_cache = { ...node_context };
           //const _data_out = doUnbottle(undefined, _data_in); // unbottle all bottles
           //flowinterface.data_in.next(_data_in);
           if (node_context.refnode === "9c55bbea-7980-4e71-b722-a0d32d332633")
@@ -63,16 +56,6 @@ const _leafinflowport = {
           const _data_out = _data_in; // do nothing
           return _data_out;
         };
-
-        const raceConditionError = doBottle(
-          "error",
-          {
-            type: "critical",
-            message: "LEAF core error: race condition detected in leafinflowport.js",
-            codebase: "/src/ghostos/api/parser/nodelogic/io/leafinflowport.js",
-          },
-          {},
-        );
 
         const _nodeflowfunc = (_input$objArr, _controlflow$obj) => {
           console.log("start debugging");

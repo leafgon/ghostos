@@ -1,19 +1,11 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { map, concatMap, withLatestFrom, filter } from "rxjs/operators";
-import { _leafbottle } from "../datautils/index.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map } from "rxjs/operators";
 //import { red } from '@mui/material/colors';
-import {
-  mergeDataflows,
-  combineDataflows,
-  chronosDataflow,
-  CHRONOSTYPE_SYNC,
-} from "../../../utils/leafdataflow.js";
-import { ReplaySubject, from, of, combineLatest } from "rxjs";
+import { mergeDataflows } from "../../../utils/leafdataflow.js";
 import { fetchMultiKeyedData } from "../../../utils/fetchnodedata.js";
 import { _leafstdlib_dataflow_api } from "../../../metamodel.js";
 import { v4 as uuid4 } from "uuid";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
-import { ElemCacheKeyLUT } from "./library/index.js";
 import { isBottle } from "../../predicates.js";
 import { doBottle, doUnbottle } from "../datautils/bottling.js";
 
@@ -55,15 +47,7 @@ const _leafdeckclub = {
       };
 
       return (input$objArr, controlflow$obj) => {
-        let idxcache = 0;
-        let loopydata_cache = [];
-        let ctrl_in_cache = undefined;
-        let bottle_label = undefined;
-
-        const _stream_cache = {};
-
         const preprocessfunc = (_data_in) => {
-          const _rt_cache = { idxcache, loopydata_cache };
           //const _data_out = doUnbottle(undefined, _data_in); // unbottle all bottles
 
           const _data_in_arr = Array.isArray(_data_in) ? _data_in : [_data_in];
@@ -125,7 +109,7 @@ const _leafdeckclub = {
         //};
 
         const loopidx = controlflow$obj._config?.loopidx;
-        const { type, args } = refnodedata.leaf.logic;
+        const { args } = refnodedata.leaf.logic;
         const _defaultLambda =
           "_default" in reduced_lambda_obj
             ? (_input$objArr, _controlflow$obj) => {
@@ -143,7 +127,6 @@ const _leafdeckclub = {
               };
 
         const postprocessfunc = (_data_in) => {
-          const _rt_cache = { idxcache, loopydata_cache };
           //const a_club_list = _data_in;
           const is_lambda_subscription = "subscribe" in reduced_lambda_obj;
 
@@ -175,7 +158,6 @@ const _leafdeckclub = {
         // wire in node-specific flow functions, if any
         const nodectrl$ = controlflow$obj._stream.pipe(
           map((_in_ctrl) => {
-            const _rt_cache = { node_context };
             return _in_ctrl;
           }),
         );
@@ -238,10 +220,10 @@ const _leafdeckclub = {
       });
       const lambda_lut = {};
       Object.entries(reduced_lambda_obj).map(([key, etafunc]) => {
-        lambda_lut[key] = (input$Arr) => {
+        lambda_lut[key] = (input$Arr, controlflow_obj) => {
           // a dataflow-scoped func per key
-          const output$obj = etafunc(input$Arr, controlflow$obj);
-          return { ...output$obj, _control: controlflow$obj };
+          const output_obj = etafunc(input$Arr, controlflow_obj);
+          return { ...output_obj, _control: controlflow_obj };
         };
       });
       return lambda_lut;

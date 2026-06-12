@@ -172,9 +172,9 @@ describe("leafgraph lambda (testbed)", () => {
 
     const leafgraph_args = {
       graphuuid: "",
-      domain: "github",
+      domain: "GitHub",
       appid: "leafgon/leafgraphs/tests/breezyforest-testbed?token=abc123",
-      graphaddrstr: "github/leafgon/leafgraphs/tests/breezyforest-testbed?token=abc123",
+      graphaddrstr: "GitHub/leafgon/leafgraphs/tests/breezyforest-testbed?token=abc123",
     };
     const getLEAFGraph = _leafgraph.lambda(lambdactrl)({
       refnodedata: { leaf: { logic: { args: leafgraph_args } } },
@@ -201,5 +201,83 @@ describe("leafgraph lambda (testbed)", () => {
         data: { type: "string" },
       },
     });
+  }, 15000);
+
+  it("redacts token query values from GitHub fetch errors", async () => {
+    const payload = await loadTestbedPayload();
+    const nodes = payload?.data?.graph?.nodes ?? [];
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => payload,
+    });
+
+    const leafgraph = reconstructLEAFGraph(nodes);
+    const leafcomponents = analyzeLEAFGraph(leafgraph);
+
+    const leafio = {
+      getCurLEAFIOState: () => ({}),
+      getMasterSubsDir: () => ({}),
+      setNewLEAFIOState: () => true,
+      setLEAFIOCallback: () => {},
+    };
+
+    const leaflakeio = {
+      qm_methods: {
+        queryGraph: async () => ({ graph: { nodes } }),
+      },
+    };
+
+    const mainMnemosyne = { current: {} };
+    const etaTree = runtimeEtaTree(
+      "nav",
+      "breezyforest",
+      "testbed",
+      "breezyforest",
+      "testbed",
+      leafgraph,
+      leafcomponents,
+      leafio,
+      leaflakeio,
+      mainMnemosyne,
+    );
+
+    const lambdactrl = {
+      gos: {
+        standardSpellbook: {},
+        curatedSpellbook: {},
+        stdlambdalut: {},
+        curatedlambdalut: {},
+        leafio: etaTree.leafio,
+        etaTree,
+      },
+      user: {
+        spellbook: {},
+        lambdalut: {},
+      },
+    };
+
+    const leafgraph_args = {
+      graphuuid: "",
+      domain: "github",
+      appid: "leafgon/leafgraphs/tests/breezyforest-testbed?token=SECRET123",
+      graphaddrstr: "github/leafgon/leafgraphs/tests/breezyforest-testbed?token=SECRET123",
+    };
+
+    const getLEAFGraph = _leafgraph.lambda(lambdactrl)({
+      refnodedata: { leaf: { logic: { args: leafgraph_args } } },
+      nodelambda: [],
+      contextuallambda: ["leafvisualelements"],
+    });
+
+    const rt_leafgraph = await getLEAFGraph;
+    const capturedLogs = consoleErrorSpy.mock.calls.flat().join(" ");
+    consoleErrorSpy.mockRestore();
+
+    expect(rt_leafgraph).toBeUndefined();
+    expect(capturedLogs).toContain("REDACTED");
+    expect(capturedLogs).not.toContain("SECRET123");
   }, 15000);
 });

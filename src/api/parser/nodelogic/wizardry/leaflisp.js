@@ -1,16 +1,10 @@
 //import { processLEAFlisp } from '../../leaflisp';
-import { map, withLatestFrom, filter, concatMap, share, switchMap } from "rxjs/operators";
-import { BehaviorSubject, Subject, combineLatest, of } from "rxjs";
-import {
-  mergeDataflows,
-  combineDataflows,
-  chronosDataflow,
-  CHRONOSTYPE_SYNC,
-} from "../../../utils/leafdataflow.js";
+import { map, withLatestFrom, filter, share, switchMap } from "rxjs/operators";
+import { BehaviorSubject, Subject, combineLatest } from "rxjs";
+import { combineDataflows } from "../../../utils/leafdataflow.js";
 import { v4 as uuid4, v5 as uuid5 } from "uuid";
-import axios from "axios";
 
-import { PocketLisp, simpleFunction } from "../../../parser/leaflisp/plispdist/index.js"; //'../../../parser/leaflisp/pocket-lisp'; //
+import { PocketLisp } from "../../../parser/leaflisp/plispdist/index.js"; //'../../../parser/leaflisp/pocket-lisp'; //
 import {
   literals,
   runtime,
@@ -22,54 +16,35 @@ import {
   plNumber,
   PLHashMap,
   PLVector,
-  PLFractionNumber,
-  PLNumber,
-  PLBool,
   PLString,
-  plFractionNumber,
   assertNumeric,
   isScientific,
   parseDecimalString,
   parseScientificString,
-  assert as lisp_assert,
   StdRuntimeError,
 } from "../../../parser/leaflisp/plispstdlib/index.js";
 import { encodeUnicode } from "../../../utils/leafbase64.js";
 //import { result } from 'lodash';
 import { etaReduceLambdaGraphs } from "../../eta.js";
 //import { _leafLISPHelpText } from './leaflisphelp';
-import {
-  driveDataflowByCtrlflow,
-  executeLEAFLogic,
-  executeLEAFLogicInSync,
-  parseAddressableGraph,
-} from "../../leaf.js";
-import { _leafgraph, _leafanchor } from "../abstraction/index.js";
+import { driveDataflowByCtrlflow, executeLEAFLogic, parseAddressableGraph } from "../../leaf.js";
+import { _leafgraph } from "../abstraction/index.js";
 import { _common_methods } from "../common.js";
 //import { memoize } from 'lodash';
 import _ from "lodash";
 import { isBottle } from "../../predicates.js";
 import { doBottle, doUnbottle } from "../datautils/bottling.js";
 
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in leaflisp.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/wizardry/leaflisp.js",
-  },
-  {},
-);
 const leafgon_env_type = process.env.LEAFGON_ENV_TYPE;
 // a predicate to test if object has _datatype, making it one of labelled base data types
-const isValuedObj = (_data) => typeof _data === "object" && "_datatype" in _data;
 
 // convert json into leaflisp
-const _indentlen = 2;
 const _indentstr = "  "; // 2 whitespaces
 const generateIndentsByDepth = (depth) => {
   return depth > 0 ? _indentstr.repeat(depth) : "";
 };
+
+const getObjectName = (obj) => obj?.constructor?.kind ?? obj?.constructor?.name ?? "unknown";
 
 const debuggerGlobal = {
   trace: [],
@@ -86,7 +61,7 @@ const parseJsonToLEAFlisp = (x, depth = 0, isdictval = false) => {
   return (
     // for string types, escape \ and "
     inputtype === "string"
-      ? (isdictval ? "" : curindentstr) + `"${x.replace(/\\/g, "\\\\").replace(/"/g, '\\\"')}"\n`
+      ? (isdictval ? "" : curindentstr) + `"${x.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"\n`
       : inputtype === "object"
         ? Array.isArray(x)
           ? (isdictval ? "" : curindentstr) +
@@ -118,24 +93,6 @@ const parseJsonToLEAFlisp = (x, depth = 0, isdictval = false) => {
   //    (isdictval ? '' : curindentstr)+'null\n');
 };
 
-function toFixed(x) {
-  if (Math.abs(x) < 1.0) {
-    var e = parseInt(x.toString().split("e-")[1]);
-    if (e) {
-      x *= Math.pow(10, e - 1);
-      x = "0." + new Array(e).join("0") + x.toString().substring(2);
-    }
-  } else {
-    var e = parseInt(x.toString().split("+")[1]);
-    if (e > 20) {
-      e -= 20;
-      x /= Math.pow(10, e);
-      x += new Array(e + 1).join("0");
-    }
-  }
-  return x;
-}
-
 //https://stackoverflow.com/questions/1685680/how-to-avoid-scientific-notation-for-large-numbers-in-javascript
 /******************************************************************
  * Converts e-Notation Numbers to Plain Numbers
@@ -153,7 +110,10 @@ function toFixed(x) {
  *****************************************************************/
 function eToNumber(num) {
   let sign = "";
-  (num += "").charAt(0) == "-" && ((num = num.substring(1)), (sign = "-"));
+  if ((num += "").charAt(0) == "-") {
+    num = num.substring(1);
+    sign = "-";
+  }
   let arr = num.split(/[e]/gi);
   if (arr.length < 2) return sign + num;
   let dot = (0.1).toLocaleString().substr(1, 1),
@@ -206,10 +166,6 @@ const parseJsonToLEAFlispObj = (x, isfirst = true) => {
   //plString("undefined")
 };
 
-const isPLNumberTypeInstance = (_) => {
-  return _ instanceof PLFractionNumber || _ instanceof PLNumber;
-};
-
 //const parseLEAFlispObjToJson = (x) => {
 //    const inputtype = typeof(x);
 //    return (
@@ -233,7 +189,7 @@ const isPLNumberTypeInstance = (_) => {
 //    );
 //}
 
-const leafLISPStdLib = ({ _probefunc, _tracefunc } = args) => {
+const leafLISPStdLib = ({ _probefunc, _tracefunc } = {}) => {
   return {
     return: (val) => {
       return val;
@@ -247,7 +203,9 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = args) => {
     trace: (trace) => {
       const _trace = trace.toJSON();
       try {
-        _tracefunc && _tracefunc(_trace);
+        if (_tracefunc) {
+          _tracefunc(_trace);
+        }
         //console.error("debugging trace, trace temporarily disabled")
       } catch (error) {
         console.log(error);
@@ -260,7 +218,9 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = args) => {
     probe: (trace) => {
       const _trace = trace.toJSON();
       try {
-        _probefunc && _probefunc(_trace);
+        if (_probefunc) {
+          _probefunc(_trace);
+        }
       } catch (error) {
         console.log(error);
         return trace;
@@ -284,7 +244,7 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = args) => {
             const value = target[prop];
             if (typeof value === "object" && value !== null) {
               // Stringify and escape all double quotes
-              return JSON.stringify(value).replace(/"/g, '\"');
+              return JSON.stringify(value).replace(/"/g, '\\"');
             }
             return value;
           },
@@ -292,7 +252,7 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = args) => {
         return new Function("return `" + templateString + "`;").call(proxy);
       };
 
-      return plString(fillTemplate(formatted_str.replace(/"/g, '\"'), jsdata));
+      return plString(fillTemplate(formatted_str.replace(/"/g, '\\"'), jsdata));
     },
     isnil: (_nil) => {
       const _n = _nil; //.toJSON();
@@ -446,9 +406,6 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = args) => {
       console.log(list1, list2);
       return plVector(...list1.value.concat(list2.value));
     },
-    gload: (libstr) => {
-      loadAdditionalRuntimeLib(libstr.toJSON(), plisp_instance);
-    },
     uuid4: () => {
       return plString(uuid4());
     },
@@ -491,32 +448,6 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = args) => {
     },
   };
 };
-const leafLISPImageLib = {
-  resize: (_b64img, _sizes, _keepratio) => {
-    //const num_re = /(^(\d*)((e(\d+)){0,1}$|$)|^(\d*)\.(\d*))$/;
-    //const target_str = _str.toJSON();
-    ////const re_match = (typeof target_str === "string") ? target_str.match(num_re) : undefined;
-    ////if (re_match) {
-    ////    if (re_match.length === 3) // integer
-    ////        return plNumber(parseInt(target_str));
-    ////    else if (re_match.length === 4) // float
-    ////        return plFractionNumber(parseFloat(target_str));
-    ////    else if (re_match.length === 5) // scientific notation
-    ////        return plFractionNumber()
-    ////}
-    //assertNumeric(target_str);
-    //let parsednum;
-    //if (isScientific(target_str))
-    //    parsednum = parseScientificString(target_str);
-    //else
-    //    parsednum = parseDecimalString(target_str);
-    //if (parsednum.decimals === 0)
-    //    return plNumber(parsednum.intValue);
-    //else
-    //    return plNumber(parsednum.intValue, parsednum.decimals)
-  },
-};
-
 // a function to initialize a globally-scoped runtimeLEAFlisp instance,
 // App.js runs this and handles the global instance reference as soon as the master etaTree is initialized.
 const init_gRuntimeLEAFlisp = (_etaTree, accio_bottles) => {
@@ -556,20 +487,6 @@ const init_gRuntimeLEAFlisp = (_etaTree, accio_bottles) => {
     //console.log(cheatsheet);
     return cheatsheet;
   };
-  const getObjectName = (obj) => obj?.constructor?.kind ?? obj?.constructor?.name ?? "unknown";
-  const plNumListFn1 = (jsfn) => (numlist) => {
-    //typeCheck(PLVector, numlist);
-    if (numlist.constructor !== PLVector)
-      throw new StdRuntimeError(
-        `Expected '${PLVector.kind ?? PLVector.name}', but got '${getObjectName(numlist.value)}'.`,
-      );
-    try {
-      return plNumber(jsfn(numlist.toJSON()));
-    } catch (error) {
-      throw new StdRuntimeError(`Invalid argument for ${jsfn.name}: ${numlist.value}`);
-    }
-  };
-
   const helptext = {};
   cheatTextPromise().then((_helpdict) => {
     helptext.cheatsheet = _helpdict;
@@ -636,23 +553,6 @@ const init_gRuntimeLEAFlisp = (_etaTree, accio_bottles) => {
   return plisp_instance;
 };
 
-const _leafLISPAddOnLibraryList = ["linear-algebra"];
-const _leafLISPAddOnLibraries = {
-  "linear-algebra": {
-    lp: (arg_a, arg_b) => {
-      //console.log(arg_a, arg_b);
-      return plHashMap(plString("a"), arg_a, plString("b"), arg_b);
-    },
-  },
-};
-const loadAdditionalRuntimeLib = (_libstr, _gRuntimeLEAFlisp) => {
-  if (_leafLISPAddOnLibraryList.includes(_libstr)) {
-    Object.entries(_leafLISPAddOnLibraries[_libstr]).map(([namekey, libfunc]) => {
-      _gRuntimeLEAFlisp.interpreter.globals.define(namekey, simpleFunction(libfunc)); // as per interpreter.ts under pocket-lisp/src
-    });
-  }
-};
-
 const runLEAFlispcode = (_lispcode, refnode, _runtimeLEAFlisp, _leafaddress, _preamble_len = 0) => {
   try {
     if (refnode?.slice(0, 4) === "1f5b") console.log("start debugging");
@@ -665,7 +565,7 @@ const runLEAFlispcode = (_lispcode, refnode, _runtimeLEAFlisp, _leafaddress, _pr
       const jsonized_result = result.toJSON();
       //lisp_assert(jsonized_result == undefined);
       return [0, jsonized_result];
-    } catch (e) {
+    } catch {
       //lisp_assert(result != undefined);
       //return [0, "LEAFlisp error: result undefined"];
       return [0, null]; // null is JSON compliant, undefined isn't
@@ -700,9 +600,9 @@ const runLEAFlispcode = (_lispcode, refnode, _runtimeLEAFlisp, _leafaddress, _pr
 
 const hijackTestURL = (_lispcode) => {
   const lispcode_url_hijacker_re_global =
-    /((https?):\/\/(www\.)?([-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6})\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))/g;
+    /((https?):\/\/(www\.)?([-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6})\b([-a-zA-Z0-9()@:%_+.~#?&//=]*))/g;
   const lispcode_url_hijacker_re =
-    /(.*)(https?):\/\/(www\.)?([-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6})\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)(.*)/;
+    /(.*)(https?):\/\/(www\.)?([-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6})\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)(.*)/;
 
   const re_match = _lispcode.match(lispcode_url_hijacker_re_global);
   //console.log(re_match);
@@ -718,13 +618,6 @@ const hijackTestURL = (_lispcode) => {
   //  input: '(+ "https://www.leafgon.com/auth/public/self-service/login/flows?id=" inport)',
   //  groups: undefined
   //]
-
-  const matchKratosURLPath = (path) => {
-    const kratos_re = /^\/auth\/public\/(.*)$/;
-    const kratos_match = path.match(kratos_re);
-    if (kratos_match) return "/" + kratos_match[1];
-    else return undefined;
-  };
 
   const _processed_lispcode = re_match
     ? re_match.reduce((acc, a_url) => {
@@ -772,7 +665,6 @@ const _leaflisp = {
 
       //const refnode_logic = runtimeEtaTree.leafgraph.graph.dataflow.getNodeAttributes(refnode).leafnode.data.leaf.logic;
       //const runtimeLEAFlisp = processLEAFlisp(refnodedata.leaf.logic.args.lispexpression);
-      let lispstdout;
       let runtimeLEAFlisp;
       let spawnVIMEditor = undefined;
 
@@ -867,10 +759,6 @@ const _leaflisp = {
           ? hijackTestURL(refnodedata.leaf.logic.args.lispexpression)
           : refnodedata.leaf.logic.args.lispexpression;
 
-      const convertlisptojs = (obj) => {
-        if (obj) return obj instanceof PLHashMap ? obj.toJSON() : obj.toJS();
-      };
-
       if ("global" in reduced_lambda_obj) {
         runtimeLEAFlisp = lambdactrl.gos.etaTree.gRuntimeLEAFlisp;
       } else {
@@ -957,7 +845,6 @@ const _leaflisp = {
         const clubrefnode = controlflow$obj?._config?.clubrefnode;
 
         const preprocessfunc = (_data_in) => {
-          const _rt_cache = { ...node_context };
           //const _data_out = doUnbottle(undefined, _data_in); // unbottle all bottles
           //flowinterface.data_in.next(_data_in);
           if (refnode === "5e6f52db-0af5-4e04-84ce-3e9af504a3d3") console.log("start debugging");
@@ -1024,7 +911,6 @@ const _leaflisp = {
           const _outflow_data$ = new Subject(); //new BehaviorSubject(raceConditionError);
 
           let traffic_semaphore = false;
-          let _lispcode = lispcode;
           const _outflow_ctrl$ = is_rewritable
             ? _controlflow$obj._stream.pipe(
                 map((_ctrl_in) => {
@@ -1032,8 +918,6 @@ const _leaflisp = {
                 }),
                 withLatestFrom(..._input$objArr.map((_) => _._stream)),
                 map((_combined_in) => {
-                  if (globalThis.DEBUG) {
-                  }
                   //const _next_data = _combined_in.slice(1).filter(_data=>_data!==undefined);
                   let _next_data = _combined_in[1];
 
@@ -1056,8 +940,6 @@ const _leaflisp = {
                     );
                     node_data.leaf.logic.args.lispexpression = lispinput;
                     refnodedata.leaf.logic.args.lispexpression = lispinput;
-                    _lispcode =
-                      leafgon_env_type === "development" ? hijackTestURL(lispinput) : lispinput;
                     //setMultiKeyedData(editorconfig.current.keypath, node_data.leaf.logic.args, editortext.current);
                     //mutateUpdateNode({variables: {uuid: editorconfig.current.node_data.leaduuid, data: encodeUnicode(JSON.stringify(node_data))}});
                     lambdactrl.gos.etaTree.leaflakeio.qm_methods.updateNode({
@@ -1099,8 +981,6 @@ const _leaflisp = {
                   }),
                   withLatestFrom(..._input$objArr.map((_) => _._stream)),
                   map((_combined_in) => {
-                    if (globalThis.DEBUG) {
-                    }
                     //const _next_data = _combined_in.slice(1).filter(_data=>_data!==undefined);
                     const _next_data = _combined_in[1];
 
@@ -1139,8 +1019,6 @@ const _leaflisp = {
                   }),
                   withLatestFrom(..._input$objArr.map((_) => _._stream)),
                   map((_combined_in) => {
-                    if (globalThis.DEBUG) {
-                    }
                     //const _next_data = _combined_in.slice(1).filter(_data=>_data!==undefined);
                     const _next_data = _combined_in[1];
 
@@ -1189,7 +1067,6 @@ const _leaflisp = {
           const _outflow_data$ = new Subject(); //new BehaviorSubject(raceConditionError);
 
           let traffic_semaphore = false;
-          let _lispcode = lispcode;
           const _outflow_ctrl$ = _controlflow$obj._stream.pipe(
             map((_ctrl_in) => {
               if (spawnVIMEditor) spawnVIMEditor();
@@ -1202,8 +1079,6 @@ const _leaflisp = {
               return combineLatest(relay_ctrl$, leafnodeioInput$);
             }),
             map((_combined_in) => {
-              if (globalThis.DEBUG) {
-              }
               const _next_data = _combined_in[1];
 
               traffic_semaphore = true;
@@ -1425,9 +1300,6 @@ const _leaflisp = {
         general: {
           getNodeData: () => {
             return refnodedata;
-          },
-          executeLEAFlisp: (lispcode) => {
-            return run(lispcode);
           },
         },
       };

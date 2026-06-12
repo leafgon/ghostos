@@ -1,21 +1,9 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
 //import { TIMEOUTBEHAVIOR_BESTEFFORT, combineDataflows, exitDataBus, mergeDataflows, chronosDataflow, CHRONOSTYPE_SYNC } from '../../../utils/leafdataflow';
-import { concatMap, filter, map, share, switchMap, withLatestFrom, finalize } from "rxjs/operators";
-import {
-  interval,
-  of,
-  take,
-  timeout,
-  catchError,
-  combineLatest,
-  Subject,
-  BehaviorSubject,
-  firstValueFrom,
-} from "rxjs";
-import { driveDataflowByCtrlflow, executeLEAFLogicInSync, timeoutPromise } from "../../leaf.js";
-import { mergeDataflows } from "../../../utils/leafdataflow.js";
+import { map, share, switchMap, withLatestFrom, finalize } from "rxjs/operators";
+import { Subject, merge } from "rxjs";
+import { driveDataflowByCtrlflow, timeoutPromise } from "../../leaf.js";
 import { isBottle } from "../../predicates.js";
-import { _common_methods } from "../common.js";
 
 const getEtaContext = (_lambda_obj) => {
   const keywordlist = Object.keys(_lambda_obj)
@@ -35,8 +23,6 @@ const _lookupSpellBook =
     if (refnode === "530acdcf-067d-4868-ba0c-b7a83e6edfdf") console.log("start debugging");
     if (spellname in spellbook) {
       const spelldefnode = spellbook[spellname];
-
-      const nodelambda = spelldefnode in lambdalut ? lambdalut[spelldefnode] : [];
 
       if (spellname === "accio" && refnode.slice(0, 4) === "39c9")
         console.log("debug time", spelldefnode, spellbook);
@@ -98,10 +84,6 @@ const _leafspell = {
         });
       }
 
-      //const nodeiosubject_in$ = new ReplaySubject(1);
-      //const nodeiosubject_out$ = new ReplaySubject(1);
-      let nodeleafinst$ = undefined;
-
       if (
         [
           "b490aada-daab-4322-9001-14aea8bcb3d3",
@@ -140,9 +122,11 @@ const _leafspell = {
             spellname +
             "/" +
             refnode;
-          globalThis.trace[tracecoord]
-            ? globalThis.trace[tracecoord].push("parsing")
-            : (globalThis.trace[tracecoord] = ["parsing"]);
+          if (globalThis.trace[tracecoord]) {
+            globalThis.trace[tracecoord].push("parsing");
+          } else {
+            globalThis.trace[tracecoord] = ["parsing"];
+          }
         }
 
         if (["2293da4a-b517-4b0b-b396-cb030dc05900"].includes(refnode))
@@ -232,9 +216,11 @@ const _leafspell = {
             spellname +
             "/" +
             refnode;
-          globalThis.trace[tracecoord]
-            ? globalThis.trace[tracecoord].push("parsed")
-            : (globalThis.trace[tracecoord] = ["parsed"]);
+          if (globalThis.trace[tracecoord]) {
+            globalThis.trace[tracecoord].push("parsed");
+          } else {
+            globalThis.trace[tracecoord] = ["parsed"];
+          }
         }
         if (spellname === "initialize") console.log("start debugging");
 
@@ -261,103 +247,6 @@ const _leafspell = {
         //return _spelldef._default; //{inputdata, spelldef: reduced_spelldef};
         return _spelldef; //{inputdata, spelldef: reduced_spelldef};
       };
-
-      const is_bypass = "bypass" in spell_lambda_obj ? true : false;
-
-      const executeSpellIsolated = (spellfunc, inputdata, is_bypass) => {
-        const mainloop$ = interval(10).pipe(take(1));
-        const lambda_result = [];
-        //const resolved_input = await Promise.resolve(inputdata);
-        const isolatedinput$obj = { _stream: of(inputdata) };
-        const isolatedoutput$ = mainloop$.pipe(
-          concatMap(async (_idx) => {
-            // execute a round of the given lambda logic
-            const controlflow$obj = isolatedinput$obj; // reset the controlflow$obj from the inputflow$
-            //const lambdaresult$obj = reduced_lambda_obj._default([{_stream: of(inputdata)}], controlflow$obj);
-            //const lambdaresult$obj = spell_lambda_obj._default([isolatedinput$obj], controlflow$obj);
-            const lambdaresult$obj = spellfunc([isolatedinput$obj], controlflow$obj);
-            await lambdaresult$obj._stream.forEach((_) => {
-              //const resolved_ = await Promise.resolve(_); // as per https://stackoverflow.com/questions/27746304/how-do-i-tell-if-an-object-is-a-promise
-              lambda_result.push(Array.isArray(_) ? _.flat() : _);
-              //lambda_result.flat(); // aggregate the result of the logic
-              //console.log(_);
-              //return _;
-              //inputsubject$.next(resolved_); // emit the result downstream
-            });
-            //inputsubject$.next(lambda_result); // to emit the aggregate result in one go
-            //return lambdaresult$obj._stream;
-            //return isolatedoutput$;
-            //return lambdaresult$obj._stream;
-            //return is_bypass ? of(inputdata) : of(lambda_result);
-            return is_bypass ? inputdata : lambda_result;
-          }),
-          //mergeMap(x => {
-          //    console.log(x);
-          //    return x;
-          //})
-        ); //.forEach((_) => {
-        //lambda_result.push(_.flat());
-        //}); //.subscribe({next: x => {x}});
-        //console.log(lambda_result);
-        //return is_bypass ? inputdata : lambda_result;
-        //return is_bypass ? isolatedinput$obj._stream : Promise.resolve(executionoutput$);
-        return isolatedoutput$;
-      };
-
-      const executeSpell = (spellfunc, spellinput$obj, spellctrl$obj, is_bypass) => {
-        const mainloop$ = interval(10).pipe(take(1));
-        const lambda_result = [];
-        //const resolved_input = await Promise.resolve(inputdata);
-        const isolatedoutput$ = spellinput$obj._stream.pipe(
-          concatMap((inputdata) => {
-            //return mainloop$.pipe(
-            //take(1),
-            //    mergeMap( x => {
-            const lambdaresult$obj = spellfunc([spellinput$obj], spellctrl$obj);
-            return is_bypass ? spellinput$obj._stream : lambdaresult$obj._stream;
-            //    }),
-            //map(x => {
-            //    console.log(x);
-            //    return x;
-            //})
-            //);
-          }),
-          map((x) => {
-            console.log("executeSpell ran:", x);
-            return x;
-          }),
-        );
-        //mainloop$.pipe(
-        //    mergeMap( (_idx) => {
-        //        // execute a round of the given lambda logic
-        //        //const lambdaresult$obj = reduced_lambda_obj._default([{_stream: of(inputdata)}], controlflow$obj);
-        //        //const lambdaresult$obj = spell_lambda_obj._default([isolatedinput$obj], controlflow$obj);
-        //        const lambdaresult$obj = spellfunc([spellinput$obj], spellctrl$obj);
-        //        //inputsubject$.next(lambda_result); // to emit the aggregate result in one go
-        //        //return lambdaresult$obj._stream;
-        //        //return isolatedoutput$;
-        //        //return lambdaresult$obj._stream;
-        //        //return is_bypass ? of(inputdata) : of(lambda_result);
-        //        return is_bypass ? spellinput$obj._stream : lambdaresult$obj._stream;
-        //    }),
-        //    //mergeMap(x => {
-        //    //    console.log(x);
-        //    //    return x;
-        //    //})
-        //); //.forEach((_) => {
-        //    //lambda_result.push(_.flat());
-        ////}); //.subscribe({next: x => {x}});
-        ////console.log(lambda_result);
-        ////return is_bypass ? inputdata : lambda_result;
-        ////return is_bypass ? isolatedinput$obj._stream : Promise.resolve(executionoutput$);
-        return isolatedoutput$;
-      };
-
-      //const mainloop$ = interval(10).pipe(take(1));
-
-      let spell_subscription = undefined;
-
-      //const spelldefProm = parseSpellBook();
 
       const node_context = {
         codebase: "leafspell.js",
@@ -587,7 +476,6 @@ const _leafspell = {
           const _outflow_ctrl$ = _controlflow$obj._stream.pipe(
             withLatestFrom(inflow_data$),
             switchMap((_combined_in) => {
-              const _ctrl_in = _combined_in[0];
               const _data_in = _combined_in[1];
 
               if (isBottle(_data_in) && _data_in._bname === GENERIC_SPELL_BNAME) {

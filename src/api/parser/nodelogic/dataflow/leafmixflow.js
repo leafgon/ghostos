@@ -1,36 +1,15 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import {
-  map,
-  withLatestFrom,
-  filter,
-  concatMap,
-  share,
-  switchMap,
-  skipUntil,
-} from "rxjs/operators";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map, withLatestFrom, share, switchMap } from "rxjs/operators";
 import {
   mergeDataflows,
-  naiveZipDataflows,
   combineDataflows,
   substituteDataflows,
   concatDataflows,
-  chronosDataflow,
-  CHRONOSTYPE_SYNC,
 } from "../../../utils/leafdataflow.js";
-import { zip, combineLatest, BehaviorSubject, of, Subject } from "rxjs";
-import { isBottle, isCrate, isEmptyBottle, isPrimitiveType } from "../../predicates.js";
+import { of, Subject } from "rxjs";
+import { isBottle, isEmptyBottle } from "../../predicates.js";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { doBottle, doUnbottle } from "../datautils/bottling.js";
-
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in leafmixflow.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/dataflow/leafmixflow.js",
-  },
-  {},
-);
 /*
  * _leafmixflow() is a runtime function for the LEAF node of logic type 'leafmixflow'.
  * it is used to define rules on how to mix the data contents of multiple dataflows wired into the node's input.
@@ -212,10 +191,7 @@ const _leafmixflow = {
               return {
                 _stream: _outflow_data$.pipe(
                   //skipUntil(_outflow_ctrl$),
-                  map((x) => {
-                    const _rt_cache = { ...node_context };
-                    return x;
-                  }),
+                  map((x) => x),
                   share(),
                 ),
                 _control: { ..._controlflow$obj, _stream: _outflow_ctrl$ },
@@ -271,13 +247,7 @@ const _leafmixflow = {
             };
           } else {
             // naive zip is the default mix mode
-            let idxcache = 0;
-            let loopydata_cache = [];
-            let ctrl_in_cache = undefined;
-            let bottle_label = undefined;
-
             const unbottlefunc = (_data_in) => {
-              const _rt_cache = { idxcache, loopydata_cache };
               //const _data_out = doUnbottle(undefined, _data_in);
               const _data_out = _data_in;
               return _data_out;

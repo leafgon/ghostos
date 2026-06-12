@@ -1,9 +1,8 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta";
-import { map, withLatestFrom, filter } from "rxjs/operators";
+import { etaReduceLambdaGraphs } from "../../eta";
+import { map, filter } from "rxjs/operators";
 import { _leafbottle } from "../datautils";
 //import { red } from '@mui/material/colors';
 import { mergeDataflows } from "../../../utils/leafdataflow";
-import { from, of } from "rxjs";
 import { fetchMultiKeyedData } from "../../../utils/fetchnodedata";
 import { _leafstdlib_dataflow_api } from "../../../metamodel";
 import { v4 as uuid4 } from "uuid";
@@ -45,7 +44,7 @@ const _leafpagequery = (() => {
         });
 
         return (flowinput$Arr, controlflow$obj) => {
-          const { type, args } = refnodedata.leaf.logic;
+          const { args } = refnodedata.leaf.logic;
           const loopidx = controlflow$obj._config?.loopidx;
           const _defaultLambda =
             "_default" in reduced_lambda_obj
@@ -146,10 +145,10 @@ const _leafpagequery = (() => {
         });
         const lambda_lut = {};
         Object.entries(reduced_lambda_obj).map(([key, etafunc]) => {
-          lambda_lut[key] = (input$Arr) => {
+          lambda_lut[key] = (input$Arr, controlflow_obj) => {
             // a dataflow-scoped func per key
-            const output$obj = etafunc(input$Arr, controlflow$obj);
-            return { ...output$obj, _control: controlflow$obj };
+            const output_obj = etafunc(input$Arr, controlflow_obj);
+            return { ...output_obj, _control: controlflow_obj };
           };
         });
         return lambda_lut;
@@ -157,4 +156,4 @@ const _leafpagequery = (() => {
   };
 })();
 
-export { _leafdeckclub };
+export { _leafpagequery };

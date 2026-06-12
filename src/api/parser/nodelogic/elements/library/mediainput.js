@@ -1,19 +1,9 @@
-import { BehaviorSubject, Subject, combineLatest, of, merge, withLatestFrom } from "rxjs";
+import { BehaviorSubject, Subject, merge, withLatestFrom } from "rxjs";
 import { switchMap, map, share, finalize } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 import { executeLEAFLogic } from "../../../leaf.js";
 import { doBottle } from "../../datautils/bottling.js";
-
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in mediainput.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/elements/library/mediainput.js",
-  },
-  {},
-);
 /*
  * spark_dev_note: 25/Apr/2023
  * all leaflogic and datalogic functions must be designed to conform to the following spec,
@@ -36,19 +26,6 @@ const raceConditionError = doBottle(
  */
 const initElementInterface = (_stream_cache) => {
   const reduced_lambda_obj = _stream_cache[ElemCacheKeyLUT.LAMBDA_OBJ];
-  const uidefsgen =
-    "uidefs" in reduced_lambda_obj && "_default" in reduced_lambda_obj.uidefs
-      ? reduced_lambda_obj.uidefs._default
-      : undefined;
-  const margingen =
-    "margin" in reduced_lambda_obj && "_default" in reduced_lambda_obj.margin
-      ? reduced_lambda_obj.margin._default
-      : undefined;
-  const fieldwidthgen =
-    "fieldwidth" in reduced_lambda_obj && "_default" in reduced_lambda_obj.fieldwidth
-      ? reduced_lambda_obj.fieldwidth._default
-      : undefined;
-
   const elementioInput$ = new Subject();
 
   const _leaflogic = (input$objArr, controlflow$obj) => {

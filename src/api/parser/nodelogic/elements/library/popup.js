@@ -1,5 +1,5 @@
 import { BehaviorSubject, Subject, merge, combineLatest, of } from "rxjs";
-import { concatMap, switchMap, filter, map, withLatestFrom } from "rxjs/operators";
+import { switchMap, filter, map, withLatestFrom } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 import { executeLEAFLogic } from "../../../leaf.js";

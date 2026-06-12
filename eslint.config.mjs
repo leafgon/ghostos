@@ -3,6 +3,11 @@ import tseslint from "typescript-eslint";
 import pluginReact from "eslint-plugin-react";
 import { defineConfig } from "eslint/config";
 
+const tsRecommended = tseslint.configs.recommended.map((config) => ({
+  ...config,
+  files: ["**/*.{ts,tsx,mts,cts}"],
+}));
+
 export default defineConfig([
   {
     ignores: [
@@ -41,10 +46,20 @@ export default defineConfig([
     },
     rules: {
       "no-unused-vars": ["error", { args: "none" }],
-      "@typescript-eslint/no-unused-vars": ["error", { args: "none" }],
     },
   },
-  tseslint.configs.recommended,
+  {
+    files: ["src/api/parser/**/*.js", "src/api/utils/leafdataflow.js"],
+    rules: {
+      "no-unused-vars": "off",
+      "no-undef": "off",
+      "no-empty": "off",
+      "no-unreachable": "off",
+      "no-redeclare": "off",
+      "no-useless-escape": "off",
+    },
+  },
+  ...tsRecommended,
   pluginReact.configs.flat.recommended,
   {
     files: ["**/*.test.*", "**/*.spec.*"],

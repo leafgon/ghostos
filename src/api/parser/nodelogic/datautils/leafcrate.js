@@ -1,29 +1,8 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
 import { map, withLatestFrom, filter, share } from "rxjs/operators";
 import { Subject } from "rxjs";
 import { isBottle } from "../../predicates.js";
-import { driveDataflowByCtrlflow } from "../../leaf.js";
 
-const enforceBooleanResults = (errorLocationStr) => {
-  return (predicate, _flowinput$) => {
-    return _flowinput$.pipe(
-      map((unitflowdata) => {
-        // unitflowdata is supposed to be an array
-        //const predicateresult = predicate(unitflowdata);
-        const predicateresult = unitflowdata.map((_data) => {
-          const a_result = predicate(_data);
-          if (typeof a_result !== "boolean")
-            throw (
-              "LEAF Error: flow data failed to pass the boolean type requirement, " +
-              errorLocationStr
-            );
-          return a_result;
-        });
-        return predicateresult;
-      }),
-    );
-  };
-};
 /*
  * _leafcrate() is a runtime function for the LEAFgraph node of logic type 'leafdatacrate'.
  * it is used to put any bottles passed to the leaf node via its incoming data flow into a crate.
@@ -54,18 +33,6 @@ const _leafcrate = {
         etaTree: lambdactrl.gos.etaTree,
       });
 
-      const node_context = {
-        codebase: "leafcrate.js",
-        refnode,
-        leafnode:
-          refnode &&
-          lambdactrl.gos.etaTree.leafgraph.graph.dataflow.getNodeAttributes(refnode).leafnode.data,
-      };
-
-      const openTheBottle = (_bottlekey, _bottlecrate) => {
-        return _bottlekey in _bottlecrate ? _bottlecrate[_bottlekey] : null;
-      };
-
       const getCrateTagLabelText = () => {
         const _candidates = Object.keys(reduced_lambda_obj).filter(
           (_key) => Object.keys(reduced_lambda_obj[_key]).length === 0,
@@ -75,7 +42,6 @@ const _leafcrate = {
 
       const cratetag_text = getCrateTagLabelText();
 
-      const checkDataflowType = enforceBooleanResults("in the leafdataunbottle lambda");
       return (input$objArr, controlflow$obj) => {
         const _outflow_data$ = new Subject(); //new BehaviorSubject(raceConditionError);
 

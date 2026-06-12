@@ -1,42 +1,18 @@
-import { BehaviorSubject, Subject, combineLatest, merge, of } from "rxjs";
-import {
-  bufferTime,
-  concatMap,
-  map,
-  share,
-  filter,
-  switchMap,
-  withLatestFrom,
-} from "rxjs/operators";
+import { BehaviorSubject } from "rxjs";
+import { map, share, filter, withLatestFrom } from "rxjs/operators";
 
-import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
-//import {JZZ} from 'jzz'; // midi interface
-import jzzpkg from "jzz";
+import { ElemCacheKeyLUT } from "./index.js";
 import { executeLEAFLogic } from "../../../leaf.js";
 import { EmptyBottle, doBottle, doUnbottle } from "../../datautils/bottling.js";
 import {
   cacheSoundStageNode,
   connectCachedSoundStageNodes,
-  destroySoundStageNode,
   doConfigureEffect,
   doConfigureInstrument,
   doConfigureSource,
   doConfigureTarget,
   initializeToneState,
 } from "./sound_lib.js";
-import { isEmptyBottle } from "../../../predicates.js";
-
-const { JZZ } = jzzpkg;
-
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in sound.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/elements/library/sound.js",
-  },
-  {},
-);
 
 const cachekeys = {
   CONFIG: "_sound_config",
@@ -89,8 +65,6 @@ const midi_notenum2pitchname = (_notenum, nameidx = 0) => {
 const initElementInterface = (_stream_cache) => {
   const reduced_lambda_obj = _stream_cache[ElemCacheKeyLUT.LAMBDA_OBJ];
   const defaultgen = "_default" in reduced_lambda_obj ? reduced_lambda_obj._default : undefined;
-  const ispoly = true; //('poly' in reduced_lambda_obj);
-
   const is_instrument = "instrument" in reduced_lambda_obj || "inst" in reduced_lambda_obj;
   const is_source = "source" in reduced_lambda_obj || "src" in reduced_lambda_obj;
   const is_effect = "effect" in reduced_lambda_obj || "fx" in reduced_lambda_obj; // an effect here is what an audionode is in web audio api terms
@@ -209,7 +183,6 @@ const initElementInterface = (_stream_cache) => {
     //leafnode: lambdactrl.gos.etaTree.leafgraph.graph.dataflow.getNodeAttributes(refnode).leafnode.data
   };
 
-  const ctrl_trigger_bottle = doBottle("accio", "ctrl_accio");
   const data_trigger_bottle = doBottle("accio", "data_accio");
 
   // this is a one-off execution of defaultgen() isolated from the main flow.
@@ -386,7 +359,6 @@ const initElementInterface = (_stream_cache) => {
           .map((_bottle) => {
             if (_bottle._bname === "_data_in") return doUnbottle("*", _bottle);
             else if (_bottle._bname === "_midi_in") {
-              const { cmd, noteNumber, velocity } = _bottle._content;
               return _bottle;
             } else if (_bottle._bname === "soundconfig") onConfigBottle(_bottle);
             else if (_bottle._bname === "soundinit") return onInitBottle(_bottle);
@@ -453,11 +425,6 @@ const initElementInterface = (_stream_cache) => {
   // data postprocessed and returned from this function will continue to flow in the data domain
   // of the current element node.
   const _datalogic_post = (data_in) => {
-    const recognizedLambdaConstants = ["image", "audio", "video"];
-    const curLambdaKeys = Object.keys(reduced_lambda_obj);
-    const validLambdaKeyList = recognizedLambdaConstants.filter((_) => curLambdaKeys.includes(_));
-    const mediatype = validLambdaKeyList.length > 0 ? validLambdaKeyList[0] : "image"; // default to 'image' type
-
     if (!Array.isArray(data_in)) console.log("start debugging");
     const filtered_data_in = data_in.map((_in_bottle) => {
       if (_in_bottle._bname === "_midi_in") {

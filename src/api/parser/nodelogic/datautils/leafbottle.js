@@ -1,12 +1,7 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { map, concatMap, withLatestFrom, filter } from "rxjs/operators";
-import { isBottle, isCrate } from "../../predicates.js";
-import { of, zip } from "rxjs";
-import {
-  combineDataflows,
-  chronosDataflow,
-  CHRONOSTYPE_SYNC,
-} from "../../../utils/leafdataflow.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map, concatMap } from "rxjs/operators";
+import { of } from "rxjs";
+import { combineDataflows } from "../../../utils/leafdataflow.js";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { doBottle } from "./bottling.js";
 
@@ -40,12 +35,6 @@ const _leafbottle = {
         etaTree: lambdactrl.gos.etaTree,
       });
 
-      const removeLabel = (_label, _bottle) => {
-        if (_label in _bottle._label) _bottle._label[_label] -= 1;
-        if (_bottle._label[_label] === 0) delete _bottle._label[_label]; // runtime leafdata garbage collection :) pun intended of course...
-        return _bottle;
-      };
-
       const getBottleTagLabelText = () => {
         const _candidates = Object.keys(reduced_lambda_obj).filter(
           (_key) => Object.keys(reduced_lambda_obj[_key]).length === 0,
@@ -65,8 +54,6 @@ const _leafbottle = {
       };
 
       return (input$objArr, controlflow$obj) => {
-        let idxcache = 0;
-        let loopydata_cache = [];
         let ctrl_in_cache = undefined;
         let bottle_name = undefined;
 
@@ -75,7 +62,6 @@ const _leafbottle = {
           : { _stream: of(refnodedata.leaf.logic.args.bottlekey), _control: controlflow$obj }; // initialize lambdakey$ data flow
 
         const bottlefunc = (_data_in) => {
-          //const _rt_cache = {idxcache, loopydata_cache};
           const _data_out =
             _tag_text === undefined
               ? doBottle(bottle_name, _data_in)

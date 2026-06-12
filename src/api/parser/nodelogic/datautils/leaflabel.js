@@ -1,8 +1,6 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { map, withLatestFrom, filter, share, switchMap } from "rxjs/operators";
-import { isBottle, isCrate } from "../../predicates.js";
-import { BehaviorSubject, of, ReplaySubject, Subject, zip, take, combineLatest } from "rxjs";
-import { mergeDataflows } from "../../../utils/leafdataflow.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map, filter, share, switchMap } from "rxjs/operators";
+import { BehaviorSubject, of, combineLatest } from "rxjs";
 import { driveDataflowByCtrlflow, executeLEAFLogic } from "../../leaf.js";
 import { doBottle } from "./bottling.js";
 
@@ -66,16 +64,7 @@ const _leaflabel = {
         etaTree: lambdactrl.gos.etaTree,
       });
 
-      const doAddLabel = (_label, _dict) => {
-        if (_label in _dict) _dict[_label] += 1;
-        else _dict[_label] = 1;
-        return _dict;
-      };
       //const checkDataflowType = enforceBooleanResults('in the leafdatalabel lambda');
-
-      const addLabel = (_lambdalabel, _unitdata) => {
-        return { ..._unitdata, _label: doAddLabel(_lambdalabel, { ..._unitdata._label }) }; // always create a new copy when modifying, never mutate the original crate
-      };
 
       const handleSpecialLabelLogic = async (lut, labelstr = "") => {
         const backslash_re = /^\\(.*)$/;

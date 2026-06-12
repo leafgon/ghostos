@@ -1,6 +1,6 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { map, withLatestFrom, filter } from "rxjs/operators";
-import { _leafbottle, _leafunbottle } from "../datautils/index.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map, filter } from "rxjs/operators";
+import { _leafbottle } from "../datautils/index.js";
 
 const leafgon_url = process.env.LEAFGON_URL;
 

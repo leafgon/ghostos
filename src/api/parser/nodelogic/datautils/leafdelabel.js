@@ -1,7 +1,7 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
 import { map, withLatestFrom, filter } from "rxjs/operators";
 import { isBottle, isCrate } from "../../predicates.js";
-import { of, zip } from "rxjs";
+import { of } from "rxjs";
 import { mergeDataflows } from "../../../utils/leafdataflow.js";
 
 /*

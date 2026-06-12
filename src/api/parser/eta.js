@@ -1,35 +1,5 @@
-import {
-  map,
-  concatMap,
-  filter,
-  share,
-  combineLatestWith,
-  zipWith,
-  mergeWith,
-  concatWith,
-  raceWith,
-  skip,
-  skipWhile,
-  delay,
-  withLatestFrom,
-  multicast,
-  bufferTime,
-  switchMap,
-} from "rxjs/operators";
-import {
-  take,
-  combineLatest,
-  interval,
-  zip,
-  merge,
-  concat,
-  race,
-  from,
-  of,
-  BehaviorSubject,
-  Subject,
-  firstValueFrom,
-} from "rxjs";
+import { map, filter, share, withLatestFrom, switchMap } from "rxjs/operators";
+import { merge, race, Subject } from "rxjs";
 
 import lodashpkg from "lodash";
 
@@ -39,17 +9,12 @@ import { getLEAFNodeCoreLogic } from "./breezyforest.js";
 import { etaTreeForest } from "./etatreeforest.js";
 import axios from "axios";
 import { driveDataflowByCtrlflow, leafTraceFlow } from "./leaf.js";
-import { isBottle, isEmptyBottle } from "./predicates.js";
+import { isBottle } from "./predicates.js";
 import { doBottle } from "./nodelogic/datautils/bottling.js";
 import { v4 as uuid4 } from "uuid";
 
 // locally global constants
 const { memoize } = lodashpkg; // nodejs compatible lodash import
-const EtaStageRootGraph = "rootgraph";
-const EtaStageComponentGraph = "componentgraph";
-const EtaStageNodeGraph = "nodegraph";
-const EtaStageCompiledGraph = "compiledgraph"; // a stage as a result of a bunch of nodegraph stage nodes being compiled across dataflow and lambda planes
-
 const EtaTreeConfig = {
   isdebug: process.env.LEAFGON_ENV_TYPE === "development" ? true : false,
 };
@@ -110,26 +75,6 @@ const EtaTreeConfig = {
 //
 //};
 
-const checkScopeMatch = (node1uuid, node2uuid, graphscomponents) => {
-  const node1_component_scope = graphscomponents.components.lut[node1uuid].scope;
-  const node2_component_scope = graphscomponents.components.lut[node2uuid].scope;
-
-  // find out about the nature of the component
-  if (node1_component_scope === node2_component_scope)
-    return { match: true, node1: node1_component_scope, node2: node2_component_scope };
-  else return { match: false, node1: node1_component_scope, node2: node2_component_scope };
-};
-
-const assertScopeMatch = (node1uuid, node2uuid, graphscomponents) => {
-  // find out about the nature of the component
-  const scopes = checkScopeMatch(node1uuid, node2uuid, graphscomponents);
-  if (scopes.match) {
-    return scopes;
-  } else {
-    throw `LEAF error: component scope mismatch between the graph node (uuid: ${node1uuid}, scope: ${scopes.node1}) and the referred lambda component (entry node uuid: ${node2uuid}, scope: ${scopes.node2}).`;
-  }
-};
-
 //const parseLEAFGraphByMemberNode = (node, prevnode, rootnode, leafgraph, graphcomponents, leaflib) => {
 //  // identify the component the member node belongs to
 //  const component_idx = graphcomponents.components.lut[leafspelldef_entrynode.uuid].idx; // look up the matching component idx
@@ -154,17 +99,6 @@ const assertScopeMatch = (node1uuid, node2uuid, graphscomponents) => {
 
 // spark_dev_note: each leaf node must be accompanied by a leaf js func pattern supporting the plane duality of being initialized in the lambda plane and used in the dataflow plane as follows.
 // @lambdafuncArgs: a dictionary of eta reduced lambda graphs, each compiled into a leaf js func pattern, passed as argument
-const leafnodejsLUT = {
-  nodeuuid1: (lambdajsArgs) => {
-    const lambdalambdafunc = (x) => undefined; // get the lambda graph with respect to the current node in its current graph context;
-    const node_setup = lambdajsArgs.default({ default: lambdalambdafunc });
-    return (input$) => {
-      // use node_setup somehow
-      const output$ = input$;
-      return output$;
-    };
-  },
-};
 
 //const getLEAFstdjslib = (type, args) => {
 //  return leafstdjslib[type];
@@ -218,15 +152,6 @@ const leafnodejsLUT = {
 ////const thecorelogic = etaReduceLambdaGraphs(contextual_lut._default.uuid, _nodelambda, _contextuallambda, leafgraph, graphcomponents);
 //const thecorelogic = etaReduceLambdaGraphs(contextual_lut._default.uuid, _contextuallambda, leafgraph, graphcomponents);
 
-const getComponentByMemberNode = (leafnodeuuid, graphcomponents) => {
-  // identify the component the member node belongs to
-  const component_idx = graphcomponents.components.lut[leafnodeuuid].idx; // look up the matching component idx
-  // get the component, fyi: component is a list of member nodes' uuids
-  const leafcomponent = graphcomponents.components.nodegroups.lambda[component_idx];
-
-  return leafcomponent;
-};
-
 // @leafnode_scope: "dataflow" or "lambda"
 // @refnode: is a leaf node defining the @leafnode of interest within its frame of reference
 
@@ -272,22 +197,6 @@ const getComponentByMemberNode = (leafnodeuuid, graphcomponents) => {
 
 //const membernode_lambda = leafgraph.edges.lambda.sourcelut[membernode_uuid];
 
-const relayStreamIntoSubject = (_stream$, _subject$, _defaultmesg = "") => {
-  return _defaultmesg !== ""
-    ? _stream$.pipe(
-        map((_) => {
-          _subject$.next(doBottle("_eta", _defaultmesg)); // do relay '_eta' bottle with non-empty default message
-          return _; // return data into the original stream
-        }),
-      )
-    : _stream$.pipe(
-        map((_) => {
-          _subject$.next(_); // do relay data
-          return _; // return data into the original stream
-        }),
-      );
-};
-
 const raceConditionError = doBottle(
   "error",
   {
@@ -300,227 +209,6 @@ const raceConditionError = doBottle(
 
 // find the closest common ancestor (CCA) in two or more traces
 // using binary search
-const binarySearchTraceCCA = (traceArr) => {
-  if (traceArr.length > 0) {
-    const ref_trace_idx_obj = traceArr
-      .filter((_) => _)
-      .map((_trace, _idx) => {
-        return { idx: _idx, trace: _trace.traces };
-      })
-      .slice(1)
-      .reduce(
-        (_shortesttraceidxobj, _curtraceidxobj) => {
-          if (_shortesttraceidxobj.trace.length > _curtraceidxobj.trace.length)
-            return _curtraceidxobj;
-          else return _shortesttraceidxobj;
-        },
-        { idx: 0, trace: traceArr[0].traces },
-      );
-
-    const primary_trace = ref_trace_idx_obj.trace;
-    const secondary_traces = [...traceArr]
-      .filter((_val, _idx) => _idx !== ref_trace_idx_obj.idx)
-      .map((_traceobj) => _traceobj.traces); // remove 1 trace at the idx
-
-    const _binSearch = (startidx, endidx) => {
-      if (startidx > endidx) {
-        console.log("_binSearch error btw idx:", startidx, endidx);
-        return -1;
-      }
-      const mid_idx = Math.floor((endidx - startidx) / 2) + startidx;
-
-      const othertraces_idx_i0 = secondary_traces.map((a_trace) => a_trace[mid_idx]);
-      const othertraces_idx_i1 = secondary_traces.map((a_trace) => a_trace[mid_idx + 1]);
-      const isEqualTrace = (_trace1, _trace2) => {
-        const _is_t1_array = Array.isArray(_trace1);
-        const _is_t2_array = Array.isArray(_trace2);
-        if (!_is_t1_array && !_is_t2_array)
-          return (
-            _trace1.trace.refnode === _trace2.trace.refnode &&
-            _trace1.trace.codebase === _trace2.trace.codebase
-          );
-        else if (_is_t1_array && _is_t2_array) {
-          if (_trace1.length === _trace2.length) {
-            return _trace1.reduce((_accbool, _curtrace, _curidx) => {
-              _accbool && isEqualTrace(_curtrace, _trace2[_curidx]);
-            }, true);
-          } else return false;
-        } else return false;
-      };
-      const mid_idx0_equality =
-        othertraces_idx_i0.reduce(
-          (_accbool, _curtrace) => _accbool && isEqualTrace(primary_trace[mid_idx], _curtrace),
-          true,
-        ) === true;
-      const mid_idx1_equality =
-        othertraces_idx_i1.reduce(
-          (_accbool, _curtrace) => _accbool && isEqualTrace(primary_trace[mid_idx + 1], _curtrace),
-          true,
-        ) === true;
-      if (mid_idx0_equality && !mid_idx1_equality) {
-        console.log("CCA idx:", mid_idx);
-        return mid_idx;
-      } else if (mid_idx0_equality && mid_idx1_equality) {
-        console.log("aim upper half", mid_idx + 1, endidx);
-        return _binSearch(mid_idx + 1, endidx);
-      } else if (!mid_idx0_equality && !mid_idx1_equality) {
-        console.log("aim lower half", startidx, mid_idx);
-        return _binSearch(startidx, mid_idx);
-      } else {
-        console.log("_binSearch error btw idx:", startidx, endidx);
-        return -1;
-      }
-    };
-
-    return _binSearch(0, primary_trace.length - 1);
-  }
-  return -1;
-};
-
-const _synchronizeFlow = (
-  nodeflowinterface,
-  _upstream_out$objArr,
-  inputnodes = undefined,
-  consolidate_dataflow = false,
-) => {
-  // get the set of inputnodes wrt the current node or endnodes if current node undefined
-  // inputnodes === endnodes in the context of weaveDataflowPlane where two end nodes in a dataflow
-  // are consolidated into a single synchronized data stream.
-  const datainputnodes = inputnodes ? inputnodes : nodeflowinterface.inputnodes;
-  // initialize flow interface
-  const _synced_upstream_out$objArr = _upstream_out$objArr.map((_composite$obj, idx) => {
-    const inputnode = datainputnodes.length > 0 ? datainputnodes[idx] : undefined;
-    return {
-      _stream: _composite$obj._stream.pipe(
-        map((_data_in) => {
-          //console.log("start debugging", _data_in);
-          return _data_in;
-        }),
-      ),
-      _control:
-        nodeflowinterface && nodeflowinterface.synchronized
-          ? {
-              _stream: _composite$obj._control._stream.pipe(
-                map((_ctrldata) => {
-                  if (Array.isArray(_ctrldata) && _ctrldata.length === 0) {
-                    console.log("start debugging");
-                  }
-                  nodeflowinterface.recordflow(inputnode); // record the incidence of flow from the inputnode
-                  if (Array.isArray(_ctrldata) && _ctrldata.length === 0) {
-                    console.log("start debugging");
-                  }
-                  return _ctrldata;
-                }),
-              ),
-            }
-          : {
-              _stream: _composite$obj._control._stream.pipe(
-                map((_ctrldata) => {
-                  // spark_dev_note: 30/June/2023
-                  // a tricky bug to tackle. for a yet unknown cause, _ctrldata passed here on
-                  // the flow is []
-                  // this is likely due to some logic upstream of the flow mistakenly sending this
-                  // empty array down the ctrl flow line.
-                  // 1/July/2023 this was caused by bufferTime returning [] after timeout elapses
-                  if (Array.isArray(_ctrldata) && _ctrldata.length === 0) {
-                    console.log("start debugging");
-                  }
-                  return _ctrldata; // do nothing to the control data
-                }),
-              ),
-            },
-    };
-  });
-
-  const _upstream_dataflow$objArr = _synced_upstream_out$objArr
-    .filter((_) => _._stream)
-    .map((_) => {
-      return { _stream: _._stream };
-    });
-  const _upstream_ctrlflow$Arr = _synced_upstream_out$objArr.map((_) => _._control._stream);
-  // consolidate multiple control flows if any, with the traffic control via checksync
-
-  // spark_dev_note: (24/Mar/2023)
-  // current default consolidation method for control flow is just choosing the first one.
-  // unsure whether this would change down the road, but currently the data passed on the
-  // control flow is the same across the board.
-  // for control flow, it's the incidence of signal that matters, not the content.
-  const _upstream_controlflow$obj = {
-    _stream:
-      nodeflowinterface && nodeflowinterface.synchronized
-        ? combineLatest(_upstream_ctrlflow$Arr).pipe(
-            map((_ctrldataArr) => {
-              // array of ctrldata, due to combineLatest
-              const consolidated_ctrldata = _ctrldataArr[0];
-
-              if (nodeflowinterface.checksync()) {
-                // if all incoming data synchronized
-                nodeflowinterface.initflowcache();
-                return consolidated_ctrldata;
-              }
-              // otherwise
-              return undefined;
-            }),
-            //delay(1), // delay control signal by 1ms, just in case data flow is delayed by a smidgen
-            filter((_data) => _data !== undefined),
-          )
-        : merge(..._upstream_ctrlflow$Arr).pipe(
-            // spark_dev_note 30/Jun/2023
-            // The behavior of bufferTime here is ideal except that it returns an empty array (ie [])
-            // even when there is nothing in the ctrldata flow
-            // hence the need for filtering out [] here
-            bufferTime(1),
-            filter((_ctrldata) => _ctrldata !== undefined && _ctrldata.length > 0),
-            map((_ctrldata) => {
-              // array of ctrldata, due to bufferTime()
-              //const consolidated_ctrldata = _ctrldataArr[0];
-              //return consolidated_ctrldata;
-              const _rt_cache = { refnode, startnodes, endnodes, etaTree };
-
-              if (_ctrldata.length > 1) {
-                if (_ctrldata.includes(undefined)) console.log("start debugging");
-
-                const cca_idx = binarySearchTraceCCA(_ctrldata);
-                if (cca_idx > -1) {
-                  return {
-                    ..._ctrldata[0],
-                    traces: [
-                      ..._ctrldata[0].traces.slice(0, cca_idx + 1),
-                      _ctrldata.map((a_ctrl_in) => {
-                        const _trailtrace = a_ctrl_in.traces.slice(cca_idx + 1);
-                        return _trailtrace.length === 1 ? _trailtrace[0] : _trailtrace;
-                      }),
-                    ],
-                  };
-                }
-              }
-              return _ctrldata[0];
-            }),
-            //delay(2), // delay control signal by 2ms, just in case data flow is delayed by a smidgen
-            filter((_data) => _data !== undefined),
-          ),
-  };
-  //if (!_upstream_controlflow$obj)
-  //    console.log("start debugging");
-
-  if (!consolidate_dataflow) {
-    return [_upstream_controlflow$obj, _upstream_dataflow$objArr];
-  } else {
-    const consolidated_dataflow$obj = {
-      _stream: _upstream_controlflow$obj._stream
-        .pipe(withLatestFrom(..._upstream_dataflow$objArr.map((_) => _._stream)))
-        .pipe(
-          map((_data) => {
-            if (_upstream_dataflow$objArr.length > 1) console.log("start debugging");
-            const consolidated_data = _data.slice(1);
-            return consolidated_data.length > 1 ? consolidated_data : consolidated_data[0]; // remove array struct for single length data array
-          }),
-        ),
-    };
-    return [_upstream_controlflow$obj, consolidated_dataflow$obj];
-  }
-};
-
 //_dosyncflow = (nodeflowinterface, _upstream_out$objArr, inputnodes=undefined, consolidate_dataflow=false) => {
 //    if (!consolidate_dataflow) {
 //        return [_upstream_controlflow$obj, _upstream_dataflow$objArr];
@@ -602,15 +290,10 @@ const doChronosSynchronize = (
   // _stream$objArr is guaranteed to have at least 1 element, so arbitrarily pick the first one as prime for consolidation
   // it is also assumed to have composite obj consisting of _stream and _control._stream
 
-  const empty_databus_bottle = doBottle("empty_bottle", "empty_data", {
-    _provenance: { rt_context, codebase: "eta.js doChronosSynchronize" },
-  });
   //const _chronos_data_out$ = new BehaviorSubject({...raceConditionError, "_label": {context: "doChronosSynchronize chronos_data_out"}});
   const _chronos_data_out$ = new Subject();
   console.log("invoking doChronosSynchronize, ", rt_context);
   // first consolidate ctrl streams
-  const _prime_ctrl_handle$ = _stream$objArr[0]._control._stream;
-  const inputcount = _stream$objArr.length;
 
   const _upstream_ctrlflow$Arr = _stream$objArr.map((_$obj) => _$obj._control._stream);
   const _flow$Arr = _stream$objArr.map((_out$obj) => _out$obj._stream);
@@ -1096,7 +779,7 @@ const weaveDataflowPlane = (
   //const empty_data_accio_bottle = doBottle('accio', 'empty_data_accio');
   // TBD: memoize this function by building a dedicated memcached version of this function,
   // separate from etaTree.etaReduceLEAFNode
-  const defaultConfig = { combineOperator: "merge", isIndexed: false };
+  //const defaultConfig = { combineOperator: "merge", isIndexed: false };
   //const node_data = JSON.parse(Buffer.from(node.data, 'base64').toString('utf-8')); // parse base64 into a json object
 
   //if (!refnode) {
@@ -1376,7 +1059,6 @@ const weaveDataflowPlane = (
               return {
                 _stream: _composite_in$obj._stream.pipe(
                   map((_in) => {
-                    const _cache = idx;
                     return _in;
                   }),
                 ),
@@ -1454,7 +1136,6 @@ const weaveDataflowPlane = (
                 synced_upstream_dataflow$objArr,
                 synced_upstream_controlflow$obj,
               );
-              let _nodecache;
               //const empty_dataflow$ = new BehaviorSubject({...raceConditionError, _label:{...empty_databus_bottle._label, context: "flow error at an exitless end node, "+nodeuuid}});
               //const empty_dataflow$ = new Subject();
               //const invocationflow$ = etaoutput$obj._control._stream.pipe(
@@ -1608,7 +1289,6 @@ const weaveDataflowPlane = (
             //if (nodeuuid.slice(0,4) === 'fdff')
             //    console.log(nodeuuid);
             //const controlflow$obj = combineDataflows(nodeuuid, input$Arr);
-            let _pipe_cache_ctrl_in;
             //const empty_dataflow$ = new BehaviorSubject({...empty_databus_bottle, _label:{...empty_databus_bottle._label, context: "input-less node dataflow init"}});
             //const empty_dataflow$ = new Subject();
 
@@ -1777,10 +1457,7 @@ const rxTimeoutStream = (prom, time, codebase, exception, metadata) => {
       (_resolve, _rej) =>
         (timer = setTimeout(
           () => {
-            const _rt_cache = { prom, metadata };
             //rej();
-            const nodeinfo = metadata.nodeinfo;
-            const traces = metadata.traces;
             const errorbottle = doBottle(
               "error",
               { type: "timeout", message: exception, codebase },
@@ -1849,7 +1526,7 @@ const parseDataflowFunc = (refnode, startnodes, endnodes, eta_lut, etaTree, meta
     )
       console.log("start debugging");
     if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(refnode)) console.log("start debugging");
-    const [_flowfunc_output$obj, weavedflowLUT] = weaveDataflowPlane(
+    const [_flowfunc_output$obj] = weaveDataflowPlane(
       refnode,
       startnodes,
       endnodes,
@@ -1860,14 +1537,6 @@ const parseDataflowFunc = (refnode, startnodes, endnodes, eta_lut, etaTree, meta
     );
 
     // spark_dev_note: refactor parseDataflowFunc to use driveDataflowByCtrlflow() as follows
-    const preprocessfunc = (_data_in) => {
-      const _rt_cache = { ...node_context };
-      //const _data_out = doUnbottle(undefined, _data_in); // unbottle all bottles
-      //flowinterface.data_in.next(_data_in);
-      const _data_out = _data_in; // do nothing
-      return _data_out;
-    };
-
     const _etaflowfunc = (_input$objArr, _controlflow$obj) => {
       const _outflow_data$ = new Subject();
 
@@ -1997,15 +1666,6 @@ const parseDataflowFunc = (refnode, startnodes, endnodes, eta_lut, etaTree, meta
           //return _flowfunc_output$obj._control._stream.pipe(withLatestFrom(_flowfunc_output$obj._stream)).pipe(map(_inner_combined_in=>{
           //    return _inner_combined_in; // remove array struct for single length data array
           //}));
-          const nodeinfo = {
-            refnode,
-            leaflogic: !(refnode in inline_refnode_LUT)
-              ? etaTree.leafgraph.graph.dataflow.getNodeAttributes(refnode).leafnode.data.leaf.logic
-              : undefined,
-            nodeaddr: etaTree.domain + "/" + etaTree.appid,
-            ctrl_trace: _pipe_cache_ctrl_in.traces,
-          };
-
           //(_flowfunc_output$obj._control._stream.pipe(withLatestFrom(_flowfunc_output$obj._stream)).pipe(map(_inner_combined_in=>{
           //    return _inner_combined_in; // remove array struct for single length data array
           //}))).subscribe(_inner_combined_in => {
@@ -2109,7 +1769,6 @@ const etaReduceDataflowComponent = memoize(
     const promiseArr = component_members.map((membernode_uuid) => {
       //if (!refnode)
       //    console.log("start debugging");
-      const membernode_lambda = etaTree.leafgraph.edges.lambda.sourcelut[membernode_uuid];
       //const membernode_lambda = etaTree.graphcomponents.components.lut.lambda[membernode_uuid];
       //etaTree.etaReduce.componentgraph(membernode_uuid)(membernode_uuid, membernode_lambda, contextuallambda);
       //const membernode_etaobj = etaReduceLEAFNode({nodeuuid: membernode_uuid, contextuallambda: contextuallambda, leafnode_scope: lambdacomponent_scope});
@@ -2453,9 +2112,6 @@ const runtimeEtaTree = (
             //    console.log('debugging');
             // register the retrieved methods in the eta tree's nodemethod LUT if not already done so.
             if (leafNodeMethods && !(nodeuuid in _runtimeEtaTree.leafnodemethods)) {
-              const _nodelambda = _runtimeEtaTree.leafgraph.edges.lambda.sourcelut[nodeuuid]
-                ? _runtimeEtaTree.leafgraph.edges.lambda.sourcelut[nodeuuid]
-                : [];
               _runtimeEtaTree.leafnodemethods[nodeuuid] = await leafNodeMethods({
                 refnode: nodeuuid,
                 refnodedata,

@@ -3,25 +3,10 @@ import { switchMap, filter, map, share, withLatestFrom } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 
-import lodashpkg from "lodash";
-
 import axios from "axios";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
-import { doBottle } from "../../datautils/bottling.js";
-import { isBottle } from "../../../predicates.js";
 import _ from "lodash";
 
-// locally global constants
-const { memoize } = lodashpkg; // nodejs compatible lodash import
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in http.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/elements/library.js",
-  },
-  {},
-);
 const cachekeys = {
   URI: "_http_uri",
   HEADER: "_http_header",
@@ -58,9 +43,6 @@ const initElementInterface = (_stream_cache) => {
       ? _uribase + `?graph=${domain}/${appid}`
       : _uribase;
 
-    // memoize this function
-    const _do_uri_request_memcache_resolver = ({ http_mode, uri } = {}) =>
-      JSON.stringify({ http_mode, uri });
     const _do_uri_request = async ({ http_mode, uri } = {}) => {
       if (["post", "put"].includes(http_mode)) {
         // put, post

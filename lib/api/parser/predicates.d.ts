@@ -1,0 +1,15 @@
+export function isSpellDefComponent(component: any, leafgraph: any): boolean;
+export function isLEAFConfigComponent(component: any, leafgraph: any): boolean;
+export function hasLambdaGraphNode(component: any, leafgraph: any): void;
+export function isDataflowPlaneScoped(component: any, leafgraph: any): boolean;
+export function isLambdaPlaneScoped(component: any, leafgraph: any): any;
+export function isLambdaComponent(component: any, leafgraph: any): any;
+export function isRuntimeComponent(component: any, leafgraph: any): any;
+export function isAnchoredComponent(component: any, leafgraph: any): any;
+export function isBottle(_data: any): boolean;
+export function isEmptyBottle(_data: any): boolean;
+export function isErrorBottle(_data: any): boolean;
+export function isCrate(_data: any): boolean;
+export function isPrimitiveType(val: any): void;
+export function isPositiveWholeNumberStr(value: any): boolean;
+export function isWholeNumberStr(value: any): boolean;

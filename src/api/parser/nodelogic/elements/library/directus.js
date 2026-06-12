@@ -3,25 +3,9 @@ import { switchMap, filter, map, share, withLatestFrom } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 
-import lodashpkg from "lodash";
-
 import axios from "axios";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
-import { doBottle } from "../../datautils/bottling.js";
-import { isBottle } from "../../../predicates.js";
 import _ from "lodash";
-
-// locally global constants
-const { memoize } = lodashpkg; // nodejs compatible lodash import
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in http.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/elements/library.js",
-  },
-  {},
-);
 const cachekeys = {
   //URI: "_directus_uri",
   //HEADER: "_directus_header",
@@ -40,7 +24,6 @@ const initElementInterface = (_stream_cache) => {
 
   const _elementlogic = async (_data_in) => {
     //_stream_cache[ElemCacheKeyLUT.DATAIN] = _metadata;
-    const _uribase = _stream_cache[ElemCacheKeyLUT.http.URI]; // uri$obj._stream
     const _header = _stream_cache[ElemCacheKeyLUT.http.HEADER]; // header$obj._stream
 
     // spark_dev_note: #http_dataflow_point // corresponding handles upstream
@@ -51,14 +34,8 @@ const initElementInterface = (_stream_cache) => {
     const validLambdaKeyList = recognizedLambdaConstants.filter((_) => curLambdaKeys.includes(_));
     //const poprect = validLambdaKeyList.length > 0 ? validLambdaKeyList[0] : 'center';
     //lookupRuntimeLambdaLUT: async (refnode, nodelambda, contextuallambda)
-    const domain = ElemCacheKeyLUT.DOMAIN ? _stream_cache[ElemCacheKeyLUT.DOMAIN] : undefined;
-    const appid = ElemCacheKeyLUT.APPID ? _stream_cache[ElemCacheKeyLUT.APPID] : undefined;
-    //const _uri = validLambdaKeyList.includes('?graph') ? _uribase + `?graph=${domain}/${appid}`: _uribase;
     const _uri = "localhost:51054";
 
-    // memoize this function
-    const _do_uri_request_memcache_resolver = ({ http_mode, uri } = {}) =>
-      JSON.stringify({ http_mode, uri });
     const _do_uri_request = async ({ http_mode, uri } = {}) => {
       if (["post", "put"].includes(http_mode)) {
         // put, post

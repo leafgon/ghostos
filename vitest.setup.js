@@ -1,5 +1,54 @@
 import { vi } from "vitest";
 
+// Mock Tone.js and instrument modules to avoid AudioContext usage in tests
+const noop = () => {};
+class MockToneNode {
+  connect() {}
+  toDestination() {}
+  set() {}
+  dispose() {}
+  triggerAttack() {}
+  triggerRelease() {}
+  triggerAttackRelease() {}
+}
+
+vi.mock("tone", () => ({
+  AutoFilter: class extends MockToneNode {},
+  BitCrusher: class extends MockToneNode {},
+  Chebyshev: class extends MockToneNode {},
+  PitchShift: class extends MockToneNode {},
+  Transport: { state: "stopped", start: noop },
+  start: noop,
+}));
+
+vi.mock("tone/build/esm/instrument/Synth.js", () => ({ Synth: class extends MockToneNode {} }));
+vi.mock("tone/build/esm/instrument/AMSynth.js", () => ({ AMSynth: class extends MockToneNode {} }));
+vi.mock("tone/build/esm/instrument/DuoSynth.js", () => ({
+  DuoSynth: class extends MockToneNode {},
+}));
+vi.mock("tone/build/esm/instrument/FMSynth.js", () => ({ FMSynth: class extends MockToneNode {} }));
+vi.mock("tone/build/esm/instrument/MembraneSynth.js", () => ({
+  MembraneSynth: class extends MockToneNode {},
+}));
+vi.mock("tone/build/esm/instrument/MetalSynth.js", () => ({
+  MetalSynth: class extends MockToneNode {},
+}));
+vi.mock("tone/build/esm/instrument/MonoSynth.js", () => ({
+  MonoSynth: class extends MockToneNode {},
+}));
+vi.mock("tone/build/esm/instrument/NoiseSynth.js", () => ({
+  NoiseSynth: class extends MockToneNode {},
+}));
+vi.mock("tone/build/esm/instrument/PluckSynth.js", () => ({
+  PluckSynth: class extends MockToneNode {},
+}));
+vi.mock("tone/build/esm/instrument/PolySynth.js", () => ({
+  PolySynth: class extends MockToneNode {},
+}));
+vi.mock("tone/build/esm/instrument/Sampler.js", () => ({
+  Sampler: class extends MockToneNode {},
+}));
+
 // Mock browser APIs that might not be available in jsdom
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),

@@ -1,6 +1,6 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { map, withLatestFrom, filter } from "rxjs/operators";
-import { _leafbottle, _leafunbottle } from "../datautils/index.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map, filter } from "rxjs/operators";
+import { _leafunbottle } from "../datautils/index.js";
 //import { combineInputStreams } from '../../leaf';
 
 /*
@@ -41,17 +41,12 @@ const _leafgnav = {
           `(${refnode}) called with args (${JSON.stringify(refnodedata.leaf.logic.args)}).`
         );
       }
-      const reduced_lambda_obj = await etaReduceLambdaGraphs({
+      await etaReduceLambdaGraphs({
         refnode,
         nodelambda: contextuallambda,
         contextuallambda: nodelambda,
         etaTree: lambdactrl.gos.etaTree,
       });
-
-      const _defaultLambda =
-        "_default" in reduced_lambda_obj
-          ? (input$) => reduced_lambda_obj._default([input$])
-          : (input$) => input$;
 
       // spark_dev_note: I think _leafdataUnbottle currently only supports a single key, in the future it would be whole lot more useful
       // if it supported an array of keys to be unbottled in one go.
@@ -75,11 +70,6 @@ const _leafgnav = {
       });
       // _leafpopupview is a leaf standard bottle to carry data for programming the user intent in a radial popup button in 3d-gnav regarding launching a popup window
       // and filterPopupView() filters (in the dataflow plane) any _leafpopupview bottles
-      const filterPopupViewBottles = _leafunbottle.dataflow(lambdactrl)({
-        refnodedata: { leaf: { logic: { args: { bottlekey: "_leafpopupview" } } } },
-        nodelambda: [],
-        contextuallambda,
-      });
 
       // spark_dev_note: some words on what "leaf standard bottle" is:
       // leaf has two data domains (data and lambda) and the data data domain consists of a dataflow plane while
@@ -97,15 +87,11 @@ const _leafgnav = {
       // (possible future expansion would support auto-layout algorithms that can cater for various user preferences).
 
       //const nodeInputGnavConfig = {combineOperator: 'zipLatest', isIndexed: false, metamodel: LEAFIOmetamodel.breezyforest}; // get node specific input stream combining config, default is {}
-      const nodeInputGnavConfig = { combineOperator: "zipLatest", isIndexed: false }; // get node specific input stream combining config, default is {}
-      //const runtimeLEAFjsFunc = func$LUT[nodeuuid](lambdacomponentRuntimeFunc);
-      const combineNodeDataGnavStreams = undefined; //combineInputStreams(nodeInputGnavConfig);
+      const combineNodeDataGnavStreams = undefined; //combineInputStreams({ combineOperator: "zipLatest", isIndexed: false });
 
       return (flowinput$) => {
         const incomingSpade$ = filterDeckSpadeBottles(flowinput$);
         const incomingHearts$ = filterDeckHeartBottles(flowinput$);
-        const incomingPopupIntents$ = filterPopupViewBottles(flowinput$);
-
         // work on gnav input dataflow (aka the moon and the orbital)
         const combinedGnavInput$ = combineNodeDataGnavStreams([incomingSpade$, incomingHearts$]);
         const gnavflowoutput$ = combinedGnavInput$.pipe(
@@ -128,17 +114,6 @@ const _leafgnav = {
         );
 
         // work on popup input dataflow (aka popup windows)
-        const popupflowoutput$ = incomingPopupIntents$.pipe(
-          map((_data) => {
-            // a peephole
-            console.log(_data);
-            return _data;
-          }),
-          map((node_input) => {
-            // go ahead with inter-component communication via using the dataflowplane/appview channels to communicate with gnav react component's useLEAFIOapi
-          }),
-        );
-
         return gnavflowoutput$.pipe(filter((_entry) => _entry)); // filter out any null entries in the result array
       };
     },

@@ -1,19 +1,9 @@
-import { Subject, combineLatest } from "rxjs";
-import { switchMap, map, withLatestFrom } from "rxjs/operators";
+import { Subject } from "rxjs";
+import { map, withLatestFrom } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 import { isBottle } from "../../../predicates.js";
-import { doBottle, doUnbottle } from "../../datautils/bottling.js";
-
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in image.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/elements/library/image.js",
-  },
-  {},
-);
+import { doUnbottle } from "../../datautils/bottling.js";
 /*
  * spark_dev_note: 25/Apr/2023
  * all leaflogic and datalogic functions must be designed to conform to the following spec,
@@ -35,7 +25,6 @@ const raceConditionError = doBottle(
  *
  */
 const initElementInterface = (_stream_cache) => {
-  const reduced_lambda_obj = _stream_cache[ElemCacheKeyLUT.LAMBDA_OBJ];
   const _leaflogic = (input$objArr, controlflow$obj) => {
     //const _stream_cache = {};
     //const _outflow_data$ = new BehaviorSubject(raceConditionError);
@@ -102,20 +91,6 @@ const initElementInterface = (_stream_cache) => {
   // of the current element node.
   const _datalogic_post = (data_in) => {
     //const recognizedLambdaConstants = ['uidefs', 'margin', 'fieldwidth'];
-    const recognizedLambdaConstants = ["onclose"];
-    const curLambdaKeys = Object.keys(reduced_lambda_obj);
-    const validLambdaKeyList = recognizedLambdaConstants.filter((_) => curLambdaKeys.includes(_));
-    //const poprect = validLambdaKeyList.length > 0 ? validLambdaKeyList[0] : 'center';
-    //lookupRuntimeLambdaLUT: async (refnode, nodelambda, contextuallambda)
-
-    //const marginval = reduced_lambda_obj.margin ? Object.keys(reduced_lambda_obj.margin) : undefined;
-    //const fieldwidthval = reduced_lambda_obj.fieldwidth ? Object.keys(reduced_lambda_obj.fieldwidth) : undefined;
-    const unmountCallback =
-      "onclose" in reduced_lambda_obj
-        ? reduced_lambda_obj.onclose
-        : () => {
-            console.log("hello world image");
-          };
     const node_output = formatElementFlowdata(
       {
         element: {

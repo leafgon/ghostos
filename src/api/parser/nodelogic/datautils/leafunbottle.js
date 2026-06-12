@@ -1,14 +1,7 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { map, withLatestFrom, filter, concatMap, switchMap, share } from "rxjs/operators";
-import { isBottle, isCrate } from "../../predicates.js";
-import { of, zip, Subject } from "rxjs";
-import {
-  mergeDataflows,
-  flattenArray,
-  combineDataflows,
-  chronosDataflow,
-  CHRONOSTYPE_SYNC,
-} from "../../../utils/leafdataflow.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map, withLatestFrom, filter, share } from "rxjs/operators";
+import { isBottle } from "../../predicates.js";
+import { of, Subject } from "rxjs";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { doUnbottle } from "./bottling.js";
 //import { memoize } from 'lodash';
@@ -47,10 +40,6 @@ const _leafunbottle = {
         etaTree: lambdactrl.gos.etaTree,
       });
 
-      const openTheBottle = (_bottlekey, _bottlecrate) => {
-        return _bottlekey in _bottlecrate ? _bottlecrate[_bottlekey] : null;
-      };
-
       const node_context = {
         codebase: "leafunbottle.js",
         refnode,
@@ -69,26 +58,7 @@ const _leafunbottle = {
             ? reduced_lambda_obj.label._default(input$objArr, controlflow$obj)
             : { _stream: of([refnodedata.leaf.logic.args.bottlekey]), _control: controlflow$obj }; // initialize lambdakey$ data flow
 
-          let idxcache = 0;
-          let loopydata_cache = [];
-          let ctrl_in_cache = undefined;
           let bottle_label = undefined;
-
-          const unbottlefunc = (_data_in) => {
-            const _rt_cache = { idxcache, loopydata_cache };
-            const _data_out = [_data_in]
-              .flat()
-              .map((_a_data) => {
-                return isBottle(_a_data) && bottle_label.includes(_a_data._bname)
-                  ? _a_data._content
-                  : undefined;
-              })
-              .filter((_in) => _in); //  exitDataBus({_bus: _data_in});
-            //return (_data_out.length === 0 ? undefined : (_data_out.length === 1 ? _data_out[0] : _data_out));
-            if (_data_out.length > 0) {
-              return _data_out.length === 1 ? _data_out[0] : _data_out;
-            }
-          };
 
           const nodectrl$ = controlflow$obj._stream.pipe(
             //switchMap(_ctrl_in=> {
@@ -124,7 +94,6 @@ const _leafunbottle = {
                 const _next_data = _combined_in[1];
 
                 const do_unbottlefunc = (_data_in) => {
-                  const _rt_cache = { idxcache, loopydata_cache };
                   const _data_out = [_data_in]
                     .flat()
                     .map((_a_data) => {

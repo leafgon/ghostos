@@ -1,4 +1,4 @@
-import { BehaviorSubject, combineLatest, of } from "rxjs";
+import { BehaviorSubject, combineLatest } from "rxjs";
 import { concatMap, map } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
@@ -34,20 +34,6 @@ const raceConditionError = doBottle(
  *
  */
 const initElementInterface = (_stream_cache) => {
-  const reduced_lambda_obj = _stream_cache[ElemCacheKeyLUT.LAMBDA_OBJ];
-  const uidefsgen =
-    "uidefs" in reduced_lambda_obj && "_default" in reduced_lambda_obj.uidefs
-      ? reduced_lambda_obj.uidefs._default
-      : undefined;
-  const margingen =
-    "margin" in reduced_lambda_obj && "_default" in reduced_lambda_obj.margin
-      ? reduced_lambda_obj.margin._default
-      : undefined;
-  const fieldwidthgen =
-    "fieldwidth" in reduced_lambda_obj && "_default" in reduced_lambda_obj.fieldwidth
-      ? reduced_lambda_obj.fieldwidth._default
-      : undefined;
-
   const _leaflogic = (input$objArr, controlflow$obj) => {
     //const _stream_cache = {};
     const _outflow_data$ = new BehaviorSubject(raceConditionError);
@@ -100,23 +86,6 @@ const initElementInterface = (_stream_cache) => {
   // data postprocessed and returned from this function will continue to flow in the data domain
   // of the current element node.
   const _datalogic_post = (data_in) => {
-    const recognizedLambdaConstants = [
-      "top",
-      "bottom",
-      "left",
-      "right",
-      "topleft",
-      "topright",
-      "bottomleft",
-      "bottomright",
-      "center",
-      "centre",
-    ]; // a prompt of type "button" can be linked, by name, to a key-labelled lambda func
-    const curLambdaKeys = Object.keys(reduced_lambda_obj);
-    const validLambdaKeyList = recognizedLambdaConstants.filter((_) => curLambdaKeys.includes(_));
-
-    const poprect = validLambdaKeyList.length > 0 ? validLambdaKeyList[0] : "center";
-
     //const marginval = reduced_lambda_obj.margin ? Object.keys(reduced_lambda_obj.margin) : undefined;
     //const fieldwidthval = reduced_lambda_obj.fieldwidth ? Object.keys(reduced_lambda_obj.fieldwidth) : undefined;
 
@@ -124,9 +93,6 @@ const initElementInterface = (_stream_cache) => {
     //const _uidefs = data_in[0];          // uidefs$obj._stream
     //const _margin_userval = data_in[1];          // margin$obj._stream
     //const _fieldwidth_userval = data_in[2];          // fieldwidth$obj._stream
-    let _flowdatain = data_in; // [...input$objArr]
-    _flowdatain = _flowdatain.length === 1 ? _flowdatain[0] : _flowdatain; // take care of data plurality
-
     const node_output = formatElementFlowdata(
       {
         element: {

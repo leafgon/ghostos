@@ -12,33 +12,13 @@
  *
  */
 
-import { etaReduceLambdaGraphs } from "../eta.js";
-
 const _common_methods =
   (lambdactrl) =>
   async ({ refnode, refnodedata, nodelambda, contextuallambda } = {}) => {
-    const reduced_lambda_obj = await etaReduceLambdaGraphs({
-      refnode,
-      nodelambda,
-      contextuallambda,
-      etaTree: lambdactrl.gos.etaTree,
-    });
-
     return {
       version: "breezyforest",
       nodequery: (flowinput$obj) => {
-        const flowoutput$ = flowinput$obj._stream.pipe(
-          map((node_input) => {
-            // node_input is expected to be an array, the calling function, parseLEAFNode (leaf.js) ensures this
-            // do something with node_input
-            // and return output
-            node_output = refnodedata;
-            return node_output;
-          }),
-        );
-        return { _stream: flowoutput$, _control: controlflow$obj };
-
-        //return {};
+        return flowinput$obj;
       },
       nodemethod: (flowinput$obj) => {
         return {};

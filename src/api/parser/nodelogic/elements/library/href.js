@@ -1,27 +1,12 @@
-import { BehaviorSubject, Subject, combineLatest, of } from "rxjs";
+import { BehaviorSubject, Subject } from "rxjs";
 import { switchMap, filter, map, share, withLatestFrom } from "rxjs/operators";
 
-import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
+import { ElemCacheKeyLUT } from "./index.js";
 
-import lodashpkg from "lodash";
-
-import axios from "axios";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
-import { doBottle } from "../../datautils/bottling.js";
 import { isBottle } from "../../../predicates.js";
 import _ from "lodash";
 
-// locally global constants
-const { memoize } = lodashpkg; // nodejs compatible lodash import
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in href.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/elements/library.js",
-  },
-  {},
-);
 const cachekeys = {
   URI: "_href_uri",
 };
@@ -41,8 +26,6 @@ example href request bottle looks like so:
     _label: {}
 }
 */
-
-const axios_instances = {};
 
 const initElementInterface = (_stream_cache) => {
   const reduced_lambda_obj = _stream_cache[ElemCacheKeyLUT.LAMBDA_OBJ];
@@ -71,10 +54,6 @@ const initElementInterface = (_stream_cache) => {
     let _flowdatain = _data_in; //.slice(2);   // [...input$objArr]
     _flowdatain = _flowdatain.length === 1 ? _flowdatain[0] : _flowdatain; // take care of data plurality
 
-    const recognizedLambdaConstants = ["uri", "post", "put", "get", "header", "?graph"];
-    const curLambdaKeys = Object.keys(reduced_lambda_obj);
-    const validLambdaKeyList = recognizedLambdaConstants.filter((_) => curLambdaKeys.includes(_));
-
     if (
       _uribase === GENERIC_URI_NAME &&
       isBottle(_flowdatain) &&
@@ -86,14 +65,8 @@ const initElementInterface = (_stream_cache) => {
     }
     //const poprect = validLambdaKeyList.length > 0 ? validLambdaKeyList[0] : 'center';
     //lookupRuntimeLambdaLUT: async (refnode, nodelambda, contextuallambda)
-    const domain = ElemCacheKeyLUT.DOMAIN ? _stream_cache[ElemCacheKeyLUT.DOMAIN] : undefined;
-    const appid = ElemCacheKeyLUT.APPID ? _stream_cache[ElemCacheKeyLUT.APPID] : undefined;
-    const _uri = validLambdaKeyList.includes("?graph")
-      ? _uribase + `?graph=${domain}/${appid}`
-      : _uribase;
+    const _uri = _uribase;
 
-    // memoize this function
-    const _do_uri_request_memcache_resolver = ({ uri } = {}) => JSON.stringify({ uri });
     const _do_uri_request = async ({ uri } = {}) => {
       try {
         console.log("executing href request");
@@ -228,54 +201,6 @@ const initElementInterface = (_stream_cache) => {
   // to be flown on the outgoing edge stream.
   // data postprocessed and returned from this function will continue to flow in the dataflow stream domain
   // of the current element node.
-  const _datalogic_post = (data_in) => {
-    const _urlret = data_in;
-
-    const escapeHtml = (text) => {
-      // https://stackoverflow.com/questions/1787322/what-is-the-htmlspecialchars-equivalent-in-javascript/4835406#4835406
-      var map = {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      };
-
-      return text.replace(/[&<>"']/g, function (m) {
-        return map[m];
-      });
-    };
-    const processAxiosObj = (obj) => {
-      const objtype = typeof obj;
-      if (objtype === "object") {
-        return Array.isArray(obj)
-          ? obj.map((_) => {
-              return processAxiosObj(_);
-            })
-          : obj
-            ? Object.fromEntries(
-                Object.entries(obj).map(([_key, _val]) => {
-                  return [_key, processAxiosObj(_val)];
-                }),
-              )
-            : obj;
-      } else if (objtype === "string") {
-        return escapeHtml(obj);
-      } else // probably of type "number"
-      {
-        return obj;
-      }
-    };
-    const node_output = formatElementFlowdata(
-      _urlret?.name && _urlret.name === "AxiosError"
-        ? { error: _urlret.message, data: _urlret.response.data }
-        : processAxiosObj(_urlret),
-      "elementio",
-    );
-
-    return node_output;
-  };
-
   return {
     leaflogic: _leaflogic,
     datalogic: {

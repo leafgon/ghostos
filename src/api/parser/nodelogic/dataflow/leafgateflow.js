@@ -1,37 +1,12 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import {
-  map,
-  mergeMap,
-  catchError,
-  withLatestFrom,
-  filter,
-  skipWhile,
-  concatMap,
-  share,
-  switchMap,
-} from "rxjs/operators";
-import {
-  combineDataflows,
-  chronosDataflow,
-  CHRONOSTYPE_SYNC,
-} from "../../../utils/leafdataflow.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map, withLatestFrom, filter, share } from "rxjs/operators";
 import { isBottle } from "../../predicates.js";
 import { _leafstdlib_dataflow_api } from "../../../metamodel.js";
 import { fetchMultiKeyedData } from "../../../utils/fetchnodedata.js";
-import { EMPTY, of, BehaviorSubject, Subject, combineLatest } from "rxjs";
+import { Subject } from "rxjs";
 //import cloneDeep from 'lodash/cloneDeep';
 import { driveDataflowByCtrlflow } from "../../leaf.js";
-import { doBottle } from "../datautils/bottling.js";
 
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in leafgateflow.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/dataflow/leafgateflow.js",
-  },
-  {},
-);
 const apidef = _leafstdlib_dataflow_api("leafgateflow");
 /*
  * _leafgateflow() is a runtime function for the LEAF node of logic type 'leafgateflow'.
@@ -82,7 +57,7 @@ const _leafgateflow = {
         etaTree: lambdactrl.gos.etaTree,
       });
 
-      const { type, args } = refnodedata.leaf.logic;
+      const { args } = refnodedata.leaf.logic;
       const gatekey = fetchMultiKeyedData(apidef.editorconfig.namedatakey, args).toLowerCase();
       const toggledatakey = fetchMultiKeyedData(apidef.editorconfig.toggledatakey, args);
 

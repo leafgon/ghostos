@@ -5,6 +5,35 @@ import { v5 as uuid5 } from "uuid";
 const DEFAULT_GITHUB_REF = "main";
 const GITHUB_DOMAIN = "github";
 
+const redactQueryValues = (graphRef) => {
+  if (typeof graphRef !== "string") {
+    return graphRef;
+  }
+  const queryIndex = graphRef.indexOf("?");
+  if (queryIndex === -1) {
+    return graphRef;
+  }
+  const refPath = graphRef.slice(0, queryIndex);
+  const refQuery = graphRef.slice(queryIndex + 1);
+  if (refQuery.length === 0) {
+    return `${refPath}?`;
+  }
+  const redactedQuery = refQuery
+    .split("&")
+    .map((entry) => {
+      if (!entry) {
+        return entry;
+      }
+      const [key] = entry.split("=");
+      return key ? `${key}=REDACTED` : "REDACTED";
+    })
+    .join("&");
+  return `${refPath}?${redactedQuery}`;
+};
+
+const redactGraphCoordinate = (graphdomain, graphappid) =>
+  `${graphdomain}/${redactQueryValues(graphappid)}`;
+
 const normalizeGraphNodesPayload = (payload) => {
   if (!payload) {
     return [];
@@ -24,7 +53,7 @@ const normalizeGraphNodesPayload = (payload) => {
 const parseGithubGraphRef = (graphappid) => {
   const [appid_path, appid_query] = graphappid.split("?");
   const parts = appid_path.split("/");
-  if (parts[0] === GITHUB_DOMAIN) {
+  if (parts[0]?.toLowerCase() === GITHUB_DOMAIN) {
     parts.shift();
   }
   if (parts.length < 3) {
@@ -49,20 +78,20 @@ const parseGithubGraphRef = (graphappid) => {
 };
 
 const isGithubGraphRef = (graphdomain, graphappid) => {
-  if (graphdomain === GITHUB_DOMAIN) {
+  if (typeof graphdomain === "string" && graphdomain.toLowerCase() === GITHUB_DOMAIN) {
     return true;
   }
-  return (
-    typeof graphappid === "string" &&
-    graphappid.startsWith(`${GITHUB_DOMAIN}/`) &&
-    graphappid.includes("/")
-  );
+  if (typeof graphappid !== "string") {
+    return false;
+  }
+  const graphappidLower = graphappid.toLowerCase();
+  return graphappidLower.startsWith(`${GITHUB_DOMAIN}/`) && graphappidLower.includes("/");
 };
 
 const fetchGithubGraph = async (graphdomain, graphappid) => {
   const graph_ref = parseGithubGraphRef(graphappid);
   if (!graph_ref) {
-    throw new Error(`Invalid GitHub graph reference: ${graphappid}`);
+    throw new Error(`Invalid GitHub graph reference: ${redactQueryValues(graphappid)}`);
   }
   if (!globalThis.fetch) {
     throw new Error("GitHub graph fetch requires global fetch.");
@@ -72,7 +101,7 @@ const fetchGithubGraph = async (graphdomain, graphappid) => {
   const response = await globalThis.fetch(url);
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch GitHub graph ${graphdomain}/${graphappid}: ${response.status}`,
+      `Failed to fetch GitHub graph ${redactGraphCoordinate(graphdomain, graphappid)}: ${response.status}`,
     );
   }
   const payload = await response.json();
@@ -154,10 +183,11 @@ const etaTreeForest = (refEtaTree) => {
     parseGraphEtaTree: async (graphdomain, graphappid) => {
       const host_domain = domain;
       const host_appid = appid;
+      const safeGraphCoord = redactGraphCoordinate(graphdomain, graphappid);
       // {_appmode, _hostdomain, _hostappid, _domain, _appid, filter='{}', variables}
-      console.log("parseGraphEtaTree(): ", graphdomain + "/" + graphappid, "parsing...");
+      console.log("parseGraphEtaTree(): ", safeGraphCoord, "parsing...");
       if (globalThis?.DEBUG) {
-        const tracecoord = graphdomain + "/" + graphappid;
+        const tracecoord = safeGraphCoord;
         if (globalThis.trace[tracecoord]) {
           globalThis.trace[tracecoord].push("parsing");
         } else {
@@ -209,9 +239,9 @@ const etaTreeForest = (refEtaTree) => {
       const parentname = hostEtaTree ? host_domain + "/" + host_appid : undefined;
       etaTreeForestObj.setEtaTree(graphdomain, graphappid, etaTree, parentname); // setEtaTree of etatreeforest.js accessed via the formalities of _leafmemoryio methods
 
-      console.log("parseGraphEtaTree(): ", graphdomain + "/" + graphappid, "parsed");
+      console.log("parseGraphEtaTree(): ", safeGraphCoord, "parsed");
       if (globalThis?.DEBUG) {
-        const tracecoord = graphdomain + "/" + graphappid;
+        const tracecoord = safeGraphCoord;
         if (globalThis.trace[tracecoord]) {
           globalThis.trace[tracecoord].push("parsed");
         } else {

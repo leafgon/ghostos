@@ -1,41 +1,10 @@
-import { processLEAFlisp } from "../../leaflisp.js";
-import { map, withLatestFrom, filter } from "rxjs/operators";
+import { map } from "rxjs/operators";
 import { of } from "rxjs";
 import { mergeDataflows } from "../../../utils/leafdataflow.js";
-
-import { PocketLisp, simpleFunction } from "../../../parser/leaflisp/plispdist/index.js"; //'../../../parser/leaflisp/pocket-lisp'; //
-import {
-  literals,
-  runtime,
-  utils,
-  plHashMap,
-  plVector,
-  plString,
-  plBool,
-  plNumber,
-  PLHashMap,
-  PLVector,
-  PLFractionNumber,
-  PLNumber,
-  PLBool,
-  PLString,
-  plFractionNumber,
-  assertNumeric,
-  isScientific,
-  parseDecimalString,
-  parseScientificString,
-  assert as lisp_assert,
-  StdRuntimeError,
-} from "../../../parser/leaflisp/plispstdlib/index.js";
-import { encodeUnicode } from "../../../utils/leafbase64.js";
 //import { result } from 'lodash';
 import { etaReduceLambdaGraphs } from "../../eta.js";
 //import { _leafLISPHelpText } from './leaflisphelp';
-import { executeLEAFLogic, executeLEAFLogicInSync } from "../../leaf.js";
-import { _leafgraph } from "../abstraction/index.js";
-
-// a predicate to test if object has _datatype, making it one of labelled base data types
-const isValuedObj = (_data) => typeof _data === "object" && "_datatype" in _data;
+import { executeLEAFLogic } from "../../leaf.js";
 
 // convert json into leaflisp
 
@@ -84,10 +53,7 @@ const _leafconfig = {
 
       //const refnode_logic = runtimeEtaTree.leafgraph.graph.dataflow.getNodeAttributes(refnode).leafnode.data.leaf.logic;
       //const runtimeLEAFlisp = processLEAFlisp(refnodedata.leaf.logic.args.lispexpression);
-      let lispstdout;
-      let runtimeLEAFlisp;
-
-      const reduced_lambda_obj = await etaReduceLambdaGraphs({
+      await etaReduceLambdaGraphs({
         refnode,
         nodelambda,
         contextuallambda,
@@ -98,8 +64,6 @@ const _leafconfig = {
         const flowinput$obj = mergeDataflows(flowinput$Arr);
         //const flowoutput$ = graphContextual(flowinput$);
         //return flowoutput$;
-        const loopidx = controlflow$obj?._config?.loopidx;
-        const clubrefnode = controlflow$obj?._config?.clubrefnode;
         if (flowinput$obj && "_stream" in flowinput$obj) {
           const flowoutput$ = flowinput$obj._stream.pipe(
             map((node_input) => {
@@ -143,7 +107,6 @@ const _leafconfig = {
   methods:
     (lambdactrl) =>
     async ({ refnode, refnodedata, nodelambda, contextuallambda } = {}) => {
-      const runtimestate = { lispcode: "" };
       const reduced_lambda_obj = await etaReduceLambdaGraphs({
         refnode,
         nodelambda,
@@ -153,7 +116,6 @@ const _leafconfig = {
       return {
         config: {
           getConfigData: async () => {
-            reduced_lambda_obj;
             const configDataGen =
               "_default" in reduced_lambda_obj ? reduced_lambda_obj._default : undefined;
             const configData = configDataGen ? await executeLEAFLogic(configDataGen, [], {}) : {};

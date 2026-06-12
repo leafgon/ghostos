@@ -10,6 +10,9 @@ echo "==> CI: lint"
 echo "==> CI: typecheck"
 ./scripts/typecheck.sh
 
+echo "==> CI: build"
+npm run -s build
+
 echo "==> CI: test"
 ./scripts/test.sh
 

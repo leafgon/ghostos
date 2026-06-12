@@ -1,30 +1,15 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { map, withLatestFrom, filter, concatMap, switchMap, share } from "rxjs/operators";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map, withLatestFrom, share } from "rxjs/operators";
 import {
   mergeDataflows,
-  naiveZipDataflows,
   combineDataflows,
   substituteDataflows,
   concatDataflows,
-  CHRONOSTYPE_ASYNC,
-  chronosDataflow,
-  TIMEOUTBEHAVIOR_BESTEFFORT,
 } from "../../../utils/leafdataflow.js";
-import { zip, combineLatest, BehaviorSubject, Subject, of, merge } from "rxjs";
-import { isBottle, isCrate, isEmptyBottle, isPrimitiveType } from "../../predicates.js";
+import { Subject, merge } from "rxjs";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
 //import { syncDataflows } from '../../../utils/leafdataflow';
-import { doBottle } from "../datautils/bottling.js";
 
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in leafchronosflow.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/dataflow/leafchronosflow.js",
-  },
-  {},
-);
 /*
  * _leafchronosflow() is a runtime function for the LEAF node of logic type 'leafchronosflow'.
  * it is used to define rules on how to synchronize/asynchronize multiple dataflows wired into the node's input.
@@ -163,7 +148,6 @@ const _leafchronosflow = {
             ...input$objArr.map((_$obj, idx) => {
               return _$obj._stream.pipe(
                 map((_data_in) => {
-                  const _cache = idx;
                   return _data_in;
                 }),
                 share(),
@@ -211,13 +195,7 @@ const _leafchronosflow = {
             };
           } else {
             // naive zip is the default mix mode
-            let idxcache = 0;
-            let loopydata_cache = [];
-            let ctrl_in_cache = undefined;
-            let bottle_label = undefined;
-
             const blankprefunc = (_data_in) => {
-              const _rt_cache = { idxcache, loopydata_cache };
               //const _data_out = doUnbottle(undefined, _data_in);
               const _data_out = _data_in;
               return _data_out;
@@ -225,7 +203,6 @@ const _leafchronosflow = {
 
             const nodectrl$ = controlflow$obj._stream.pipe(
               map((_ctrl_in) => {
-                const _rt_cache = { ...node_context };
                 return _ctrl_in;
               }),
             );

@@ -1,24 +1,12 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import { map, concatMap, withLatestFrom, filter } from "rxjs/operators";
-import { of, combineLatest, ReplaySubject } from "rxjs";
-import { _leafbottle, _leafunbottle } from "../datautils/index.js";
+import { etaReduceLambdaGraphs } from "../../eta.js";
 import { fetchMultiKeyedData } from "../../../utils/fetchnodedata.js";
-import {
-  combineDataflows,
-  naiveZipDataflows,
-  mergeDataflows,
-  chronosDataflow,
-  CHRONOSTYPE_SYNC,
-} from "../../../utils/leafdataflow.js";
-import { v4 as uuid4, v5 as uuid5 } from "uuid";
-import { _leafgraph } from "../abstraction/index.js";
-import { driveDataflowByCtrlflow, executeLEAFLogicInSync } from "../../leaf.js";
+import { mergeDataflows } from "../../../utils/leafdataflow.js";
+import { v4 as uuid4 } from "uuid";
+import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { _leafstdlib_dataflow_api } from "../../../metamodel.js";
 import { _leafmixflow } from "../dataflow/index.js";
-import { ElemCacheKeyLUT } from "./library/index.js";
 import { doBottle, doUnbottle } from "../datautils/bottling.js";
 
-const leafgon_prod_url = process.env.LEAFGON_PROD_URL;
 const leaf_apidef = _leafstdlib_dataflow_api("leafdeckspade");
 /*
  * _leafdeckspade() is a runtime function for the LEAFgraph node of logic type 'leafdeckspade'.
@@ -65,22 +53,10 @@ const _leafdeckspade = {
         etaTree: lambdactrl.gos.etaTree,
       });
 
-      const _defaultLambda =
-        "_default" in reduced_lambda_obj
-          ? (input$Arr, controlflow$obj) => {
-              return {
-                ...reduced_lambda_obj._default(input$Arr, controlflow$obj),
-                _control: controlflow$obj,
-              };
-            }
-          : (input$Arr, controlflow$obj) => {
-              return { ...mergeDataflows(input$Arr), _control: controlflow$obj };
-            };
-
       // spark_dev_note: I think _leafdataUnbottle currently only supports a single key, in the future it would be whole lot more useful
       // if it supported an array of keys to be unbottled in one go.
       //const filterDataOfInterest = await _leafunbottle.dataflow(lambdactrl)({refnodedata: {leaf: {logic: {args: {bottlekey:'_leafdeckdiamond'}}}}, nodelambda: [], contextuallambda});
-      const mixDataflow = await _leafmixflow.dataflow(lambdactrl)({
+      await _leafmixflow.dataflow(lambdactrl)({
         refnodedata: { leaf: { logic: { args: {} } } },
         nodelambda: [],
         contextuallambda,
@@ -104,18 +80,18 @@ const _leafdeckspade = {
       //    }
       //]
 
-      const leafgraph_args = {
-        graphuuid: "",
-        domain: "breezyforest",
-        appid: "leafdeckspade",
-        graphaddrstr: "breezyforest/spade",
-      };
-      const getLEAFGraph = _leafgraph.lambda(lambdactrl)({
-        refnodedata: { leaf: { logic: { args: leafgraph_args } } },
-        nodelambda: [],
-        contextuallambda: [],
-      });
-      const leafgraph = await getLEAFGraph; //.then((response) => { // async call to get leafgraph
+      // const leafgraph_args = {
+      //   graphuuid: "",
+      //   domain: "breezyforest",
+      //   appid: "leafdeckspade",
+      //   graphaddrstr: "breezyforest/spade",
+      // };
+      // const getLEAFGraph = _leafgraph.lambda(lambdactrl)({
+      //   refnodedata: { leaf: { logic: { args: leafgraph_args } } },
+      //   nodelambda: [],
+      //   contextuallambda: [],
+      // });
+      // const leafgraph = await getLEAFGraph; //.then((response) => { // async call to get leafgraph
       // do something with the response once the leafgraph is resolved
       //let default_spade_diamonds_and_clubs = []; //{diamonds: []};
       //if (leafgraph && 'menudata' in leafgraph && '_default' in leafgraph.menudata) {
@@ -141,65 +117,17 @@ const _leafdeckspade = {
       };
 
       return (input$objArr, controlflow$obj) => {
-        let idxcache = 0;
-        let loopydata_cache = [];
-        let ctrl_in_cache = undefined;
         let bottle_label = ["_leafdeckdiamond"];
 
-        const _stream_cache = {};
-
         const preprocessfunc = (_data_in) => {
-          const _rt_cache = { idxcache, loopydata_cache };
-
           const _data_out = Array.isArray(_data_in)
             ? _data_in.map((_datum_in) => doUnbottle(bottle_label, _datum_in)).filter((_in) => _in)
             : doUnbottle(bottle_label, _data_in); //(isBottle(_data_in) && bottle_label.includes(_data_in._bname)) ? _data_in._content : undefined; //  exitDataBus({_bus: _data_in});
           return _data_out;
         };
 
-        const _leafdeckspade_leaflogic = (_input$objArr, _controlflow$obj) => {
-          //const uri$obj = driveDataflowByCtrlflow(
-          //    controlflow$obj, input$objArr, undefined, node_context,
-          //    {
-          //        leaflogic: urigen,
-          //        datalogic: {post: (_data) => {
-          //            _stream_cache[ElemCacheKeyLUT.mediaplayer.URI] = _data;
-          //            return _data;
-          //        }}
-          //    }
-          //);
-
-          //const _inflow_ctrl$obj = uri$obj._control;
-          const _inflow_ctrl$obj = _controlflow$obj;
-
-          const _outflow_data$ = new ReplaySubject(1);
-          const _ctrl_out$ = _inflow_ctrl$obj._stream.pipe(
-            concatMap((_ctrl_in) => {
-              _stream_cache[ElemCacheKeyLUT.CTRLIN] = _ctrl_in;
-
-              // perform any input data (read) operations specific to the element here
-              // like accessing the most up-to-date messages from rx subjects/streams, etc
-
-              // return data read from the rx stream domain as an array
-              return combineLatest([..._input$objArr.map((_obj) => _obj._stream)]);
-            }),
-            map((_data_in) => {
-              console.log("testing element _leaflogic: ", _data_in);
-              // perform any output data (write) operations specific to the element here
-              // like sending messages to rx subjects, etc
-
-              if (_data_in.length > 1) _outflow_data$.next(_data_in);
-              else if (_data_in.length === 1) _outflow_data$.next(_data_in[0]);
-              // return ctrl
-              return _stream_cache[ElemCacheKeyLUT.CTRLIN];
-            }),
-          );
-
-          return { _stream: _outflow_data$, _control: { _stream: _ctrl_out$ } };
-        };
-
         const loopidx = controlflow$obj._config?.loopidx;
-        const { type, args } = refnodedata.leaf.logic;
+        const { args } = refnodedata.leaf.logic;
         const _defaultLambda =
           "_default" in reduced_lambda_obj
             ? (_input$objArr, _controlflow$obj) => {
@@ -217,7 +145,6 @@ const _leafdeckspade = {
               };
 
         const postprocessfunc = (_data_in) => {
-          const _rt_cache = { idxcache, loopydata_cache };
           const a_diamond_list = Array.isArray(_data_in) ? _data_in : [_data_in];
           const _data_out = {
             type: "leafdeckspade",

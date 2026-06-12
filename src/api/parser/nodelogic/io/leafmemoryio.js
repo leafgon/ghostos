@@ -1,42 +1,15 @@
-import { etaReduceLambdaGraphs, etaReduceDataflowComponent, runtimeEtaTree } from "../../eta.js";
-import {
-  combineDataflows,
-  mergeDataflows,
-  chronosDataflow,
-  CHRONOSTYPE_SYNC,
-} from "../../../utils/leafdataflow.js";
-import { mergeMap, switchMap, map, withLatestFrom, filter, share } from "rxjs/operators";
+import { etaReduceLambdaGraphs } from "../../eta.js";
+import { map, withLatestFrom, share } from "rxjs/operators";
 import { _leafstdlib_dataflow_api } from "../../../metamodel.js";
 import { fetchMultiKeyedData } from "../../../utils/fetchnodedata.js";
-import {
-  skip,
-  take,
-  interval,
-  from,
-  of,
-  repeat,
-  delay,
-  BehaviorSubject,
-  Subject,
-  combineLatest,
-} from "rxjs";
+import { Subject } from "rxjs";
 import safeStringify from "fast-safe-stringify";
-import { v4 as uuid4, v5 as uuid5 } from "uuid";
+import { v5 as uuid5 } from "uuid";
 import { SHA1 } from "../../../utils/crypto.js";
 import { etaTreeForest } from "../../etatreeforest.js";
 import { isBottle } from "../../predicates.js";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { doBottle } from "../datautils/bottling.js";
-
-const raceConditionError = doBottle(
-  "error",
-  {
-    type: "critical",
-    message: "LEAF core error: race condition detected in leafmemoryio.js",
-    codebase: "/src/ghostos/api/parser/nodelogic/io/leafmemoryio.js",
-  },
-  {},
-);
 const leaf_apidef = _leafstdlib_dataflow_api("leafmemoryio");
 
 const isPersistentMemory = (_name, _uri, _lambdaobj, _spade_lambda) => {
@@ -51,8 +24,6 @@ const isPersistentMemory = (_name, _uri, _lambdaobj, _spade_lambda) => {
   if (isvalidmemoryref) return true;
   else return false;
 };
-
-const GENERIC_MEMORYNAME = "{*}";
 
 /*
  * _leafscreenio() is a dataflow-plane-scoped function for the LEAF node of logic type 'leafscreenio'.
@@ -71,7 +42,7 @@ const _leafmemoryio = {
         etaTree: lambdactrl.gos.etaTree,
       });
 
-      const { type, args } = refnodedata.leaf.logic;
+      const { args } = refnodedata.leaf.logic;
       const memoryname = fetchMultiKeyedData(leaf_apidef.editorconfig.namedatakey, args);
 
       const { domain, appid } = lambdactrl.gos.etaTree;
@@ -79,10 +50,8 @@ const _leafmemoryio = {
       const memorykey = uuid5(leafspade_uri, uuid5.URL); // uuid deterministically generated based on domain and appid
 
       const ismarkedglobal = "global" in reduced_lambda_obj ? true : false;
-      const issubscription = "subscribe" in reduced_lambda_obj ? true : false;
       const is_on_tap = "on-tap" in reduced_lambda_obj ? true : false;
       const is_proxy = "proxy" in reduced_lambda_obj ? true : false;
-      const is_generic_memory = memoryname === GENERIC_MEMORYNAME;
 
       const thespadeuuid = lambdactrl.gos.etaTree.leafgraph.thespade?.uuid;
       const spade_lambda =
@@ -96,12 +65,9 @@ const _leafmemoryio = {
             )
           : undefined;
       if (refnode.slice(0, 4) === "4d34") console.log("start debugging");
-      const ispersistent = ismarkedglobal
-        ? isPersistentMemory(memoryname, leafspade_uri, reduced_lambda_obj, spade_lambda)
-        : false;
-
-      let curgenerator = undefined;
-      let prevmemory = undefined;
+      if (ismarkedglobal) {
+        isPersistentMemory(memoryname, leafspade_uri, reduced_lambda_obj, spade_lambda);
+      }
       const node_context = {
         codebase: "leafmemoryio.js",
         refnode,
@@ -116,7 +82,6 @@ const _leafmemoryio = {
         if (memoryname === "details") console.log(memorykey);
 
         const preprocessfunc = (_data_in) => {
-          const _rt_cache = { ...node_context };
           //const _data_out = doUnbottle(undefined, _data_in); // unbottle all bottles
           //flowinterface.data_in.next(_data_in);
           const _data_out = _data_in; // do nothing
@@ -390,7 +355,7 @@ const _leafmemoryio = {
         ? lambdactrl.gos.etaTree.leafgraph.edges.lambda.sourcelut[thespadeuuid].includes(refnode)
         : false;
       if (isvalid) {
-        const { type, args } = refnodedata.leaf.logic;
+        const { args } = refnodedata.leaf.logic;
         const memoryname = fetchMultiKeyedData(leaf_apidef.editorconfig.namedatakey, args);
 
         if (nodelambda.length > 0) {
@@ -431,7 +396,6 @@ const _leafmemoryio = {
     ({ refnode, refnodedata, nodelambda, contextuallambda } = {}) => {
       const retrieveMasterEtaTree = (_etatree) => {
         if (!_etatree.hostEtaTree) return _etatree;
-        else _etatree.hostEtaTree;
         return retrieveMasterEtaTree(_etatree.hostEtaTree);
       };
       const masterEtaTree = retrieveMasterEtaTree(lambdactrl.gos.etaTree);

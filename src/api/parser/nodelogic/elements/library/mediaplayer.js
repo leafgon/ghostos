@@ -1,5 +1,5 @@
-import { BehaviorSubject, combineLatest, withLatestFrom } from "rxjs";
-import { concatMap, map } from "rxjs/operators";
+import { BehaviorSubject, withLatestFrom } from "rxjs";
+import { map } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
@@ -119,18 +119,6 @@ const initElementInterface = (_stream_cache) => {
   // of the current element node.
   const _datalogic_post = (data_in) => {
     //const recognizedLambdaConstants = ['uidefs', 'margin', 'fieldwidth'];
-    const recognizedLambdaConstants = ["uri"];
-    const curLambdaKeys = Object.keys(reduced_lambda_obj);
-    const validLambdaKeyList = recognizedLambdaConstants.filter((_) => curLambdaKeys.includes(_));
-    //const poprect = validLambdaKeyList.length > 0 ? validLambdaKeyList[0] : 'center';
-    //lookupRuntimeLambdaLUT: async (refnode, nodelambda, contextuallambda)
-
-    const marginval = reduced_lambda_obj.margin
-      ? Object.keys(reduced_lambda_obj.margin)
-      : undefined;
-    const fieldwidthval = reduced_lambda_obj.fieldwidth
-      ? Object.keys(reduced_lambda_obj.fieldwidth)
-      : undefined;
     const node_output = formatElementFlowdata(
       {
         element: {
