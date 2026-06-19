@@ -60,16 +60,16 @@ const MUT_DELEDGE = `mutation DeleteEdge($uuid: String!) {
 //const MUT_ADDNODE = `mutation { addNode(input: [{label: "ala999", data: ""}]) {node {label}} }`;
 
 // spark_dev_note: TBD: the following config is only valid for testing/debugging.
-// for production use, please change it to gdb.leafgon.com URIs
+// for production use, please change it to www.leafgon.com URIs
 //const defaultLEAFlakeConfig = {
 //  dburi_subs: process.env.LEAFGON_ENDPOINT_SUBS, //"http://localhost:10001/sgraphql",
 //  dburi_subs_ws: process.env.LEAFGON_WEBSOCKET_SUBS, //"ws://localhost:10001/sgraphql",
 //  dburi_qm: process.env.LEAFGON_ENDPOINT_QM, //"http://localhost:10001/qmgraphql",
 //};
 const defaultLEAFlakeConfig = {
-  dburi_subs: process.env.LEAFGON_ENDPOINT_SUBS, //"https://gdb.leafgon.com/sgraphql",
-  dburi_subs_ws: process.env.LEAFGON_WEBSOCKET_SUBS, //"wss://gdb.leafgon.com/sgraphql",
-  dburi_qm: process.env.LEAFGON_ENDPOINT_QM, //"httpx://gdb.leafgon.com/qmgraphql",
+  dburi_subs: process.env.LEAFGON_ENDPOINT_SUBS || "https://www.leafgon.com/sgraphql",
+  dburi_subs_ws: process.env.LEAFGON_WEBSOCKET_SUBS || "wss://www.leafgon.com/sgraphql",
+  dburi_qm: process.env.LEAFGON_ENDPOINT_QM || "https://www.leafgon.com/qmgraphql",
 };
 
 //const initializeLEAFlakeGQLClient = ({_domain, _appid, _clientConfig=defaultLEAFlakeConfig, _handleChange=blankChangeHandler, _metamodel=LEAFIOmetamodel.breezyforest}={}) => {}
@@ -78,6 +78,8 @@ const initializeLEAFlakeGQLClient = ({
   _metamodel = LEAFIOmetamodel.breezyforest,
   _sessionid = undefined,
 } = {}) => {
+  const resolvedClientConfig = { ...defaultLEAFlakeConfig, ...(_clientConfig || {}) };
+
   //const dburi = metamodel.GQLParameters[metamodel.SubsDirectory.leaflake.gqlclient];
   //const dburi_subs = _clientConfig.dburi_subs;
   //const dburi_qm = _clientConfig.dburi_qm;
@@ -86,10 +88,16 @@ const initializeLEAFlakeGQLClient = ({
   //const websocket_subs = dburi_subs ? `wss://${dburi_subs}`: undefined; //"www.leafgon.com:10001/sgraphql"
   //const endpoint_qm = dburi_subs ? `https://${dburi_qm}`: undefined;
   //const prodLEAFlakeConfig = _metamodel.GQLParameters.clientconfig_full;
-  const endpoint_subs = _clientConfig.dburi_subs ? _clientConfig.dburi_subs : undefined;
-  const websocket_subs = _clientConfig.dburi_subs_ws ? _clientConfig.dburi_subs_ws : undefined; //"www.leafgon.com:10001/sgraphql"
-  const endpoint_qm = _clientConfig.dburi_qm ? _clientConfig.dburi_qm : undefined;
-  const client_auth_key = _clientConfig.clientAuthKey ? _clientConfig.clientAuthKey : undefined;
+  const endpoint_subs = resolvedClientConfig.dburi_subs
+    ? resolvedClientConfig.dburi_subs
+    : undefined;
+  const websocket_subs = resolvedClientConfig.dburi_subs_ws
+    ? resolvedClientConfig.dburi_subs_ws
+    : undefined; //"www.leafgon.com:10001/sgraphql"
+  const endpoint_qm = resolvedClientConfig.dburi_qm ? resolvedClientConfig.dburi_qm : undefined;
+  const client_auth_key = resolvedClientConfig.clientAuthKey
+    ? resolvedClientConfig.clientAuthKey
+    : undefined;
   //const nfilter = _appid ? `{ appid: {eq: "${_appid}"} }` : '{}';
   const masterquery = _metamodel.GQLParameters.masterquery;
 

@@ -137,9 +137,9 @@ export default {
     //  // Add other environment variables your app needs
     //}),
     new webpack.DefinePlugin({
-      "process.env.LEAFGON_ENDPOINT_SUBS": JSON.stringify("https://gdb.leafgon.com/sgraphql"),
-      "process.env.LEAFGON_ENDPOINT_QM": JSON.stringify("https://gdb.leafgon.com/qmgraphql"),
-      "process.env.LEAFGON_WEBSOCKET_SUBS": JSON.stringify("wss://gdb.leafgon.com/sgraphql"),
+      "process.env.LEAFGON_ENDPOINT_SUBS": JSON.stringify("https://www.leafgon.com/sgraphql"),
+      "process.env.LEAFGON_ENDPOINT_QM": JSON.stringify("https://www.leafgon.com/qmgraphql"),
+      "process.env.LEAFGON_WEBSOCKET_SUBS": JSON.stringify("wss://www.leafgon.com/sgraphql"),
       "process.env.LEAFGON_WHOAMI": JSON.stringify(
         "https://www.leafgon.com/auth/public/sessions/whoami",
       ),

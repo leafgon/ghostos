@@ -1,8 +1,8 @@
 export function initializeLEAFlakeGQLClient({ _clientConfig, _metamodel, _sessionid, }?: {
     _clientConfig?: {
-        dburi_subs: string | undefined;
-        dburi_subs_ws: string | undefined;
-        dburi_qm: string | undefined;
+        dburi_subs: string;
+        dburi_subs_ws: string;
+        dburi_qm: string;
     } | undefined;
     _metamodel?: {
         _version: string;

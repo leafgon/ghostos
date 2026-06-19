@@ -4,9 +4,38 @@
 //import gql from 'graphql-tag';
 import { createGQLClient } from "../../graphql/client.js"; //'../../lib/graphql/client';
 
-const endpoint_subs = process.env.LEAFGON_ENDPOINT_SUBS || "https://gdb.leafgon.com/sgraphql";
-const websocket_subs = process.env.LEAFGON_WEBSOCKET_SUBS || "wss://gdb.leafgon.com/sgraphql";
-const endpoint_qm = process.env.LEAFGON_ENDPOINT_QM || "https://gdb.leafgon.com/qmgraphql";
+const defaultLEAFgqlEndpoints = Object.freeze({
+  endpoint_subs: process.env.LEAFGON_ENDPOINT_SUBS || "https://www.leafgon.com/sgraphql",
+  websocket_subs: process.env.LEAFGON_WEBSOCKET_SUBS || "wss://www.leafgon.com/sgraphql",
+  endpoint_qm: process.env.LEAFGON_ENDPOINT_QM || "https://www.leafgon.com/qmgraphql",
+});
+let endpoint_subs = defaultLEAFgqlEndpoints.endpoint_subs;
+let websocket_subs = defaultLEAFgqlEndpoints.websocket_subs;
+let endpoint_qm = defaultLEAFgqlEndpoints.endpoint_qm;
+
+const getLEAFgqlEndpoints = () => ({
+  endpoint_subs,
+  websocket_subs,
+  endpoint_qm,
+});
+
+const setLEAFgqlEndpoints = ({
+  endpoint_subs: nextEndpointSubs,
+  websocket_subs: nextWebsocketSubs,
+  endpoint_qm: nextEndpointQm,
+} = {}) => {
+  if (typeof nextEndpointSubs === "string") {
+    endpoint_subs = nextEndpointSubs;
+  }
+  if (typeof nextWebsocketSubs === "string") {
+    websocket_subs = nextWebsocketSubs;
+  }
+  if (typeof nextEndpointQm === "string") {
+    endpoint_qm = nextEndpointQm;
+  }
+
+  return getLEAFgqlEndpoints();
+};
 //const endpoint_subs = "https://www.leafgon.com:10001/sgraphql";
 //const websocket_subs = "wss://www.leafgon.com:10001/sgraphql";
 //const endpoint_qm = "https://www.leafgon.com:10001/qmgraphql";
@@ -341,6 +370,8 @@ const mutateDelEdge = async ({ edge_uuid, endpoint = endpoint_qm }) => {
 };
 
 export {
+  getLEAFgqlEndpoints,
+  setLEAFgqlEndpoints,
   getLEAFgqlStrAddNode,
   getLEAFgqlStrUpdateNode,
   getLEAFgqlStrDelNode,

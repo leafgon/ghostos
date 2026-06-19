@@ -33,6 +33,8 @@ import { mutateAddNode } from "./api/leafio/leafgql.js";
 import { mutateDelNode } from "./api/leafio/leafgql.js";
 import { mutateAddEdge } from "./api/leafio/leafgql.js";
 import { mutateDelEdge } from "./api/leafio/leafgql.js";
+import { getLEAFgqlEndpoints } from "./api/leafio/leafgql.js";
+import { setLEAFgqlEndpoints } from "./api/leafio/leafgql.js";
 import { _breezyforeststdlib_name } from "./api/metamodel.js";
 import { _edge_handle_dict } from "./api/metamodel.js";
 import { _edge_style_dict } from "./api/metamodel.js";
@@ -74,6 +76,8 @@ export {
   mutateDelNode,
   mutateAddEdge,
   mutateDelEdge,
+  getLEAFgqlEndpoints,
+  setLEAFgqlEndpoints,
   _breezyforeststdlib_name,
   _edge_handle_dict,
   _edge_style_dict,

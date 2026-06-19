@@ -33,6 +33,8 @@ import { mutateAddNode } from "./index.core.js";
 import { mutateDelNode } from "./index.core.js";
 import { mutateAddEdge } from "./index.core.js";
 import { mutateDelEdge } from "./index.core.js";
+import { getLEAFgqlEndpoints } from "./index.core.js";
+import { setLEAFgqlEndpoints } from "./index.core.js";
 import { _breezyforeststdlib_name } from "./index.core.js";
 import { _edge_handle_dict } from "./index.core.js";
 import { _edge_style_dict } from "./index.core.js";
@@ -75,6 +77,8 @@ export {
   mutateDelNode,
   mutateAddEdge,
   mutateDelEdge,
+  getLEAFgqlEndpoints,
+  setLEAFgqlEndpoints,
   _breezyforeststdlib_name,
   _edge_handle_dict,
   _edge_style_dict,
