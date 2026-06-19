@@ -1,26 +1,26 @@
-import { createFunction } from '../dataTypes/PLFunction'
-import { Interpreter } from '../interpreter'
-import { Environment } from '../dataTypes/Environment'
-import { Literal, LiteralType } from '../dataTypes/Literal'
-import { assetParamLength } from '../utils/fn'
-import { PLCallable } from '../types'
-import { FN_IDENTIFIER } from '../parser'
-import { SnippetPosition } from '../dataTypes/SnippetPosition'
+import { createFunction } from "../dataTypes/PLFunction";
+import { Interpreter } from "../interpreter";
+import { Environment } from "../dataTypes/Environment";
+import { Literal, LiteralType } from "../dataTypes/Literal";
+import { assetParamLength } from "../utils/fn";
+import { PLCallable } from "../types";
+import { FN_IDENTIFIER } from "../parser";
+import { SnippetPosition } from "../dataTypes/SnippetPosition";
 
 export const defn = createFunction({
-  name: 'defn',
+  name: "defn",
   arity: -1,
   resolveArgsIdentifiers: false,
   fn: (interpreter: Interpreter, env: Environment, args: Literal<LiteralType>[]) => {
-    assetParamLength(args, 3)
+    assetParamLength(args, 3);
 
     const [id, fnArgs, body] = args as [
       Literal<LiteralType.Identifier>,
       Literal<LiteralType.List>,
       Literal<LiteralType>,
-    ]
+    ];
 
-    const def = env.get('def') as PLCallable
+    const def = env.get("def") as PLCallable;
     return def.call(interpreter, env, [
       id,
       new Literal(
@@ -28,6 +28,6 @@ export const defn = createFunction({
         [new Literal(LiteralType.Identifier, FN_IDENTIFIER, SnippetPosition.unknown), fnArgs, body],
         SnippetPosition.unknown,
       ),
-    ])
+    ]);
   },
-})
+});

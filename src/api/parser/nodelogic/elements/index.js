@@ -6,4 +6,12 @@ import { _leafgnav } from "./leafgnav.js";
 import { _leafpopupview } from "./leafpopupview.js";
 import { _leafelement } from "./leafelement.js";
 
-export { _leafdeckspade, _leafdeckheart, _leafdeckdiamond, _leafdeckclub, _leafgnav, _leafpopupview, _leafelement };
+export {
+  _leafdeckspade,
+  _leafdeckheart,
+  _leafdeckdiamond,
+  _leafdeckclub,
+  _leafgnav,
+  _leafpopupview,
+  _leafelement,
+};

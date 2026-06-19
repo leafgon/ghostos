@@ -2,12 +2,40 @@
 //import Base64 from 'crypto-js/enc-base64';
 //import sjcl from 'sjcl';
 //import gql from 'graphql-tag';
-import {v4 as uuidv4} from 'uuid';
-import {createGQLClient} from '../../graphql/client.js'; //'../../lib/graphql/client';
+import { createGQLClient } from "../../graphql/client.js"; //'../../lib/graphql/client';
 
-const endpoint_subs = process.env.LEAFGON_ENDPOINT_SUBS || "https://gdb.leafgon.com/sgraphql";
-const websocket_subs = process.env.LEAFGON_WEBSOCKET_SUBS || "wss://gdb.leafgon.com/sgraphql";
-const endpoint_qm = process.env.LEAFGON_ENDPOINT_QM || "https://gdb.leafgon.com/qmgraphql";
+const defaultLEAFgqlEndpoints = Object.freeze({
+  endpoint_subs: process.env.LEAFGON_ENDPOINT_SUBS || "https://www.leafgon.com/sgraphql",
+  websocket_subs: process.env.LEAFGON_WEBSOCKET_SUBS || "wss://www.leafgon.com/sgraphql",
+  endpoint_qm: process.env.LEAFGON_ENDPOINT_QM || "https://www.leafgon.com/qmgraphql",
+});
+let endpoint_subs = defaultLEAFgqlEndpoints.endpoint_subs;
+let websocket_subs = defaultLEAFgqlEndpoints.websocket_subs;
+let endpoint_qm = defaultLEAFgqlEndpoints.endpoint_qm;
+
+const getLEAFgqlEndpoints = () => ({
+  endpoint_subs,
+  websocket_subs,
+  endpoint_qm,
+});
+
+const setLEAFgqlEndpoints = ({
+  endpoint_subs: nextEndpointSubs,
+  websocket_subs: nextWebsocketSubs,
+  endpoint_qm: nextEndpointQm,
+} = {}) => {
+  if (typeof nextEndpointSubs === "string") {
+    endpoint_subs = nextEndpointSubs;
+  }
+  if (typeof nextWebsocketSubs === "string") {
+    websocket_subs = nextWebsocketSubs;
+  }
+  if (typeof nextEndpointQm === "string") {
+    endpoint_qm = nextEndpointQm;
+  }
+
+  return getLEAFgqlEndpoints();
+};
 //const endpoint_subs = "https://www.leafgon.com:10001/sgraphql";
 //const websocket_subs = "wss://www.leafgon.com:10001/sgraphql";
 //const endpoint_qm = "https://www.leafgon.com:10001/qmgraphql";
@@ -21,8 +49,8 @@ const getLEAFgqlSubs = (graph) => {
   //const nfilter = `{appid: {eq: "${appid}"}}`
   //const efilter = `{appid: {eq: "${appid}"}}`
   //const nfilter = appid_str ? `{ appid: {eq: "${appid_str}"} }` : '{}';
-  const nfilter = '{}';
-  const efilter = '{}';
+  const nfilter = "{}";
+  const efilter = "{}";
   const SUBS_GRAPH = `
     subscription {graph:
       getGraph(domain: "${graph.domain}", appid: "${graph.appid}", nfilter: ${nfilter}, efilter: ${efilter}) {
@@ -80,15 +108,6 @@ const getLEAFgqlStrDelNode = (node_uuid) => {
   return MUT_DelNode;
 };
 
-const getLEAFgqlStrDelEdge = (edge_uuid) => {
-  const MUT_DelEdge = `
-    mutation {
-      deleteEdge(efilter: {uuid: {eq: "${edge_uuid}"}}) {edge {uuid}}
-    }
-  `;
-  return MUT_DelEdge;
-};
-
 const MUT_DELNODE = `mutation DeleteNode($uuid: String!) {
   deleteNode(nfilter: {uuid: {eq: $uuid}}) {node {uuid}}
 }`;
@@ -114,21 +133,20 @@ const MUT_DELEDGE = `mutation DeleteEdge($uuid: String!) {
 //const MUT_ADDNODE = `mutation { addNode(input: [{label: "ala999", data: ""}]) {node {label}} }`;
 
 //const mutateAddNode2 = async ({uuid, type, position}) => {
-const mutateAddNode = async ({variables, endpoint=endpoint_qm}) => {
-
+const mutateAddNode = async ({ variables, endpoint = endpoint_qm }) => {
   const gql_qm_client = createGQLClient({
     endpoint,
     headers: {
       //'Content-Type': 'application/json', // should never use this when using fetch
-      'Accept': 'application/json'
-    }
+      Accept: "application/json",
+    },
   });
 
   const mut_options = {
     endpoint,
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id)}).replace(/\\n/g, ''),
     //query: JSON.stringify({"query": getLEAFgqlStrAddNode({id: uuid, type: type, position: position}), "variables": (variables || {})}),
-    query: JSON.stringify({"query": MUT_ADDNODE, "variables": (variables || {})}),
+    query: JSON.stringify({ query: MUT_ADDNODE, variables: variables || {} }),
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id), "variables": (variables || {})}),
     //query: MUT_DELNODE,
     //query: `mutation DeleteNode($uuid: String!) {
@@ -137,48 +155,50 @@ const mutateAddNode = async ({variables, endpoint=endpoint_qm}) => {
     //variables: {
     //  uuid: el.id,
     //},
-  }
+  };
   let qmresponse;
   try {
     qmresponse = await gql_qm_client.query(
       mut_options,
-      //(data) => { 
+      //(data) => {
       //  console.log('gql_qm_client:query completed with sucess: ', data);
       //},
-      //(data) => { 
+      //(data) => {
       // console.log('gql_qm_client:query completed with error: ', data);
       //},
     );
     //.then( () => {
     //  console.log(qmresponse.data);
     //});
-    if (qmresponse.data)
-    {
-      console.log('mutateAddNode(): ', qmresponse.data);
+    if (qmresponse.data) {
+      console.log("mutateAddNode(): ", qmresponse.data);
     }
   } catch (e) {
-    console.log('Error mutateAddNode(): ', e);
+    console.log("Error mutateAddNode(): ", e);
   }
 };
 
-const mutateDelNode = async ({node_uuid, endpoint=endpoint_qm}) => {
+const mutateDelNode = async ({ node_uuid, endpoint = endpoint_qm }) => {
   const gql_qm_client = createGQLClient({
     endpoint,
     headers: {
       //'Content-Type': 'application/json', // should never use this when using fetch
-      'Accept': 'application/json'
-    }
+      Accept: "application/json",
+    },
   });
 
   //const querystr = MUT_DELNODE; // getLEAFgqlStrDelNode(el.id);
   //const variables = {};
-  //const test_query_str1 = JSON.stringify({"query": getLEAFgqlStrDelNode(node_uuid), "variables": (variables || {})}); 
-  //const test_query_str2 = JSON.stringify({"query": MUT_DELNODE, "variables": ({uuid: node_uuid} || {})}); 
+  //const test_query_str1 = JSON.stringify({"query": getLEAFgqlStrDelNode(node_uuid), "variables": (variables || {})});
+  //const test_query_str2 = JSON.stringify({"query": MUT_DELNODE, "variables": ({uuid: node_uuid} || {})});
   const mut_options = {
     endpoint,
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id)}).replace(/\\n/g, ''),
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(node_uuid), "variables": (variables || {})}),
-    query: JSON.stringify({"query": MUT_DELNODE, "variables": ({uuid: node_uuid} || {})}).replace(/\\n/g, ''),
+    query: JSON.stringify({ query: MUT_DELNODE, variables: { uuid: node_uuid } }).replace(
+      /\\n/g,
+      "",
+    ),
     //query: MUT_DELNODE,
     //query: `mutation DeleteNode($uuid: String!) {
     //  deleteNode(nfilter: {uuid: {eq: $uuid}}) {node {label}}
@@ -186,45 +206,43 @@ const mutateDelNode = async ({node_uuid, endpoint=endpoint_qm}) => {
     //variables: {
     //  uuid: el.id,
     //},
-  }
+  };
   let qmresponse;
   try {
     qmresponse = await gql_qm_client.query(
       mut_options,
-      //(data) => { 
+      //(data) => {
       //  console.log('gql_qm_client:query completed with sucess: ', data);
       //},
-      //(data) => { 
+      //(data) => {
       // console.log('gql_qm_client:query completed with error: ', data);
       //},
     );
     //.then( () => {
     //  console.log(qmresponse.data);
     //});
-    if (qmresponse.data)
-    {
-      console.log('onElementsRemove(): ', qmresponse.data);
+    if (qmresponse.data) {
+      console.log("onElementsRemove(): ", qmresponse.data);
     }
   } catch (e) {
-    console.log('Error onElementsRemove(): ', e);
+    console.log("Error onElementsRemove(): ", e);
   }
-}
+};
 
-const mutateUpdateNode = async ({variables, endpoint=endpoint_qm}) => {
-
+const mutateUpdateNode = async ({ variables, endpoint = endpoint_qm }) => {
   const gql_qm_client = createGQLClient({
     endpoint,
     headers: {
       //'Content-Type': 'application/json', // should never use this when using fetch
-      'Accept': 'application/json'
-    }
+      Accept: "application/json",
+    },
   });
 
   const mut_options = {
     endpoint,
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id)}).replace(/\\n/g, ''),
     //query: JSON.stringify({"query": getLEAFgqlStrAddNode({id: uuid, type: type, position: position}), "variables": (variables || {})}),
-    query: JSON.stringify({"query": MUT_UPDATENODE, "variables": (variables || {})}),
+    query: JSON.stringify({ query: MUT_UPDATENODE, variables: variables || {} }),
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id), "variables": (variables || {})}),
     //query: MUT_DELNODE,
     //query: `mutation DeleteNode($uuid: String!) {
@@ -233,45 +251,43 @@ const mutateUpdateNode = async ({variables, endpoint=endpoint_qm}) => {
     //variables: {
     //  uuid: el.id,
     //},
-  }
+  };
   let qmresponse;
-	try {
-	  qmresponse = await gql_qm_client.query(
-	    mut_options,
-	    //(data) => { 
-	    //  console.log('gql_qm_client:query completed with sucess: ', data);
-	    //},
-	    //(data) => { 
-	    // console.log('gql_qm_client:query completed with error: ', data);
-	    //},
-	  );
-	  //.then( () => {
-	  //  console.log(qmresponse.data);
-	  //});
-	  if (qmresponse.data)
-	  {
-	    console.log('mutateUpdateNode(): ', qmresponse.data);
-	  }
-	} catch (e) {
-	  console.log('Error mutateUpdateNode(): ', e);
-	}
+  try {
+    qmresponse = await gql_qm_client.query(
+      mut_options,
+      //(data) => {
+      //  console.log('gql_qm_client:query completed with sucess: ', data);
+      //},
+      //(data) => {
+      // console.log('gql_qm_client:query completed with error: ', data);
+      //},
+    );
+    //.then( () => {
+    //  console.log(qmresponse.data);
+    //});
+    if (qmresponse.data) {
+      console.log("mutateUpdateNode(): ", qmresponse.data);
+    }
+  } catch (e) {
+    console.log("Error mutateUpdateNode(): ", e);
+  }
 };
 
-const mutateAddEdge = async ({variables, endpoint=endpoint_qm}) => {
-
+const mutateAddEdge = async ({ variables, endpoint = endpoint_qm }) => {
   const gql_qm_client = createGQLClient({
     endpoint,
     headers: {
       //'Content-Type': 'application/json', // should never use this when using fetch
-      'Accept': 'application/json'
-    }
+      Accept: "application/json",
+    },
   });
 
   const mut_options = {
     endpoint,
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id)}).replace(/\\n/g, ''),
     //query: JSON.stringify({"query": getLEAFgqlStrAddNode({id: uuid, type: type, position: position}), "variables": (variables || {})}),
-    query: JSON.stringify({"query": MUT_ADDEDGE, "variables": (variables || {})}),
+    query: JSON.stringify({ query: MUT_ADDEDGE, variables: variables || {} }),
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id), "variables": (variables || {})}),
     //query: MUT_DELNODE,
     //query: `mutation DeleteNode($uuid: String!) {
@@ -280,48 +296,49 @@ const mutateAddEdge = async ({variables, endpoint=endpoint_qm}) => {
     //variables: {
     //  uuid: el.id,
     //},
-  }
+  };
   let qmresponse;
   try {
     qmresponse = await gql_qm_client.query(
       mut_options,
-      //(data) => { 
+      //(data) => {
       //  console.log('gql_qm_client:query completed with sucess: ', data);
       //},
-      //(data) => { 
+      //(data) => {
       // console.log('gql_qm_client:query completed with error: ', data);
       //},
     );
     //.then( () => {
     //  console.log(qmresponse.data);
     //});
-    if (qmresponse.data)
-    {
-      console.log('mutateAddEdge(): ', qmresponse.data);
+    if (qmresponse.data) {
+      console.log("mutateAddEdge(): ", qmresponse.data);
     }
   } catch (e) {
-    console.log('Error mutateAddEdge(): ', e);
+    console.log("Error mutateAddEdge(): ", e);
   }
 };
 
-const mutateDelEdge = async ({edge_uuid, endpoint=endpoint_qm}) => {
+const mutateDelEdge = async ({ edge_uuid, endpoint = endpoint_qm }) => {
   const gql_qm_client = createGQLClient({
     endpoint,
     headers: {
       //'Content-Type': 'application/json', // should never use this when using fetch
-      'Accept': 'application/json'
-    }
+      Accept: "application/json",
+    },
   });
 
   //const querystr = MUT_DELNODE; // getLEAFgqlStrDelNode(el.id);
-  const variables = {};
-  //const test_query_str1 = JSON.stringify({"query": getLEAFgqlStrDelEdge(edge_uuid), "variables": (variables || {})}); 
-  //const query_str = JSON.stringify({"query": MUT_DELEDGE, "variables": ({uuid: edge_uuid} || {})}).replace(/\\n/g, ''); 
+  //const test_query_str1 = JSON.stringify({"query": getLEAFgqlStrDelEdge(edge_uuid), "variables": (variables || {})});
+  //const query_str = JSON.stringify({"query": MUT_DELEDGE, "variables": ({uuid: edge_uuid} || {})}).replace(/\\n/g, '');
   const mut_options = {
     endpoint,
     //query: JSON.stringify({"query": getLEAFgqlStrDelNode(el.id)}).replace(/\\n/g, ''),
     //query: JSON.stringify({"query": getLEAFgqlStrDelEdge(edge_uuid), "variables": (variables || {})}),
-    query: JSON.stringify({"query": MUT_DELEDGE, "variables": ({uuid: edge_uuid} || {})}).replace(/\\n/g, ''),
+    query: JSON.stringify({ query: MUT_DELEDGE, variables: { uuid: edge_uuid } }).replace(
+      /\\n/g,
+      "",
+    ),
     //query: MUT_DELNODE,
     //query: `mutation DeleteNode($uuid: String!) {
     //  deleteNode(nfilter: {uuid: {eq: $uuid}}) {node {label}}
@@ -329,28 +346,45 @@ const mutateDelEdge = async ({edge_uuid, endpoint=endpoint_qm}) => {
     //variables: {
     //  uuid: el.id,
     //},
-  }
+  };
   let qmresponse;
   try {
     qmresponse = await gql_qm_client.query(
       mut_options,
-      //(data) => { 
+      //(data) => {
       //  console.log('gql_qm_client:query completed with sucess: ', data);
       //},
-      //(data) => { 
+      //(data) => {
       // console.log('gql_qm_client:query completed with error: ', data);
       //},
     );
     //.then( () => {
     //  console.log(qmresponse.data);
     //});
-    if (qmresponse.data)
-    {
-      console.log('onElementsRemove(): ', qmresponse.data);
+    if (qmresponse.data) {
+      console.log("onElementsRemove(): ", qmresponse.data);
     }
   } catch (e) {
-    console.log('Error onElementsRemove(): ', e);
+    console.log("Error onElementsRemove(): ", e);
   }
-}
+};
 
-export {getLEAFgqlStrAddNode, getLEAFgqlStrUpdateNode, getLEAFgqlStrDelNode, getLEAFgqlSubs, mutateUpdateNode, mutateAddNode, mutateDelNode, mutateAddEdge, mutateDelEdge, MUT_UPDATENODE, MUT_ADDNODE, MUT_DELNODE, endpoint_subs, websocket_subs, endpoint_qm};
+export {
+  getLEAFgqlEndpoints,
+  setLEAFgqlEndpoints,
+  getLEAFgqlStrAddNode,
+  getLEAFgqlStrUpdateNode,
+  getLEAFgqlStrDelNode,
+  getLEAFgqlSubs,
+  mutateUpdateNode,
+  mutateAddNode,
+  mutateDelNode,
+  mutateAddEdge,
+  mutateDelEdge,
+  MUT_UPDATENODE,
+  MUT_ADDNODE,
+  MUT_DELNODE,
+  endpoint_subs,
+  websocket_subs,
+  endpoint_qm,
+};

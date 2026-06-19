@@ -1,12 +1,12 @@
-import type { Debug, SerializeToJS, SerializeToString } from '../typeClasses'
-import type { PLString } from './string/PLString'
+import type { Debug, SerializeToJS, SerializeToString } from "../typeClasses";
+import type { PLString } from "./string/PLString";
 
 export interface PLBase extends SerializeToJS<unknown>, SerializeToString, Debug {
-  toString(): string
+  toString(): string;
 
-  toJS(): any
+  toJS(): any;
 
-  toJSON(): any
+  toJSON(): any;
 
-  debugTypeOf(): PLString
+  debugTypeOf(): PLString;
 }

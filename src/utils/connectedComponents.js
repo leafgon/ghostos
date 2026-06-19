@@ -6,10 +6,10 @@
 function isGraph(value) {
   return (
     value !== null &&
-    typeof value === 'object' &&
-    typeof value.addUndirectedEdgeWithKey === 'function' &&
-    typeof value.dropNode === 'function' &&
-    typeof value.multi === 'boolean'
+    typeof value === "object" &&
+    typeof value.addUndirectedEdgeWithKey === "function" &&
+    typeof value.dropNode === "function" &&
+    typeof value.multi === "boolean"
   );
 }
 
@@ -57,7 +57,7 @@ class DFSStack {
 // The actual connectedComponents function
 export function connectedComponents(graph) {
   if (!isGraph(graph))
-    throw new Error('connectedComponents: the given graph is not a valid graphology instance.');
+    throw new Error("connectedComponents: the given graph is not a valid graphology instance.");
 
   if (!graph.order) return [];
 
@@ -79,4 +79,4 @@ export function connectedComponents(graph) {
   });
 
   return components;
-} 
+}

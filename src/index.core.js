@@ -15,27 +15,72 @@ import { analyzeLEAFGraph } from "./api/parser/leaf.js";
 import { LEAFIOmetamodel } from "./api/metamodel.js";
 import { _leafstdlib_dataflow_api } from "./api/metamodel.js";
 import { _breezyforeststdlib_hierarchy } from "./api/metamodel.js";
-import { createGQLClient } from './graphql/client.js';
+import { createGQLClient } from "./graphql/client.js";
 import { doBottle } from "./api/parser/nodelogic/datautils/bottling.js";
 import { doUnbottle } from "./api/parser/nodelogic/datautils/bottling.js";
-import { destroySoundStageNode } from './api/parser/nodelogic/elements/library/sound_lib.js';
-import { initializeSoundStage } from './api/parser/nodelogic/elements/library/sound_lib.js';
-import { parseJsonToLEAFlisp } from './api/parser/nodelogic/wizardry/leaflisp.js';
-import { runLEAFlispcode } from './api/parser/nodelogic/wizardry/leaflisp.js';
-import { SHA1 } from './api/utils/crypto.js';
-import { etaTreeForest } from './api/parser/etatreeforest.js';
-import { encodeUnicode } from './api/utils/leafbase64.js';
-import { decodeUnicode } from './api/utils/leafbase64.js';
-import { fetchMultiKeyedData } from './api/utils/fetchnodedata.js';
-import { setMultiKeyedData } from './api/utils/fetchnodedata.js';
-import { mutateUpdateNode } from './api/leafio/leafgql.js';
-import { mutateAddNode } from './api/leafio/leafgql.js';
-import { mutateDelNode } from './api/leafio/leafgql.js';
-import { mutateAddEdge } from './api/leafio/leafgql.js';
-import { mutateDelEdge } from './api/leafio/leafgql.js';
-import { _breezyforeststdlib_name } from './api/metamodel.js';
-import { _edge_handle_dict } from './api/metamodel.js';
-import { _edge_style_dict } from './api/metamodel.js';
-import { _leafgraph } from './api/parser/nodelogic/abstraction/index.js';
-import { _leafelement } from './api/parser/nodelogic/elements/index.js';
-export { executeLEAFLogic, executeLEAFLogicInSync, subscribeToLEAFLogic, driveDataflowByCtrlflow, parseAddressableGraph, initializeLEAFlakeGQLClient, init_gRuntimeLEAFlisp, runtimeEtaTree, etaReduceDataflowComponent, initLEAFIOapi, initializeMasterSubsDirectory, initializeSubsMain, reconstructLEAFGraph, analyzeLEAFGraph, LEAFIOmetamodel, _leafstdlib_dataflow_api, _breezyforeststdlib_hierarchy, createGQLClient, doBottle, doUnbottle, destroySoundStageNode, initializeSoundStage, parseJsonToLEAFlisp, runLEAFlispcode, SHA1, etaTreeForest, encodeUnicode, decodeUnicode, fetchMultiKeyedData, setMultiKeyedData, mutateUpdateNode, mutateAddNode, mutateDelNode, mutateAddEdge, mutateDelEdge, _breezyforeststdlib_name, _edge_handle_dict, _edge_style_dict, _leafgraph, _leafelement };
+import { destroySoundStageNode } from "./api/parser/nodelogic/elements/library/sound_lib.js";
+import { initializeSoundStage } from "./api/parser/nodelogic/elements/library/sound_lib.js";
+import { parseJsonToLEAFlisp } from "./api/parser/nodelogic/wizardry/leaflisp.js";
+import { runLEAFlispcode } from "./api/parser/nodelogic/wizardry/leaflisp.js";
+import { SHA1 } from "./api/utils/crypto.js";
+import { etaTreeForest } from "./api/parser/etatreeforest.js";
+import { encodeUnicode } from "./api/utils/leafbase64.js";
+import { decodeUnicode } from "./api/utils/leafbase64.js";
+import { fetchMultiKeyedData } from "./api/utils/fetchnodedata.js";
+import { setMultiKeyedData } from "./api/utils/fetchnodedata.js";
+import { mutateUpdateNode } from "./api/leafio/leafgql.js";
+import { mutateAddNode } from "./api/leafio/leafgql.js";
+import { mutateDelNode } from "./api/leafio/leafgql.js";
+import { mutateAddEdge } from "./api/leafio/leafgql.js";
+import { mutateDelEdge } from "./api/leafio/leafgql.js";
+import { getLEAFgqlEndpoints } from "./api/leafio/leafgql.js";
+import { setLEAFgqlEndpoints } from "./api/leafio/leafgql.js";
+import { _breezyforeststdlib_name } from "./api/metamodel.js";
+import { _edge_handle_dict } from "./api/metamodel.js";
+import { _edge_style_dict } from "./api/metamodel.js";
+import { _leafgraph } from "./api/parser/nodelogic/abstraction/index.js";
+import { _leafelement } from "./api/parser/nodelogic/elements/index.js";
+export {
+  executeLEAFLogic,
+  executeLEAFLogicInSync,
+  subscribeToLEAFLogic,
+  driveDataflowByCtrlflow,
+  parseAddressableGraph,
+  initializeLEAFlakeGQLClient,
+  init_gRuntimeLEAFlisp,
+  runtimeEtaTree,
+  etaReduceDataflowComponent,
+  initLEAFIOapi,
+  initializeMasterSubsDirectory,
+  initializeSubsMain,
+  reconstructLEAFGraph,
+  analyzeLEAFGraph,
+  LEAFIOmetamodel,
+  _leafstdlib_dataflow_api,
+  _breezyforeststdlib_hierarchy,
+  createGQLClient,
+  doBottle,
+  doUnbottle,
+  destroySoundStageNode,
+  initializeSoundStage,
+  parseJsonToLEAFlisp,
+  runLEAFlispcode,
+  SHA1,
+  etaTreeForest,
+  encodeUnicode,
+  decodeUnicode,
+  fetchMultiKeyedData,
+  setMultiKeyedData,
+  mutateUpdateNode,
+  mutateAddNode,
+  mutateDelNode,
+  mutateAddEdge,
+  mutateDelEdge,
+  getLEAFgqlEndpoints,
+  setLEAFgqlEndpoints,
+  _breezyforeststdlib_name,
+  _edge_handle_dict,
+  _edge_style_dict,
+  _leafgraph,
+  _leafelement,
+};

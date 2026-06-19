@@ -1,16 +1,17 @@
 // code taken from the implementation of graphqurl (https://github.com/hasura/graphqurl.git)
 // modified by spark@leautomaton.com to function in leaf_editor
-// 
-import { cloneObject, wsScheme } from './utils.js';
-import { GQL_CONNECTION_INIT, GQL_START, GQL_STOP, GRAPHQL_SUBSCRIPTIONS_PROTOCOL, handler as wsEventHandler } from './events.js';
+//
+import { cloneObject, wsScheme } from "./utils.js";
+import {
+  GQL_CONNECTION_INIT,
+  GQL_START,
+  GQL_STOP,
+  GRAPHQL_SUBSCRIPTIONS_PROTOCOL,
+  handler as wsEventHandler,
+} from "./events.js";
 
-const createGQLClient = options => {
-  const {
-    endpoint,
-    websocket,
-    headers,
-    hook,
-  } = options;
+const createGQLClient = (options) => {
+  const { endpoint, websocket, headers, hook } = options;
 
   const clientContext = {
     endpoint,
@@ -26,36 +27,25 @@ const createGQLClient = options => {
   };
 
   const executeQuery = async (queryOptions, successCallback, errorCallback) => {
-    const {
-      query,
-      variables,
-      headers: headerOverrides,
-    } = queryOptions;
+    const { query, headers: headerOverrides } = queryOptions;
 
     const headers = {
       ...clientContext.headers,
       ...(headerOverrides || {}),
     };
-    const isExistContentTypeKey = Object.keys(headers).some(key => /content-type/gi.test(key));
     // spark_dev_note: having the content-type specified on graphql queries/mutations isn't compatible with leaf server
-    //if (!isExistContentTypeKey) {
-    //  headers['Content-Type'] = 'application/json';
-    //}
 
     try {
       let response;
       //response = await fetch(clientContext.endpoint, {method: 'POST', body: JSON.stringify({"query": "query {getGraph(userid:\"1\", appid:\"2\") {userid appid nodes {uuid label data}}}"})});
       console.log("graphql/client.js executeQuery: ", query);
-      response = await fetch(
-        clientContext.endpoint,
-        {
-          method: 'POST',
-          headers: headers, // spark changed from headers, -> headers: headers,
-          credentials: 'include', // https://stackoverflow.com/questions/34558264/fetch-api-with-cookie
-          //body: JSON.stringify({query, variables: (variables || {})}),
-          body: query, 
-        },
-      );
+      response = await fetch(clientContext.endpoint, {
+        method: "POST",
+        headers: headers, // spark changed from headers, -> headers: headers,
+        credentials: "include", // https://stackoverflow.com/questions/34558264/fetch-api-with-cookie
+        //body: JSON.stringify({query, variables: (variables || {})}),
+        body: query,
+      });
       const responseObj = await response.json();
       if (hook) {
         hook(responseObj);
@@ -88,26 +78,29 @@ const createGQLClient = options => {
 
   const makeWsClient = async () => {
     try {
-        // https://github.com/heineiuo/isomorphic-ws
-        const wsConnection = new WebSocket(clientContext.websocket.endpoint, GRAPHQL_SUBSCRIPTIONS_PROTOCOL);
-        wsConnection.onerror = (e) => {
-            console.log("WebSocket connection error:", e);
-        };
-        wsConnection.onclose = (e) => {
-            console.log("WebSocket connection closed:", e);
-        };
-        return wsConnection;
+      // https://github.com/heineiuo/isomorphic-ws
+      const wsConnection = new WebSocket(
+        clientContext.websocket.endpoint,
+        GRAPHQL_SUBSCRIPTIONS_PROTOCOL,
+      );
+      wsConnection.onerror = (e) => {
+        console.log("WebSocket connection error:", e);
+      };
+      wsConnection.onclose = (e) => {
+        console.log("WebSocket connection closed:", e);
+      };
+      return wsConnection;
     } catch (e) {
-        console.log(e);
-        throw new Error('Failed to establish the WebSocket connection: ', e);
+      console.log(e);
+      throw new Error("Failed to establish the WebSocket connection: ", e);
     }
   };
 
-  const sendWsEvent = data => {
+  const sendWsEvent = (data) => {
     clientContext.websocket.client.send(JSON.stringify(data));
   };
 
-  const setWsClient = _wsClient => {
+  const setWsClient = (_wsClient) => {
     clientContext.websocket.client = _wsClient;
 
     if (clientContext.websocket.shouldRetry) {
@@ -116,7 +109,7 @@ const createGQLClient = options => {
       };
     }
 
-    _wsClient.addEventListener('open', () => {
+    _wsClient.addEventListener("open", () => {
       const payload = {
         ...clientContext.websocket.parameters,
         headers: {
@@ -130,20 +123,22 @@ const createGQLClient = options => {
       });
     });
 
-    _wsClient.addEventListener('message', event => {
+    _wsClient.addEventListener("message", (event) => {
       wsEventHandler(clientContext.websocket, event);
     });
   };
 
   const establishWS = () => {
-    makeWsClient().then((_wsClient) => {
-      console.log('setting websocket for LEAF graphql subscription');
-      setWsClient(_wsClient);
-    }).catch(e => {
-      console.error(e);
-    });
+    makeWsClient()
+      .then((_wsClient) => {
+        console.log("setting websocket for LEAF graphql subscription");
+        setWsClient(_wsClient);
+      })
+      .catch((e) => {
+        console.error(e);
+      });
     //setWsClient(makeWsClient());
-  }
+  };
 
   if (websocket) {
     establishWS();
@@ -151,7 +146,7 @@ const createGQLClient = options => {
 
   const subscribe = (subscriptionOptions, successCallback, errorCallback) => {
     if (!clientContext.websocket.client) {
-      console.log('WebSocket connection has not been established');
+      console.log("WebSocket connection has not been established");
       return;
     }
 
@@ -165,7 +160,7 @@ const createGQLClient = options => {
     } = subscriptionOptions;
 
     clientContext.websocket.subscriptions[operationId] = {
-      onGraphQLData: data => {
+      onGraphQLData: (data) => {
         if (onGraphQLData) {
           onGraphQLData(data);
         }
@@ -173,10 +168,12 @@ const createGQLClient = options => {
           successCallback(data);
         }
       },
-      onGraphQLComplete: data => {
-          onGraphQLComplete && onGraphQLComplete(data);
+      onGraphQLComplete: (data) => {
+        if (onGraphQLComplete) {
+          onGraphQLComplete(data);
+        }
       },
-      onGraphQLError: data => {
+      onGraphQLError: (data) => {
         if (onGraphQLError) {
           onGraphQLError(data);
         }
@@ -205,12 +202,14 @@ const createGQLClient = options => {
     };
   };
 
-  const updateHeaders = newHeaders => {
+  const updateHeaders = (newHeaders) => {
     clientContext.headers = cloneObject(newHeaders);
     if (clientContext.websocket.client) {
-      makeWsClient().then(setWsClient).catch(e => {
-        console.error(e);
-      });
+      makeWsClient()
+        .then(setWsClient)
+        .catch((e) => {
+          console.error(e);
+        });
     }
   };
 

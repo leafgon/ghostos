@@ -1,20 +1,20 @@
-import { RuntimeError } from '../dataTypes/RuntimeError'
-import { PLLiteral, PLLiterals } from '../types'
+import { RuntimeError } from "../dataTypes/RuntimeError";
+import { PLLiteral, PLLiterals } from "../types";
 
 const notImplementedConstructor = (name: string) => () => {
-  throw new RuntimeError(`${name} is not implemented.`)
-}
+  throw new RuntimeError(`${name} is not implemented.`);
+};
 
 const notImplementedLiteral = (name: string): PLLiteral => ({
   parser: () => {
-    throw new RuntimeError(`${name} is not implemented.`)
+    throw new RuntimeError(`${name} is not implemented.`);
   },
   factory: notImplementedConstructor(name),
-})
+});
 
 export const defaultLiterals: PLLiterals = {
   Bool: {
-    parser: (x: string): boolean => x === 'true',
+    parser: (x: string): boolean => x === "true",
     factory: Boolean,
   },
   Int: {
@@ -31,8 +31,8 @@ export const defaultLiterals: PLLiterals = {
   },
   FractionNumber: {
     parser: (str: string): string => str,
-    factory: notImplementedConstructor('FractionNumber'),
+    factory: notImplementedConstructor("FractionNumber"),
   },
-  Vector: notImplementedLiteral('Vector'),
-  HashMap: notImplementedLiteral('HashMap'),
-}
+  Vector: notImplementedLiteral("Vector"),
+  HashMap: notImplementedLiteral("HashMap"),
+};

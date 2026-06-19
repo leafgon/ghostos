@@ -1,4 +1,4 @@
-import type { PLBool } from '../data/bool/PLBool'
+import type { PLBool } from "../data/bool/PLBool";
 
 /**
  * a.equals(a) === true (reflexivity)
@@ -7,7 +7,7 @@ import type { PLBool } from '../data/bool/PLBool'
  */
 export interface PartialEq<T> {
   // Setoid a => a ~> a -> Boolean
-  equals(b: T): PLBool
+  equals(b: T): PLBool;
 }
 
 export enum Ordering {
@@ -17,13 +17,13 @@ export enum Ordering {
 }
 
 export interface PartialOrd<T extends PartialEq<T>> {
-  partialCmp(other: T): Ordering
+  partialCmp(other: T): Ordering;
 
-  lt?(other: T): PLBool
+  lt?(other: T): PLBool;
 
-  le?(other: T): PLBool
+  le?(other: T): PLBool;
 
-  gt?(other: T): PLBool
+  gt?(other: T): PLBool;
 
-  ge?(other: T): PLBool
+  ge?(other: T): PLBool;
 }

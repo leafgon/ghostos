@@ -1,3 +1,3 @@
-import { SerializeToJS } from '../typeClasses/baseType'
+import { SerializeToJS } from "../typeClasses/baseType";
 
-export const unboxing = (x: SerializeToJS<unknown>): unknown => x.toJS()
+export const unboxing = (x: SerializeToJS<unknown>): unknown => x.toJS();
