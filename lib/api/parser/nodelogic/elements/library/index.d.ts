@@ -15,6 +15,7 @@ export namespace ElemCacheKeyLUT {
     export { _mediaplayer_cachekeys as mediaplayer };
     export { _sound_cachekeys as sound };
     export { _html_cachekeys as html };
+    export { _hermes_cachekeys as hermes };
 }
 import { cachekeys as _http_cachekeys } from "./http.js";
 import { cachekeys as _href_cachekeys } from "./href.js";
@@ -23,3 +24,4 @@ import { cachekeys as _prompt_cachekeys } from "./prompt.js";
 import { cachekeys as _mediaplayer_cachekeys } from "./mediaplayer.js";
 import { cachekeys as _sound_cachekeys } from "./sound.js";
 import { cachekeys as _html_cachekeys } from "./html.js";
+import { cachekeys as _hermes_cachekeys } from "./hermes.js";
