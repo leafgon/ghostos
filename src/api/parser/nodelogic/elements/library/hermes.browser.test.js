@@ -26,6 +26,33 @@ const TEST_COMMAND = {
   expiresAt: "2026-07-02T12:10:00Z",
 };
 
+const EMPTY_SENTINEL_INPUTS = [
+  {
+    label: "empty_bottle + empty_data",
+    bottle: { _bname: "empty_bottle", _content: "empty_data" },
+  },
+  {
+    label: "empty_bottle + null",
+    bottle: { _bname: "empty_bottle", _content: null },
+  },
+  {
+    label: "empty_bottle + undefined",
+    bottle: { _bname: "empty_bottle", _content: undefined },
+  },
+  {
+    label: "empty + empty_data",
+    bottle: { _bname: "empty", _content: "empty_data" },
+  },
+  {
+    label: "empty + null",
+    bottle: { _bname: "empty", _content: null },
+  },
+  {
+    label: "empty + undefined",
+    bottle: { _bname: "empty", _content: undefined },
+  },
+];
+
 const makeConfigLambda = (config) => {
   return (_input$objArr, controlflow$obj) => {
     return {
@@ -121,6 +148,27 @@ const runTickCollect = async ({
   }
 };
 
+const runCtrlTickCollectAllOutputs = async ({
+  output$obj,
+  datainput$,
+  ctrlinput$,
+  dataIn,
+  ctrlIn = { _bname: "accio" },
+}) => {
+  const outputs = [];
+  const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+  const ctrlSub = output$obj._control._stream.subscribe(() => {});
+  try {
+    datainput$.next(dataIn);
+    ctrlinput$.next(ctrlIn);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return outputs;
+  } finally {
+    ctrlSub.unsubscribe();
+    outSub.unsubscribe();
+  }
+};
+
 describe("hermes leafelement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -134,7 +182,7 @@ describe("hermes leafelement", () => {
     expect(typeof hermesProps.datalogic.post).toBe("function");
   });
 
-  it("routes upstream input to Hermes write API and emits elementio success bottle", async () => {
+  it("mode=write with valid command payload calls write fetch once and emits success", async () => {
     global.fetch = vi
       .fn()
       .mockResolvedValue(makeJsonResponse(202, { status: "accepted", requestId: "req-1" }));
@@ -159,6 +207,69 @@ describe("hermes leafelement", () => {
     expect(output._content.data.status).toBe("accepted");
     expect(output._content.meta.instanceId).toBe(TEST_INSTANCE_ID);
     expect(output._content.meta.commandId).toBe(TEST_COMMAND.commandId);
+  });
+
+  it.each(EMPTY_SENTINEL_INPUTS)(
+    "mode=write with sentinel input skips write API call and emits no output ($label)",
+    async ({ bottle }) => {
+      global.fetch = vi.fn();
+      const { output$obj, datainput$, ctrlinput$ } = initHermesFlow();
+      const outputs = await runCtrlTickCollectAllOutputs({
+        output$obj,
+        datainput$,
+        ctrlinput$,
+        dataIn: bottle,
+      });
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(outputs).toHaveLength(0);
+    },
+  );
+
+  it("mode=both with sentinel input skips write and still runs read path", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      makeJsonResponse(200, {
+        schemaVersion: "v1",
+        events: [
+          {
+            eventId: "evt_both_1",
+            sequence: 1,
+            instanceId: TEST_INSTANCE_ID,
+            payload: { text: "read-only-event" },
+          },
+        ],
+        nextCursor: "cursor-both-1",
+        hasMore: false,
+        requestId: "req-read-both-1",
+      }),
+    );
+
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "both",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+      }),
+    };
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const output = await runTick({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: { _bname: "empty", _content: null },
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [requestUrl, requestInit] = global.fetch.mock.calls[0];
+    expect(requestHref(requestUrl)).toContain("/api/hermes/integration/events");
+    expect(requestInit.method).toBe("GET");
+    expect(output._bname).toBe("elementio");
+    expect(output._content.mode).toBe("read");
+    expect(output._content.ok).toBe(true);
+    expect(output._content.data.event.eventId).toBe("evt_both_1");
   });
 
   it("routes subscribed Hermes events to output stream in read mode", async () => {
@@ -319,5 +430,30 @@ describe("hermes leafelement", () => {
     expect(output[0]._content.error.code).toBe("validation_failed");
     expect(output[0]._content.error.message).toContain("commandId");
     expect(output[0]._content.error.status).toBe(400);
+  });
+
+  it("mode=write with explicit error bottle skips write and preserves error passthrough", async () => {
+    global.fetch = vi.fn();
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow();
+    const upstreamErrorBottle = {
+      _bname: "error",
+      _content: {
+        type: "critical",
+        code: "upstream_error",
+        message: "Simulated upstream failure",
+      },
+    };
+
+    const output = await runTick({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: upstreamErrorBottle,
+    });
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(output._bname).toBe("error");
+    expect(output._content.code).toBe("upstream_error");
+    expect(output._content.message).toBe("Simulated upstream failure");
   });
 });

@@ -314,6 +314,25 @@ const requireSnowflakeField = (value, fieldName) => {
   return normalized;
 };
 
+const isEmptyInputSentinel = (_data_in) => {
+  let normalizedData = _data_in;
+  if (Array.isArray(normalizedData) && normalizedData.length === 1) {
+    normalizedData = normalizedData[0];
+  }
+  if (!isBottle(normalizedData)) {
+    return false;
+  }
+
+  const bottleName = `${normalizedData._bname ?? ""}`.trim().toLowerCase();
+  const hasSentinelBottleName = bottleName === "empty_bottle" || bottleName === "empty";
+  if (!hasSentinelBottleName) {
+    return false;
+  }
+
+  const bottleContent = normalizedData._content;
+  return bottleContent === "empty_data" || bottleContent === null || bottleContent === undefined;
+};
+
 const normalizeWritePayload = (_data_in) => {
   let payload = isBottle(_data_in) ? _data_in._content : _data_in;
 
@@ -827,11 +846,16 @@ const initElementInterface = (_stream_cache) => {
           const nextOutputs = [];
           const upstreamErrorBottle =
             isBottle(_data_in) && _data_in._bname === "error" ? _data_in : undefined;
+          const emptyInputSentinel = isEmptyInputSentinel(_data_in);
           if (upstreamErrorBottle) {
             nextOutputs.push(upstreamErrorBottle);
           }
 
-          if (["write", "both"].includes(config.mode) && !upstreamErrorBottle) {
+          if (
+            ["write", "both"].includes(config.mode) &&
+            !upstreamErrorBottle &&
+            !emptyInputSentinel
+          ) {
             const writeOutputs = await executeWriteFlow({
               config,
               _stream_cache,
