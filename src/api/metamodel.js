@@ -584,6 +584,7 @@ const _leafstdlib_dataflow_api = (type) => {
           "directus",
           "openai",
           "rancher",
+          "hermes",
         ],
         banduplicatename: false,
         banmultiplenode: false,
