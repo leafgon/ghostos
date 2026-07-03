@@ -14,4 +14,5 @@ export namespace cachekeys {
     let CONFIG: string;
     let CURSOR: string;
     let LAST_READ_AT: string;
+    let READ_STREAM: string;
 }

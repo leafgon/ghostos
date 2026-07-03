@@ -62,6 +62,50 @@ const makeConfigLambda = (config) => {
   };
 };
 
+const makeFakeEventSourceRuntime = () => {
+  const instances = [];
+
+  class FakeEventSource {
+    constructor(url, init = {}) {
+      this.url = url;
+      this.init = init;
+      this.closed = false;
+      this.listeners = new Map();
+      instances.push(this);
+    }
+
+    addEventListener(eventName, listener) {
+      const nextListeners = this.listeners.get(eventName) ?? [];
+      nextListeners.push(listener);
+      this.listeners.set(eventName, nextListeners);
+    }
+
+    removeEventListener(eventName, listener) {
+      const nextListeners = this.listeners.get(eventName) ?? [];
+      this.listeners.set(
+        eventName,
+        nextListeners.filter((entry) => entry !== listener),
+      );
+    }
+
+    emit(eventName, payload = {}) {
+      const nextListeners = this.listeners.get(eventName) ?? [];
+      nextListeners.forEach((listener) => listener(payload));
+    }
+
+    close() {
+      this.closed = true;
+    }
+  }
+
+  return {
+    instances,
+    eventSourceFactory: (url, init) => {
+      return new FakeEventSource(url, init);
+    },
+  };
+};
+
 const makeJsonResponse = (status, body) => {
   return {
     ok: status >= 200 && status < 300,
@@ -172,6 +216,7 @@ const runCtrlTickCollectAllOutputs = async ({
 describe("hermes leafelement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    global.EventSource = undefined;
   });
 
   it("resolves hermes from _std_elements_lut", () => {
@@ -250,6 +295,7 @@ describe("hermes leafelement", () => {
         instanceId: TEST_INSTANCE_ID,
         guildId: "123456789012345678",
         channelId: "223456789012345678",
+        readTransport: "poll",
         pollIntervalMs: 0,
       }),
     };
@@ -270,6 +316,160 @@ describe("hermes leafelement", () => {
     expect(output._content.mode).toBe("read");
     expect(output._content.ok).toBe(true);
     expect(output._content.data.event.eventId).toBe("evt_both_1");
+  });
+
+  it("mode=read with readTransport=sse emits stream events without polling fetch", async () => {
+    global.fetch = vi.fn();
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const firstTickOutputs = await runCtrlTickCollectAllOutputs({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: { ignore: true },
+    });
+
+    expect(firstTickOutputs).toHaveLength(0);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(instances).toHaveLength(1);
+    expect(instances[0].url).toContain("/api/hermes/integration/events/stream");
+
+    instances[0].emit("hermes.event", {
+      data: JSON.stringify({
+        schemaVersion: "v1",
+        eventId: "evt_sse_1",
+        sequence: 1,
+        instanceId: TEST_INSTANCE_ID,
+        payload: { text: "from-sse" },
+      }),
+    });
+
+    const output = await runTick({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: { ignore: true },
+      ctrlIn: { _bname: "accio", idx: 2 },
+    });
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(output._bname).toBe("elementio");
+    expect(output._content.mode).toBe("read");
+    expect(output._content.ok).toBe(true);
+    expect(output._content.data.event.eventId).toBe("evt_sse_1");
+  });
+
+  it("mode=read with readTransport=auto falls back to poll when SSE is unavailable", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      makeJsonResponse(200, {
+        schemaVersion: "v1",
+        events: [
+          {
+            eventId: "evt_poll_fallback_1",
+            sequence: 1,
+            instanceId: TEST_INSTANCE_ID,
+            payload: { text: "poll-fallback" },
+          },
+        ],
+        nextCursor: "cursor-poll-fallback-1",
+        hasMore: false,
+        requestId: "req-poll-fallback-1",
+      }),
+    );
+
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "auto",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+      }),
+    };
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+    const output = await runTick({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: { ignore: true },
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(requestHref(global.fetch.mock.calls[0][0])).toContain("/api/hermes/integration/events");
+    expect(output._content.mode).toBe("read");
+    expect(output._content.ok).toBe(true);
+    expect(output._content.data.event.eventId).toBe("evt_poll_fallback_1");
+  });
+
+  it("mode=read with readTransport=auto falls back to poll after SSE stream error", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      makeJsonResponse(200, {
+        schemaVersion: "v1",
+        events: [
+          {
+            eventId: "evt_poll_after_error_1",
+            sequence: 1,
+            instanceId: TEST_INSTANCE_ID,
+            payload: { text: "after-stream-error" },
+          },
+        ],
+        nextCursor: "cursor-poll-after-error-1",
+        hasMore: false,
+        requestId: "req-poll-after-error-1",
+      }),
+    );
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "auto",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const firstTickOutputs = await runCtrlTickCollectAllOutputs({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: { ignore: true },
+    });
+    expect(firstTickOutputs).toHaveLength(0);
+    expect(instances).toHaveLength(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    instances[0].emit("error", { type: "error" });
+
+    const output = await runTick({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: { ignore: true },
+      ctrlIn: { _bname: "accio", idx: 2 },
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(requestHref(global.fetch.mock.calls[0][0])).toContain("/api/hermes/integration/events");
+    expect(output._content.mode).toBe("read");
+    expect(output._content.ok).toBe(true);
+    expect(output._content.data.event.eventId).toBe("evt_poll_after_error_1");
   });
 
   it("routes subscribed Hermes events to output stream in read mode", async () => {
@@ -314,6 +514,7 @@ describe("hermes leafelement", () => {
         instanceId: TEST_INSTANCE_ID,
         guildId: "123456789012345678",
         channelId: "223456789012345678",
+        readTransport: "poll",
         pollIntervalMs: 0,
       }),
     };
@@ -350,6 +551,76 @@ describe("hermes leafelement", () => {
     expect(secondOutput._content.mode).toBe("read");
     expect(secondOutput._content.ok).toBe(true);
     expect(secondOutput._content.data.event.eventId).toBe("evt_2");
+  });
+
+  it("emits read output for non-events Hermes instance responses", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      makeJsonResponse(200, {
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        status: "connected",
+        memberCount: 4,
+        requestId: "req-instance-1",
+      }),
+    );
+
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readPath: `/hermes-instances/${TEST_INSTANCE_ID}`,
+        instanceId: TEST_INSTANCE_ID,
+        readTransport: "poll",
+        pollIntervalMs: 0,
+      }),
+    };
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const output = await runTick({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: { ignore: true },
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [requestUrl, requestInit] = global.fetch.mock.calls[0];
+    expect(requestHref(requestUrl)).toContain(`/hermes-instances/${TEST_INSTANCE_ID}`);
+    expect(requestInit.method).toBe("GET");
+
+    expect(output._bname).toBe("elementio");
+    expect(output._content.mode).toBe("read");
+    expect(output._content.ok).toBe(true);
+    expect(output._content.data.event.instanceId).toBe(TEST_INSTANCE_ID);
+    expect(output._content.data.event.status).toBe("connected");
+  });
+
+  it("does not emit read output for metadata-only non-events responses", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      makeJsonResponse(200, {
+        requestId: "req-empty",
+        hasMore: false,
+      }),
+    );
+
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        instanceId: TEST_INSTANCE_ID,
+        readTransport: "poll",
+        pollIntervalMs: 0,
+      }),
+    };
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+    const outputs = await runCtrlTickCollectAllOutputs({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: { ignore: true },
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(outputs).toHaveLength(0);
   });
 
   it("fails fast with explicit deterministic error bottle for invalid read config", async () => {

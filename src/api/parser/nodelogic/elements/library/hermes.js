@@ -18,10 +18,12 @@ const cachekeys = {
   CONFIG: "_hermes_config",
   CURSOR: "_hermes_cursor",
   LAST_READ_AT: "_hermes_last_read_at",
+  READ_STREAM: "_hermes_read_stream",
 };
 
 const HERMES_CODEBASE = "ghostos/api/parser/nodelogic/elements/library/hermes.js";
 const HERMES_DEFAULT_READ_PATH = "/api/hermes/integration/events";
+const HERMES_DEFAULT_READ_STREAM_PATH = "/api/hermes/integration/events/stream";
 const HERMES_DEFAULT_WRITE_PATH = "/api/hermes/egress-commands";
 const HERMES_DEFAULT_LIMIT = 100;
 const HERMES_DEFAULT_TIMEOUT_MS = 15000;
@@ -174,6 +176,36 @@ const resolveCredentialsMode = (config) => {
   return resolved;
 };
 
+const normalizeReadTransport = (readTransportValue) => {
+  const readTransport = `${readTransportValue ?? "auto"}`.trim().toLowerCase();
+  if (["poll", "sse", "auto"].includes(readTransport)) {
+    return readTransport;
+  }
+  throw new HermesConfigError("Hermes readTransport must be one of: poll, sse, auto.", {
+    field: "readTransport",
+  });
+};
+
+const resolveEventSourceFactory = (parsedConfig) => {
+  if (typeof parsedConfig.eventSourceFactory === "function") {
+    return parsedConfig.eventSourceFactory;
+  }
+
+  const EventSourceImpl =
+    typeof parsedConfig.eventSource === "function"
+      ? parsedConfig.eventSource
+      : typeof globalThis.EventSource === "function"
+        ? globalThis.EventSource
+        : undefined;
+  if (typeof EventSourceImpl !== "function") {
+    return undefined;
+  }
+
+  return (url, init = {}) => {
+    return new EventSourceImpl(url, init);
+  };
+};
+
 const resolveHermesConfig = (rawConfig, _stream_cache) => {
   const parsedConfig = parseConfigValue(rawConfig);
   const mode = normalizeHermesMode(parsedConfig.mode);
@@ -184,8 +216,16 @@ const resolveHermesConfig = (rawConfig, _stream_cache) => {
   const readPath = trimString(
     parsedConfig.readPath ?? parsedConfig.integrationEventsPath ?? HERMES_DEFAULT_READ_PATH,
   );
+  const readStreamPath = trimString(
+    parsedConfig.readStreamPath ??
+      parsedConfig.integrationEventsStreamPath ??
+      HERMES_DEFAULT_READ_STREAM_PATH,
+  );
   const writePath = trimString(
     parsedConfig.writePath ?? parsedConfig.egressCommandsPath ?? HERMES_DEFAULT_WRITE_PATH,
+  );
+  const readTransport = normalizeReadTransport(
+    parsedConfig.readTransport ?? parsedConfig.transport ?? "auto",
   );
   const instanceId = trimString(parsedConfig.instanceId ?? "");
   const guildId = trimString(parsedConfig.guildId ?? "");
@@ -218,6 +258,7 @@ const resolveHermesConfig = (rawConfig, _stream_cache) => {
 
   const fetchImpl =
     typeof parsedConfig.fetch === "function" ? parsedConfig.fetch : globalThis.fetch;
+  const eventSourceFactory = resolveEventSourceFactory(parsedConfig);
   if (typeof fetchImpl !== "function") {
     throw new HermesConfigError("Hermes runtime requires a fetch implementation.", {
       field: "fetch",
@@ -226,6 +267,11 @@ const resolveHermesConfig = (rawConfig, _stream_cache) => {
   if (!readPath) {
     throw new HermesConfigError("Hermes readPath must be configured.", {
       field: "readPath",
+    });
+  }
+  if (!readStreamPath) {
+    throw new HermesConfigError("Hermes readStreamPath must be configured.", {
+      field: "readStreamPath",
     });
   }
   if (!writePath) {
@@ -245,12 +291,26 @@ const resolveHermesConfig = (rawConfig, _stream_cache) => {
       mode,
     });
   }
+  if (
+    ["read", "both"].includes(mode) &&
+    readTransport === "sse" &&
+    typeof eventSourceFactory !== "function"
+  ) {
+    throw new HermesConfigError(
+      "Hermes readTransport=sse requires an EventSource implementation.",
+      {
+        field: "eventSourceFactory",
+      },
+    );
+  }
 
   return {
     mode,
     baseUrl,
     readPath,
+    readStreamPath,
     writePath,
+    readTransport,
     instanceId,
     guildId,
     channelId,
@@ -262,6 +322,7 @@ const resolveHermesConfig = (rawConfig, _stream_cache) => {
     timeoutMs,
     pollIntervalMs,
     fetchImpl,
+    eventSourceFactory,
   };
 };
 
@@ -547,6 +608,57 @@ const mapApiError = ({ statusCode, payload, fallbackMessage }) => {
   };
 };
 
+const READ_RESPONSE_META_KEYS = new Set([
+  "schemaVersion",
+  "requestId",
+  "nextCursor",
+  "cursor",
+  "hasMore",
+  "events",
+  "data",
+  "instance",
+]);
+
+const isMeaningfulReadRecord = (record) => {
+  return isPlainObject(record) && Object.keys(record).length > 0;
+};
+
+const hasNonMetaReadFields = (payload) => {
+  return (
+    isPlainObject(payload) &&
+    Object.keys(payload).some((key) => {
+      return !READ_RESPONSE_META_KEYS.has(key);
+    })
+  );
+};
+
+const normalizeReadRecords = (responsePayload) => {
+  if (Array.isArray(responsePayload.events)) {
+    return responsePayload.events.filter((entry) => isMeaningfulReadRecord(entry));
+  }
+
+  if (Array.isArray(responsePayload.data)) {
+    const records = responsePayload.data.filter((entry) => isMeaningfulReadRecord(entry));
+    if (records.length > 0) {
+      return records;
+    }
+  }
+
+  if (isMeaningfulReadRecord(responsePayload.data)) {
+    return [responsePayload.data];
+  }
+
+  if (isMeaningfulReadRecord(responsePayload.instance)) {
+    return [responsePayload.instance];
+  }
+
+  if (hasNonMetaReadFields(responsePayload)) {
+    return [responsePayload];
+  }
+
+  return [];
+};
+
 const toElementSuccessOutput = ({ mode, data, meta = {} }) => {
   return {
     element: "hermes",
@@ -593,6 +705,386 @@ const toFatalErrorBottle = (error) => {
     },
     {},
   );
+};
+
+const clearReadStreamListeners = (readStreamState) => {
+  if (!isPlainObject(readStreamState) || !Array.isArray(readStreamState.detachFns)) {
+    return;
+  }
+
+  readStreamState.detachFns.forEach((detachFn) => {
+    if (typeof detachFn === "function") {
+      try {
+        detachFn();
+      } catch (_error) {
+        // Best-effort listener teardown.
+      }
+    }
+  });
+  readStreamState.detachFns = [];
+};
+
+const closeReadStream = (_stream_cache) => {
+  const readStreamState = _stream_cache[cachekeys.READ_STREAM];
+  if (!isPlainObject(readStreamState)) {
+    delete _stream_cache[cachekeys.READ_STREAM];
+    return;
+  }
+
+  clearReadStreamListeners(readStreamState);
+  if (typeof readStreamState.source?.close === "function") {
+    try {
+      readStreamState.source.close();
+    } catch (_error) {
+      // Best-effort stream teardown.
+    }
+  }
+  delete _stream_cache[cachekeys.READ_STREAM];
+};
+
+const drainReadStreamOutputs = (_stream_cache) => {
+  const readStreamState = _stream_cache[cachekeys.READ_STREAM];
+  if (!isPlainObject(readStreamState) || !Array.isArray(readStreamState.pendingOutputs)) {
+    return [];
+  }
+  if (readStreamState.pendingOutputs.length === 0) {
+    return [];
+  }
+
+  const outputs = readStreamState.pendingOutputs;
+  readStreamState.pendingOutputs = [];
+  return outputs;
+};
+
+const resolveReadCursor = ({ config, _stream_cache }) => {
+  return maybeTrimString(_stream_cache[cachekeys.CURSOR]) ?? config.cursor;
+};
+
+const resolveReadQuery = ({ config, _stream_cache, includeLimit }) => {
+  const cursor = resolveReadCursor({ config, _stream_cache });
+  return {
+    instanceId: config.instanceId,
+    guildId: config.guildId || undefined,
+    channelId: config.channelId || undefined,
+    cursor: cursor ?? undefined,
+    sinceEventId: cursor ? undefined : config.sinceEventId,
+    limit: includeLimit ? config.limit : undefined,
+  };
+};
+
+const resolveReadPollUrl = ({ config, _stream_cache }) => {
+  return resolveApiUrl({
+    path: config.readPath,
+    baseUrl: config.baseUrl,
+    query: resolveReadQuery({
+      config,
+      _stream_cache,
+      includeLimit: true,
+    }),
+  });
+};
+
+const resolveReadStreamUrl = ({ config, _stream_cache }) => {
+  return resolveApiUrl({
+    path: config.readStreamPath,
+    baseUrl: config.baseUrl,
+    query: resolveReadQuery({
+      config,
+      _stream_cache,
+      includeLimit: false,
+    }),
+  });
+};
+
+const resolveReadStreamIdentityKey = (config) => {
+  const headerEntries = Object.entries(config.requestHeaders ?? {}).sort(([left], [right]) => {
+    return left.localeCompare(right);
+  });
+
+  return JSON.stringify({
+    baseUrl: config.baseUrl,
+    readStreamPath: config.readStreamPath,
+    readTransport: config.readTransport,
+    instanceId: config.instanceId,
+    guildId: config.guildId || "",
+    channelId: config.channelId || "",
+    credentials: config.credentials,
+    requestHeaders: headerEntries,
+  });
+};
+
+const parseSsePayloadObject = (rawData) => {
+  if (isPlainObject(rawData)) {
+    return rawData;
+  }
+  if (typeof rawData !== "string") {
+    return undefined;
+  }
+
+  const trimmed = rawData.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return isPlainObject(parsed) ? parsed : undefined;
+  } catch (_error) {
+    return undefined;
+  }
+};
+
+const attachEventSourceListener = (source, eventName, listener) => {
+  if (typeof source?.addEventListener === "function") {
+    source.addEventListener(eventName, listener);
+    return () => {
+      if (typeof source?.removeEventListener === "function") {
+        source.removeEventListener(eventName, listener);
+      }
+    };
+  }
+
+  const canUseHandlerProperty =
+    source !== null &&
+    (typeof source === "object" || typeof source === "function") &&
+    ((eventName === "hermes.event" && "onmessage" in source) ||
+      (eventName === "error" && "onerror" in source));
+  if (!canUseHandlerProperty) {
+    return () => {};
+  }
+
+  const property = eventName === "error" ? "onerror" : "onmessage";
+  const previous = source[property];
+  source[property] = listener;
+  return () => {
+    if (source[property] === listener) {
+      source[property] = previous;
+    }
+  };
+};
+
+const toReadSseErrorOutput = ({
+  config,
+  reason,
+  message,
+  status = 503,
+  code = "upstream_unavailable",
+}) => {
+  return toElementErrorOutput({
+    mode: "read",
+    error: {
+      code,
+      message,
+      status,
+      details: { reason },
+    },
+    meta: {
+      instanceId: config.instanceId,
+    },
+  });
+};
+
+const ensureSseReadStream = ({ config, _stream_cache }) => {
+  const identityKey = resolveReadStreamIdentityKey(config);
+  const existingState = _stream_cache[cachekeys.READ_STREAM];
+  if (
+    isPlainObject(existingState) &&
+    existingState.identityKey === identityKey &&
+    (existingState.fallbackToPoll === true || existingState.source)
+  ) {
+    return {
+      usePollFallback: existingState.fallbackToPoll === true,
+      outputs: [],
+    };
+  }
+
+  closeReadStream(_stream_cache);
+  const usePollFallbackState = () => {
+    const readStreamState = {
+      identityKey,
+      source: undefined,
+      pendingOutputs: [],
+      detachFns: [],
+      fallbackToPoll: true,
+    };
+    _stream_cache[cachekeys.READ_STREAM] = readStreamState;
+    return {
+      usePollFallback: true,
+      outputs: [],
+    };
+  };
+
+  if (typeof config.eventSourceFactory !== "function") {
+    if (config.readTransport === "auto") {
+      return usePollFallbackState();
+    }
+    return {
+      usePollFallback: false,
+      outputs: [
+        toReadSseErrorOutput({
+          config,
+          reason: "event_source_unavailable",
+          message: "Hermes SSE transport is unavailable in this runtime.",
+          status: 500,
+          code: "execution_failed",
+        }),
+      ],
+    };
+  }
+
+  const streamUrl = resolveReadStreamUrl({ config, _stream_cache });
+  let source = undefined;
+  try {
+    source = config.eventSourceFactory(streamUrl, {
+      withCredentials: config.credentials === "include",
+      headers: {
+        ...config.requestHeaders,
+      },
+    });
+  } catch (_error) {
+    if (config.readTransport === "auto") {
+      return usePollFallbackState();
+    }
+    return {
+      usePollFallback: false,
+      outputs: [
+        toReadSseErrorOutput({
+          config,
+          reason: "stream_open_failed",
+          message: "Hermes SSE stream failed to open.",
+          code: "execution_failed",
+        }),
+      ],
+    };
+  }
+
+  const supportsEventSourceApi =
+    source !== null &&
+    (typeof source === "object" || typeof source === "function") &&
+    (typeof source.addEventListener === "function" || "onmessage" in source || "onerror" in source);
+  if (!supportsEventSourceApi) {
+    if (typeof source?.close === "function") {
+      source.close();
+    }
+
+    if (config.readTransport === "auto") {
+      return usePollFallbackState();
+    }
+    return {
+      usePollFallback: false,
+      outputs: [
+        toReadSseErrorOutput({
+          config,
+          reason: "invalid_event_source",
+          message: "Hermes SSE stream implementation is invalid.",
+          status: 500,
+          code: "execution_failed",
+        }),
+      ],
+    };
+  }
+
+  const readStreamState = {
+    identityKey,
+    source,
+    pendingOutputs: [],
+    detachFns: [],
+    fallbackToPoll: false,
+    emittedStreamError: false,
+  };
+  _stream_cache[cachekeys.READ_STREAM] = readStreamState;
+
+  const enqueueStreamOutput = (output) => {
+    readStreamState.pendingOutputs.push(output);
+  };
+
+  const handleEventMessage = (messageEvent) => {
+    const eventPayload = parseSsePayloadObject(messageEvent?.data);
+    if (!isMeaningfulReadRecord(eventPayload)) {
+      enqueueStreamOutput(
+        toReadSseErrorOutput({
+          config,
+          reason: "invalid_stream_event_payload",
+          message: "Hermes SSE event payload must be a JSON object.",
+          status: 502,
+          code: "validation_failed",
+        }),
+      );
+      return;
+    }
+
+    const nextCursor = maybeTrimString(eventPayload.cursor);
+    if (nextCursor) {
+      _stream_cache[cachekeys.CURSOR] = nextCursor;
+    }
+
+    enqueueStreamOutput(
+      toElementSuccessOutput({
+        mode: "read",
+        data: {
+          schemaVersion:
+            typeof eventPayload.schemaVersion === "string" ? eventPayload.schemaVersion : "v1",
+          event: eventPayload,
+          cursor: nextCursor,
+          hasMore: false,
+        },
+        meta: {
+          instanceId: config.instanceId,
+        },
+      }),
+    );
+  };
+
+  const handleHeartbeatMessage = (messageEvent) => {
+    const heartbeatPayload = parseSsePayloadObject(messageEvent?.data);
+    if (!isPlainObject(heartbeatPayload)) {
+      return;
+    }
+
+    const nextCursor = maybeTrimString(heartbeatPayload.cursor);
+    if (nextCursor) {
+      _stream_cache[cachekeys.CURSOR] = nextCursor;
+    }
+  };
+
+  const handleStreamError = () => {
+    clearReadStreamListeners(readStreamState);
+    if (typeof readStreamState.source?.close === "function") {
+      try {
+        readStreamState.source.close();
+      } catch (_error) {
+        // Best-effort stream teardown after error.
+      }
+    }
+    readStreamState.source = undefined;
+
+    if (config.readTransport === "auto") {
+      readStreamState.fallbackToPoll = true;
+      return;
+    }
+
+    if (!readStreamState.emittedStreamError) {
+      readStreamState.emittedStreamError = true;
+      enqueueStreamOutput(
+        toReadSseErrorOutput({
+          config,
+          reason: "stream_disconnected",
+          message: "Hermes SSE stream disconnected.",
+        }),
+      );
+    }
+  };
+
+  readStreamState.detachFns = [
+    attachEventSourceListener(readStreamState.source, "hermes.event", handleEventMessage),
+    attachEventSourceListener(readStreamState.source, "hermes.heartbeat", handleHeartbeatMessage),
+    attachEventSourceListener(readStreamState.source, "error", handleStreamError),
+  ];
+
+  return {
+    usePollFallback: false,
+    outputs: [],
+  };
 };
 
 const executeWriteFlow = async ({ config, _stream_cache, data_in }) => {
@@ -682,7 +1174,7 @@ const executeWriteFlow = async ({ config, _stream_cache, data_in }) => {
   ];
 };
 
-const executeReadFlow = async ({ config, _stream_cache }) => {
+const executeReadFlowPoll = async ({ config, _stream_cache }) => {
   const now = Date.now();
   const lastReadAt = Number(_stream_cache[cachekeys.LAST_READ_AT] ?? 0);
   if (config.pollIntervalMs > 0 && now - lastReadAt < config.pollIntervalMs) {
@@ -690,19 +1182,7 @@ const executeReadFlow = async ({ config, _stream_cache }) => {
   }
   _stream_cache[cachekeys.LAST_READ_AT] = now;
 
-  const cursor = maybeTrimString(_stream_cache[cachekeys.CURSOR]) ?? config.cursor;
-  const readUrl = resolveApiUrl({
-    path: config.readPath,
-    baseUrl: config.baseUrl,
-    query: {
-      instanceId: config.instanceId,
-      guildId: config.guildId || undefined,
-      channelId: config.channelId || undefined,
-      cursor: cursor ?? undefined,
-      sinceEventId: cursor ? undefined : config.sinceEventId,
-      limit: config.limit,
-    },
-  });
+  const readUrl = resolveReadPollUrl({ config, _stream_cache });
 
   let response = undefined;
   try {
@@ -776,21 +1256,21 @@ const executeReadFlow = async ({ config, _stream_cache }) => {
     _stream_cache[cachekeys.CURSOR] = nextCursor;
   }
 
-  const events = Array.isArray(responsePayload.events)
-    ? responsePayload.events.filter((entry) => isPlainObject(entry))
-    : [];
-  if (events.length === 0) {
+  const readRecords = normalizeReadRecords(responsePayload);
+  if (readRecords.length === 0) {
     return [];
   }
 
-  return events.map((event) => {
+  const responseCursor = maybeTrimString(responsePayload.cursor);
+
+  return readRecords.map((event) => {
     return toElementSuccessOutput({
       mode: "read",
       data: {
         schemaVersion:
           typeof responsePayload.schemaVersion === "string" ? responsePayload.schemaVersion : "v1",
         event,
-        cursor: nextCursor ?? event.cursor,
+        cursor: nextCursor ?? responseCursor ?? event.cursor,
         hasMore: responsePayload.hasMore === true,
       },
       meta: {
@@ -800,6 +1280,29 @@ const executeReadFlow = async ({ config, _stream_cache }) => {
       },
     });
   });
+};
+
+const executeReadFlow = async ({ config, _stream_cache }) => {
+  if (config.readTransport === "poll") {
+    closeReadStream(_stream_cache);
+    return executeReadFlowPoll({ config, _stream_cache });
+  }
+
+  const sseSetup = ensureSseReadStream({ config, _stream_cache });
+  if (sseSetup.outputs.length > 0) {
+    return sseSetup.outputs;
+  }
+
+  const sseOutputs = drainReadStreamOutputs(_stream_cache);
+  if (sseOutputs.length > 0) {
+    return sseOutputs;
+  }
+
+  if (config.readTransport === "auto" && sseSetup.usePollFallback) {
+    return executeReadFlowPoll({ config, _stream_cache });
+  }
+
+  return [];
 };
 
 const initElementInterface = (_stream_cache) => {
@@ -842,6 +1345,9 @@ const initElementInterface = (_stream_cache) => {
         try {
           const config = resolveHermesConfig(rawConfig, _stream_cache);
           _stream_cache[cachekeys.CONFIG] = config;
+          if (!["read", "both"].includes(config.mode)) {
+            closeReadStream(_stream_cache);
+          }
 
           const nextOutputs = [];
           const upstreamErrorBottle =
