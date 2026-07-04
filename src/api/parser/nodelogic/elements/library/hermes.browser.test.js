@@ -1,11 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { ReplaySubject, firstValueFrom, of } from "rxjs";
-import { take, toArray } from "rxjs/operators";
+import { startWith, take, toArray } from "rxjs/operators";
 
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
 import { ElemCacheKeyLUT, initStdElementProps } from "./index.js";
 
-const TEST_REFNODE = "hermes-test-refnode";
+const TEST_REFNODE = "e03c5006-8feb-4bdd-a9de-a2afde5b06ee";
 const TEST_INSTANCE_ID = "7ccf6732-9f1b-4b4d-92bd-08ae5724b650";
 const TEST_COMMAND = {
   schemaVersion: "v1",
@@ -62,6 +62,12 @@ const makeConfigLambda = (config) => {
   };
 };
 
+const initHermesFlowWithConfig = (config) => {
+  return initHermesFlow({
+    _default: makeConfigLambda(config),
+  });
+};
+
 const makeFakeEventSourceRuntime = () => {
   const instances = [];
 
@@ -71,6 +77,9 @@ const makeFakeEventSourceRuntime = () => {
       this.init = init;
       this.closed = false;
       this.listeners = new Map();
+      this.onopen = null;
+      this.onmessage = null;
+      this.onerror = null;
       instances.push(this);
     }
 
@@ -91,6 +100,15 @@ const makeFakeEventSourceRuntime = () => {
     emit(eventName, payload = {}) {
       const nextListeners = this.listeners.get(eventName) ?? [];
       nextListeners.forEach((listener) => listener(payload));
+      if (eventName === "open" && typeof this.onopen === "function") {
+        this.onopen(payload);
+      }
+      if (eventName === "message" && typeof this.onmessage === "function") {
+        this.onmessage(payload);
+      }
+      if (eventName === "error" && typeof this.onerror === "function") {
+        this.onerror(payload);
+      }
     }
 
     close() {
@@ -102,6 +120,16 @@ const makeFakeEventSourceRuntime = () => {
     instances,
     eventSourceFactory: (url, init) => {
       return new FakeEventSource(url, init);
+    },
+  };
+};
+
+const makeSseProbeResponse = (status = 200) => {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    body: {
+      cancel: vi.fn().mockResolvedValue(undefined),
     },
   };
 };
@@ -136,11 +164,12 @@ const initHermesFlow = (reducedLambdaObj = {}) => {
   };
   const hermesProps = initStdElementProps(streamCache, "hermes");
   const datainput$ = new ReplaySubject(1);
+  const seededDataInput$ = datainput$.pipe(startWith(undefined));
   const ctrlinput$ = new ReplaySubject(1);
 
   const output$obj = driveDataflowByCtrlflow(
     { _stream: ctrlinput$, _config: {} },
-    [{ _stream: datainput$ }],
+    [{ _stream: seededDataInput$ }],
     undefined,
     {
       codebase: "hermes.browser.test.js",
@@ -232,7 +261,9 @@ describe("hermes leafelement", () => {
       .fn()
       .mockResolvedValue(makeJsonResponse(202, { status: "accepted", requestId: "req-1" }));
 
-    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow();
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlowWithConfig({
+      mode: "write",
+    });
     const output = await runTick({
       output$obj,
       datainput$,
@@ -258,7 +289,9 @@ describe("hermes leafelement", () => {
     "mode=write with sentinel input skips write API call and emits no output ($label)",
     async ({ bottle }) => {
       global.fetch = vi.fn();
-      const { output$obj, datainput$, ctrlinput$ } = initHermesFlow();
+      const { output$obj, datainput$, ctrlinput$ } = initHermesFlowWithConfig({
+        mode: "write",
+      });
       const outputs = await runCtrlTickCollectAllOutputs({
         output$obj,
         datainput$,
@@ -318,8 +351,153 @@ describe("hermes leafelement", () => {
     expect(output._content.data.event.eventId).toBe("evt_both_1");
   });
 
-  it("mode=read with readTransport=sse emits stream events without polling fetch", async () => {
-    global.fetch = vi.fn();
+  it("mode=read with readTransport=sse opens stream without data input and emits pushed events", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const [probeUrl, probeInit] = global.fetch.mock.calls[0];
+      expect(requestHref(probeUrl)).toContain("/api/hermes/integration/events/stream");
+      expect(probeInit.method).toBe("HEAD");
+      expect(probeInit.headers.Accept).toBe("text/event-stream");
+      expect(instances).toHaveLength(1);
+      expect(instances[0].url).toContain("/api/hermes/integration/events/stream");
+      expect(outputs).toHaveLength(0);
+
+      instances[0].emit("open", { type: "open" });
+
+      instances[0].emit("hermes.event", {
+        data: JSON.stringify({
+          schemaVersion: "v1",
+          eventId: "evt_sse_1",
+          sequence: 1,
+          instanceId: TEST_INSTANCE_ID,
+          payload: { text: "from-sse" },
+        }),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0]._bname).toBe("elementio");
+      expect(outputs[0]._content.mode).toBe("read");
+      expect(outputs[0]._content.ok).toBe(true);
+      expect(outputs[0]._content.data.event.eventId).toBe("evt_sse_1");
+    } finally {
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+    }
+  });
+
+  it("mode=read with readTransport=sse handles default message events", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      instances[0].emit("open", { type: "open" });
+      instances[0].emit("message", {
+        data: JSON.stringify({
+          schemaVersion: "v1",
+          eventId: "evt_sse_message_1",
+          sequence: 11,
+          instanceId: TEST_INSTANCE_ID,
+          payload: { text: "from-default-message" },
+        }),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0]._content.ok).toBe(true);
+      expect(outputs[0]._content.data.event.eventId).toBe("evt_sse_message_1");
+    } finally {
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+    }
+  });
+
+  it("mode=read with readTransport=sse does not classify post-open close as auth failure", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const traceSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      instances[0].emit("open", { type: "open" });
+      instances[0].emit("hermes.event", {
+        data: JSON.stringify({
+          schemaVersion: "v1",
+          eventId: "evt_sse_close_1",
+          sequence: 12,
+          instanceId: TEST_INSTANCE_ID,
+          payload: { text: "close-soon" },
+        }),
+      });
+      instances[0].emit("error", { type: "error" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const traceLines = traceSpy.mock.calls.map(([message]) => `${message}`);
+      expect(traceLines.some((line) => line.includes("event=sse.auth.fail"))).toBe(false);
+      expect(
+        traceLines.some((line) => line.includes("event=sse.lifecycle.reconnect_scheduled")),
+      ).toBe(true);
+    } finally {
+      ctrlSub.unsubscribe();
+      traceSpy.mockRestore();
+    }
+  });
+
+  it("mode=read with readTransport=sse emits explicit auth fail for preflight 401", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(401));
     const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
     const reducedLambdaObj = {
       _default: makeConfigLambda({
@@ -334,41 +512,24 @@ describe("hermes leafelement", () => {
     };
     const { output$obj, datainput$, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
 
-    const firstTickOutputs = await runCtrlTickCollectAllOutputs({
-      output$obj,
-      datainput$,
-      ctrlinput$,
-      dataIn: { ignore: true },
-    });
-
-    expect(firstTickOutputs).toHaveLength(0);
-    expect(global.fetch).not.toHaveBeenCalled();
-    expect(instances).toHaveLength(1);
-    expect(instances[0].url).toContain("/api/hermes/integration/events/stream");
-
-    instances[0].emit("hermes.event", {
-      data: JSON.stringify({
-        schemaVersion: "v1",
-        eventId: "evt_sse_1",
-        sequence: 1,
-        instanceId: TEST_INSTANCE_ID,
-        payload: { text: "from-sse" },
-      }),
-    });
-
     const output = await runTick({
       output$obj,
       datainput$,
       ctrlinput$,
       dataIn: { ignore: true },
-      ctrlIn: { _bname: "accio", idx: 2 },
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
-    expect(output._bname).toBe("elementio");
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [probeUrl, probeInit] = global.fetch.mock.calls[0];
+    expect(requestHref(probeUrl)).toContain("/api/hermes/integration/events/stream");
+    expect(probeInit.method).toBe("HEAD");
+    expect(probeInit.headers.Accept).toBe("text/event-stream");
+    expect(instances).toHaveLength(0);
     expect(output._content.mode).toBe("read");
-    expect(output._content.ok).toBe(true);
-    expect(output._content.data.event.eventId).toBe("evt_sse_1");
+    expect(output._content.ok).toBe(false);
+    expect(output._content.error.code).toBe("auth_unauthorized");
+    expect(output._content.error.status).toBe(401);
+    expect(output._content.error.details.reason).toBe("http_401");
   });
 
   it("mode=read with readTransport=auto falls back to poll when SSE is unavailable", async () => {
@@ -414,23 +575,31 @@ describe("hermes leafelement", () => {
     expect(output._content.data.event.eventId).toBe("evt_poll_fallback_1");
   });
 
-  it("mode=read with readTransport=auto falls back to poll after SSE stream error", async () => {
-    global.fetch = vi.fn().mockResolvedValue(
-      makeJsonResponse(200, {
-        schemaVersion: "v1",
-        events: [
-          {
-            eventId: "evt_poll_after_error_1",
-            sequence: 1,
-            instanceId: TEST_INSTANCE_ID,
-            payload: { text: "after-stream-error" },
-          },
-        ],
-        nextCursor: "cursor-poll-after-error-1",
-        hasMore: false,
-        requestId: "req-poll-after-error-1",
-      }),
-    );
+  it("mode=read with readTransport=auto falls back to poll only after repeated no-frame SSE errors", async () => {
+    vi.useFakeTimers();
+    const traceSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    global.fetch = vi.fn().mockImplementation((requestUrl) => {
+      const href = requestHref(requestUrl);
+      if (href.includes("/api/hermes/integration/events/stream")) {
+        return Promise.resolve(makeSseProbeResponse(200));
+      }
+      return Promise.resolve(
+        makeJsonResponse(200, {
+          schemaVersion: "v1",
+          events: [
+            {
+              eventId: "evt_poll_after_error_1",
+              sequence: 1,
+              instanceId: TEST_INSTANCE_ID,
+              payload: { text: "after-stream-error" },
+            },
+          ],
+          nextCursor: "cursor-poll-after-error-1",
+          hasMore: false,
+          requestId: "req-poll-after-error-1",
+        }),
+      );
+    });
     const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
     const reducedLambdaObj = {
       _default: makeConfigLambda({
@@ -445,31 +614,140 @@ describe("hermes leafelement", () => {
     };
     const { output$obj, datainput$, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
 
-    const firstTickOutputs = await runCtrlTickCollectAllOutputs({
-      output$obj,
-      datainput$,
-      ctrlinput$,
-      dataIn: { ignore: true },
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      datainput$.next({ ignore: true });
+      ctrlinput$.next({ _bname: "accio" });
+      await vi.advanceTimersByTimeAsync(50);
+      expect(outputs).toHaveLength(0);
+      expect(instances).toHaveLength(1);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+
+      instances[0].emit("error", { type: "error" });
+      await vi.advanceTimersByTimeAsync(1200);
+
+      expect(instances).toHaveLength(2);
+      instances[1].emit("error", { type: "error" });
+      await vi.advanceTimersByTimeAsync(1600);
+
+      expect(instances).toHaveLength(3);
+      instances[2].emit("error", { type: "error" });
+      await vi.advanceTimersByTimeAsync(50);
+
+      datainput$.next({ ignore: true });
+      ctrlinput$.next({ _bname: "accio", idx: 2 });
+      await vi.advanceTimersByTimeAsync(50);
+
+      const requestHrefs = global.fetch.mock.calls.map(([requestUrl]) => requestHref(requestUrl));
+      expect(
+        requestHrefs.some(
+          (href) =>
+            href.includes("/api/hermes/integration/events") &&
+            !href.includes("/api/hermes/integration/events/stream"),
+        ),
+      ).toBe(true);
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0]._content.mode).toBe("read");
+      expect(outputs[0]._content.ok).toBe(true);
+      expect(outputs[0]._content.data.event.eventId).toBe("evt_poll_after_error_1");
+      const traceLines = traceSpy.mock.calls.map(([message]) => `${message}`);
+      expect(
+        traceLines.some(
+          (line) =>
+            line.includes("event=sse.lifecycle.fallback_poll_enabled") &&
+            line.includes("reason=max_no_frame_retries"),
+        ),
+      ).toBe(true);
+      expect(
+        traceLines.some(
+          (line) =>
+            line.includes("event=sse.auth.fail") && line.includes("reason=max_no_frame_retries"),
+        ),
+      ).toBe(false);
+    } finally {
+      traceSpy.mockRestore();
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+      vi.useRealTimers();
+    }
+  });
+
+  it("dedupes repeated SSE events across reconnects by message id", async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn().mockImplementation((requestUrl) => {
+      const href = requestHref(requestUrl);
+      if (href.includes("/api/hermes/integration/events/stream")) {
+        return Promise.resolve(makeSseProbeResponse(200));
+      }
+      return Promise.resolve(makeJsonResponse(200, { schemaVersion: "v1", events: [] }));
     });
-    expect(firstTickOutputs).toHaveLength(0);
-    expect(instances).toHaveLength(1);
-    expect(global.fetch).not.toHaveBeenCalled();
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
 
-    instances[0].emit("error", { type: "error" });
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await vi.advanceTimersByTimeAsync(50);
+      instances[0].emit("open", { type: "open" });
+      instances[0].emit("hermes.event", {
+        data: JSON.stringify({
+          schemaVersion: "v1",
+          eventId: "evt_dedupe_1",
+          sequence: 1,
+          instanceId: TEST_INSTANCE_ID,
+          payload: { text: "first" },
+        }),
+      });
+      await vi.advanceTimersByTimeAsync(50);
 
-    const output = await runTick({
-      output$obj,
-      datainput$,
-      ctrlinput$,
-      dataIn: { ignore: true },
-      ctrlIn: { _bname: "accio", idx: 2 },
-    });
+      instances[0].emit("error", { type: "error" });
+      await vi.advanceTimersByTimeAsync(1200);
+      expect(instances).toHaveLength(2);
 
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(requestHref(global.fetch.mock.calls[0][0])).toContain("/api/hermes/integration/events");
-    expect(output._content.mode).toBe("read");
-    expect(output._content.ok).toBe(true);
-    expect(output._content.data.event.eventId).toBe("evt_poll_after_error_1");
+      instances[1].emit("open", { type: "open" });
+      instances[1].emit("hermes.event", {
+        data: JSON.stringify({
+          schemaVersion: "v1",
+          eventId: "evt_dedupe_1",
+          sequence: 1,
+          instanceId: TEST_INSTANCE_ID,
+          payload: { text: "duplicate" },
+        }),
+      });
+      instances[1].emit("hermes.event", {
+        data: JSON.stringify({
+          schemaVersion: "v1",
+          eventId: "evt_dedupe_2",
+          sequence: 2,
+          instanceId: TEST_INSTANCE_ID,
+          payload: { text: "second" },
+        }),
+      });
+      await vi.advanceTimersByTimeAsync(50);
+
+      expect(outputs).toHaveLength(2);
+      expect(outputs[0]._content.data.event.eventId).toBe("evt_dedupe_1");
+      expect(outputs[1]._content.data.event.eventId).toBe("evt_dedupe_2");
+    } finally {
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+      vi.useRealTimers();
+    }
   });
 
   it("routes subscribed Hermes events to output stream in read mode", async () => {
@@ -623,27 +901,31 @@ describe("hermes leafelement", () => {
     expect(outputs).toHaveLength(0);
   });
 
-  it("fails fast with explicit deterministic error bottle for invalid read config", async () => {
-    global.fetch = vi.fn();
-    const reducedLambdaObj = {
-      _default: makeConfigLambda({
-        mode: "read",
+  it("mode=read falls back to refnode instanceId when instanceId is omitted", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      makeJsonResponse(200, {
+        schemaVersion: "v1",
+        events: [],
+        hasMore: false,
+        requestId: "req-refnode-fallback",
       }),
-    };
-    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
-
-    const output = await runTick({
+    );
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlowWithConfig({
+      mode: "read",
+      readTransport: "poll",
+      pollIntervalMs: 0,
+    });
+    await runCtrlTickCollectAllOutputs({
       output$obj,
       datainput$,
       ctrlinput$,
       dataIn: { ignore: true },
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
-    expect(output._bname).toBe("error");
-    expect(output._content.code).toBe("validation_failed");
-    expect(output._content.message).toContain("instanceId");
-    expect(output._content.element).toBe("hermes");
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [requestUrl, requestInit] = global.fetch.mock.calls[0];
+    expect(requestInit.method).toBe("GET");
+    expect(requestHref(requestUrl)).toContain(`instanceId=${encodeURIComponent(TEST_REFNODE)}`);
   });
 
   it("emits deterministic machine-readable write errors without leaking secrets", async () => {
@@ -661,7 +943,9 @@ describe("hermes leafelement", () => {
       }),
     );
 
-    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow();
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlowWithConfig({
+      mode: "write",
+    });
     const output = await runTick({
       output$obj,
       datainput$,
@@ -685,7 +969,9 @@ describe("hermes leafelement", () => {
     };
     delete malformedCommand.commandId;
 
-    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow();
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlowWithConfig({
+      mode: "write",
+    });
     const output = await runTickCollect({
       output$obj,
       datainput$,
@@ -705,7 +991,9 @@ describe("hermes leafelement", () => {
 
   it("mode=write with explicit error bottle skips write and preserves error passthrough", async () => {
     global.fetch = vi.fn();
-    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow();
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlowWithConfig({
+      mode: "write",
+    });
     const upstreamErrorBottle = {
       _bname: "error",
       _content: {

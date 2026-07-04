@@ -1,5 +1,5 @@
-import { Subject, of } from "rxjs";
-import { concatMap, map, share, withLatestFrom } from "rxjs/operators";
+import { Subject, merge, of } from "rxjs";
+import { concatMap, map, share, startWith, withLatestFrom } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 
@@ -19,6 +19,7 @@ const cachekeys = {
   CURSOR: "_hermes_cursor",
   LAST_READ_AT: "_hermes_last_read_at",
   READ_STREAM: "_hermes_read_stream",
+  READ_STREAMS: "_hermes_read_streams",
 };
 
 const HERMES_CODEBASE = "ghostos/api/parser/nodelogic/elements/library/hermes.js";
@@ -28,6 +29,13 @@ const HERMES_DEFAULT_WRITE_PATH = "/api/hermes/egress-commands";
 const HERMES_DEFAULT_LIMIT = 100;
 const HERMES_DEFAULT_TIMEOUT_MS = 15000;
 const HERMES_DEFAULT_POLL_INTERVAL_MS = 1000;
+const HERMES_TRACE_PREFIX = "HERMES_TRACE";
+const HERMES_TRACE_COMPONENT = "leafelement.hermes";
+const HERMES_SSE_MAX_NO_FRAME_RETRIES = 3;
+const HERMES_SSE_RETRY_BASE_MS = 500;
+const HERMES_SSE_RETRY_MAX_MS = 8000;
+const HERMES_SSE_RETRY_JITTER_MS = 300;
+const HERMES_SSE_EVENT_DEDUPE_LIMIT = 1024;
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DISCORD_SNOWFLAKE_REGEX = /^\d{17,20}$/;
@@ -95,6 +103,55 @@ const maybeTrimString = (value) => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
+const encodeTraceValue = (value) => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return "null";
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return `${value}`;
+  }
+  if (typeof value === "string") {
+    return encodeURIComponent(value);
+  }
+
+  try {
+    return encodeURIComponent(JSON.stringify(redactSecrets(value)));
+  } catch (_error) {
+    return encodeURIComponent("[unserializable]");
+  }
+};
+
+const hermesTrace = (eventName, fields = {}) => {
+  const fieldTokens = Object.entries(fields)
+    .filter(([_key, value]) => value !== undefined)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => {
+      return `${key}=${encodeTraceValue(value)}`;
+    });
+
+  const suffix = fieldTokens.length > 0 ? ` ${fieldTokens.join(" ")}` : "";
+  console.log(
+    `${HERMES_TRACE_PREFIX} component=${HERMES_TRACE_COMPONENT} event=${eventName}${suffix}`,
+  );
+};
+
+const stableHash = (value) => {
+  const input = `${value ?? ""}`;
+  let hash = 0;
+  for (let idx = 0; idx < input.length; idx += 1) {
+    hash = (hash * 31 + input.charCodeAt(idx)) >>> 0;
+  }
+  return hash;
+};
+
+const resolveDeterministicJitterMs = (instanceId, retryCount) => {
+  const seed = stableHash(`${instanceId}:${retryCount}`);
+  return seed % (HERMES_SSE_RETRY_JITTER_MS + 1);
+};
+
 const normalizePositiveInteger = ({
   value,
   field,
@@ -139,7 +196,7 @@ const parseConfigValue = (rawConfig) => {
 };
 
 const normalizeHermesMode = (modeValue) => {
-  const mode = `${modeValue ?? "write"}`.trim().toLowerCase();
+  const mode = `${modeValue ?? "both"}`.trim().toLowerCase();
   if (["write", "read", "both"].includes(mode)) {
     return mode;
   }
@@ -227,7 +284,10 @@ const resolveHermesConfig = (rawConfig, _stream_cache) => {
   const readTransport = normalizeReadTransport(
     parsedConfig.readTransport ?? parsedConfig.transport ?? "auto",
   );
-  const instanceId = trimString(parsedConfig.instanceId ?? "");
+  const instanceId =
+    maybeTrimString(parsedConfig.instanceId) ??
+    maybeTrimString(_stream_cache[ElemCacheKeyLUT.REFNODE]) ??
+    "";
   const guildId = trimString(parsedConfig.guildId ?? "");
   const channelId = trimString(parsedConfig.channelId ?? "");
   const cursorFromConfig = maybeTrimString(parsedConfig.cursor);
@@ -724,13 +784,73 @@ const clearReadStreamListeners = (readStreamState) => {
   readStreamState.detachFns = [];
 };
 
-const closeReadStream = (_stream_cache) => {
-  const readStreamState = _stream_cache[cachekeys.READ_STREAM];
-  if (!isPlainObject(readStreamState)) {
+const ensureReadStreamRegistry = (_stream_cache) => {
+  const readStreams = _stream_cache[cachekeys.READ_STREAMS];
+  if (isPlainObject(readStreams)) {
+    return readStreams;
+  }
+  const nextReadStreams = {};
+  _stream_cache[cachekeys.READ_STREAMS] = nextReadStreams;
+  return nextReadStreams;
+};
+
+const listReadStreamStates = (_stream_cache) => {
+  return Object.values(ensureReadStreamRegistry(_stream_cache)).filter((entry) =>
+    isPlainObject(entry),
+  );
+};
+
+const getReadStreamStateByInstance = (_stream_cache, instanceId) => {
+  if (!instanceId) {
+    return undefined;
+  }
+  const readStreams = ensureReadStreamRegistry(_stream_cache);
+  return isPlainObject(readStreams[instanceId]) ? readStreams[instanceId] : undefined;
+};
+
+const setReadStreamStateByInstance = ({ _stream_cache, instanceId, readStreamState }) => {
+  if (!instanceId || !isPlainObject(readStreamState)) {
+    return;
+  }
+  const readStreams = ensureReadStreamRegistry(_stream_cache);
+  readStreams[instanceId] = readStreamState;
+  _stream_cache[cachekeys.READ_STREAM] = readStreamState;
+};
+
+const removeReadStreamStateByInstance = (_stream_cache, instanceId) => {
+  if (!instanceId) {
+    return;
+  }
+  const readStreams = ensureReadStreamRegistry(_stream_cache);
+  delete readStreams[instanceId];
+  if (_stream_cache[cachekeys.READ_STREAM]?.instanceId === instanceId) {
     delete _stream_cache[cachekeys.READ_STREAM];
+  }
+};
+
+const clearReadStreamReconnectTimer = (readStreamState) => {
+  if (!isPlainObject(readStreamState)) {
+    return;
+  }
+  if (readStreamState.reconnectTimer !== undefined) {
+    clearTimeout(readStreamState.reconnectTimer);
+    readStreamState.reconnectTimer = undefined;
+  }
+};
+
+const closeReadStreamState = (readStreamState, reason = "unspecified") => {
+  if (!isPlainObject(readStreamState)) {
     return;
   }
 
+  hermesTrace("sse.lifecycle.close", {
+    fallbackToPoll: readStreamState.fallbackToPoll === true,
+    instanceId: readStreamState.instanceId,
+    reason,
+    streamId: readStreamState.identityKey,
+  });
+
+  clearReadStreamReconnectTimer(readStreamState);
   clearReadStreamListeners(readStreamState);
   if (typeof readStreamState.source?.close === "function") {
     try {
@@ -739,20 +859,40 @@ const closeReadStream = (_stream_cache) => {
       // Best-effort stream teardown.
     }
   }
+  readStreamState.source = undefined;
+};
+
+const closeReadStreamByInstance = (_stream_cache, instanceId, reason = "unspecified") => {
+  const readStreamState = getReadStreamStateByInstance(_stream_cache, instanceId);
+  if (!isPlainObject(readStreamState)) {
+    removeReadStreamStateByInstance(_stream_cache, instanceId);
+    return;
+  }
+
+  closeReadStreamState(readStreamState, reason);
+  removeReadStreamStateByInstance(_stream_cache, instanceId);
+};
+
+const closeReadStream = (_stream_cache, reason = "unspecified") => {
+  listReadStreamStates(_stream_cache).forEach((readStreamState) => {
+    closeReadStreamState(readStreamState, reason);
+  });
+  _stream_cache[cachekeys.READ_STREAMS] = {};
   delete _stream_cache[cachekeys.READ_STREAM];
 };
 
 const drainReadStreamOutputs = (_stream_cache) => {
-  const readStreamState = _stream_cache[cachekeys.READ_STREAM];
-  if (!isPlainObject(readStreamState) || !Array.isArray(readStreamState.pendingOutputs)) {
-    return [];
-  }
-  if (readStreamState.pendingOutputs.length === 0) {
-    return [];
-  }
-
-  const outputs = readStreamState.pendingOutputs;
-  readStreamState.pendingOutputs = [];
+  const outputs = [];
+  listReadStreamStates(_stream_cache).forEach((readStreamState) => {
+    if (
+      !Array.isArray(readStreamState.pendingOutputs) ||
+      readStreamState.pendingOutputs.length === 0
+    ) {
+      return;
+    }
+    outputs.push(...readStreamState.pendingOutputs);
+    readStreamState.pendingOutputs = [];
+  });
   return outputs;
 };
 
@@ -847,13 +987,15 @@ const attachEventSourceListener = (source, eventName, listener) => {
   const canUseHandlerProperty =
     source !== null &&
     (typeof source === "object" || typeof source === "function") &&
-    ((eventName === "hermes.event" && "onmessage" in source) ||
+    ((eventName === "message" && "onmessage" in source) ||
+      (eventName === "open" && "onopen" in source) ||
       (eventName === "error" && "onerror" in source));
   if (!canUseHandlerProperty) {
     return () => {};
   }
 
-  const property = eventName === "error" ? "onerror" : "onmessage";
+  const property =
+    eventName === "error" ? "onerror" : eventName === "open" ? "onopen" : "onmessage";
   const previous = source[property];
   source[property] = listener;
   return () => {
@@ -884,55 +1026,372 @@ const toReadSseErrorOutput = ({
   });
 };
 
-const ensureSseReadStream = ({ config, _stream_cache }) => {
-  const identityKey = resolveReadStreamIdentityKey(config);
-  const existingState = _stream_cache[cachekeys.READ_STREAM];
-  if (
-    isPlainObject(existingState) &&
-    existingState.identityKey === identityKey &&
-    (existingState.fallbackToPoll === true || existingState.source)
-  ) {
+const queueReadStreamOutput = (readStreamState, output) => {
+  if (!isPlainObject(readStreamState) || output === undefined) {
+    return;
+  }
+  if (typeof readStreamState.emitReadOutput === "function") {
+    readStreamState.emitReadOutput(output);
+    return;
+  }
+  if (!Array.isArray(readStreamState.pendingOutputs)) {
+    readStreamState.pendingOutputs = [];
+  }
+  readStreamState.pendingOutputs.push(output);
+};
+
+const closeProbeResponseBody = async (response) => {
+  try {
+    if (typeof response?.body?.cancel === "function") {
+      await response.body.cancel();
+    }
+  } catch (_error) {
+    // Best-effort body cancellation after preflight headers.
+  }
+};
+
+const runSsePreflightProbe = async ({ config, streamUrl, readStreamState }) => {
+  const probeTimeoutMs = Math.max(1000, Math.min(config.timeoutMs, 5000));
+  const probeMethod = "HEAD";
+  hermesTrace("sse.preflight.request", {
+    instanceId: config.instanceId,
+    method: probeMethod,
+    timeoutMs: probeTimeoutMs,
+    url: streamUrl,
+  });
+
+  let response = undefined;
+  try {
+    response = await fetchWithTimeout(
+      config.fetchImpl,
+      streamUrl,
+      {
+        method: probeMethod,
+        headers: {
+          Accept: "text/event-stream",
+          ...config.requestHeaders,
+        },
+        credentials: config.credentials,
+      },
+      probeTimeoutMs,
+    );
+  } catch (error) {
+    hermesTrace("sse.preflight.network_error", {
+      instanceId: config.instanceId,
+      reason: error?.name === "AbortError" ? "timeout" : "network_error",
+    });
+    readStreamState.lastHttpStatus = undefined;
     return {
-      usePollFallback: existingState.fallbackToPoll === true,
-      outputs: [],
+      authFailureReason: undefined,
+      status: undefined,
+      transientReason: error?.name === "AbortError" ? "timeout" : "network_error",
     };
   }
 
-  closeReadStream(_stream_cache);
-  const usePollFallbackState = () => {
-    const readStreamState = {
-      identityKey,
-      source: undefined,
-      pendingOutputs: [],
-      detachFns: [],
-      fallbackToPoll: true,
-    };
-    _stream_cache[cachekeys.READ_STREAM] = readStreamState;
-    return {
-      usePollFallback: true,
-      outputs: [],
-    };
-  };
+  const status = Number.isInteger(response?.status) ? response.status : undefined;
+  readStreamState.lastHttpStatus = status;
+  await closeProbeResponseBody(response);
+  hermesTrace("sse.preflight.response", {
+    instanceId: config.instanceId,
+    ok: response?.ok === true,
+    status,
+  });
 
-  if (typeof config.eventSourceFactory !== "function") {
-    if (config.readTransport === "auto") {
-      return usePollFallbackState();
-    }
+  if (status === 401) {
     return {
-      usePollFallback: false,
-      outputs: [
-        toReadSseErrorOutput({
-          config,
-          reason: "event_source_unavailable",
-          message: "Hermes SSE transport is unavailable in this runtime.",
-          status: 500,
-          code: "execution_failed",
-        }),
-      ],
+      authFailureReason: "http_401",
+      status,
+      transientReason: undefined,
     };
+  }
+  if (status === 403) {
+    return {
+      authFailureReason: "http_403",
+      status,
+      transientReason: undefined,
+    };
+  }
+  if (status !== undefined && status >= 500) {
+    return {
+      authFailureReason: undefined,
+      status,
+      transientReason: `http_${status}`,
+    };
+  }
+
+  return {
+    authFailureReason: undefined,
+    status,
+    transientReason: undefined,
+  };
+};
+
+const supportsEventSourceApi = (source) => {
+  return (
+    source !== null &&
+    (typeof source === "object" || typeof source === "function") &&
+    (typeof source.addEventListener === "function" ||
+      "onopen" in source ||
+      "onmessage" in source ||
+      "onerror" in source)
+  );
+};
+
+const resolveSseMessageId = ({ messageEvent, payload }) => {
+  const candidates = [
+    payload?.message_id,
+    payload?.messageId,
+    payload?.eventId,
+    payload?.id,
+    payload?.cursor,
+    messageEvent?.lastEventId,
+  ];
+  for (const candidate of candidates) {
+    const normalizedCandidate = maybeTrimString(candidate);
+    if (normalizedCandidate) {
+      return normalizedCandidate;
+    }
+  }
+  return undefined;
+};
+
+const isDuplicateSseMessage = (readStreamState, messageId) => {
+  const normalizedMessageId = maybeTrimString(messageId);
+  if (!normalizedMessageId) {
+    return false;
+  }
+
+  if (!(readStreamState.seenMessageIds instanceof Set)) {
+    readStreamState.seenMessageIds = new Set();
+  }
+  if (!Array.isArray(readStreamState.seenMessageOrder)) {
+    readStreamState.seenMessageOrder = [];
+  }
+
+  if (readStreamState.seenMessageIds.has(normalizedMessageId)) {
+    return true;
+  }
+
+  readStreamState.seenMessageIds.add(normalizedMessageId);
+  readStreamState.seenMessageOrder.push(normalizedMessageId);
+
+  while (readStreamState.seenMessageOrder.length > HERMES_SSE_EVENT_DEDUPE_LIMIT) {
+    const droppedMessageId = readStreamState.seenMessageOrder.shift();
+    if (droppedMessageId !== undefined) {
+      readStreamState.seenMessageIds.delete(droppedMessageId);
+    }
+  }
+
+  return false;
+};
+
+const markReadStreamAuthPass = (readStreamState, config, reason) => {
+  if (!readStreamState.authResolved) {
+    readStreamState.authResolved = true;
+    readStreamState.authPassed = true;
+    hermesTrace("sse.auth.pass", {
+      instanceId: config.instanceId,
+      reason,
+    });
+  }
+};
+
+const enablePollFallback = ({ readStreamState, config, reason }) => {
+  readStreamState.fallbackToPoll = true;
+  clearReadStreamReconnectTimer(readStreamState);
+  hermesTrace("sse.lifecycle.fallback_poll_enabled", {
+    instanceId: config.instanceId,
+    reason,
+    streamId: readStreamState.identityKey,
+    transport: config.readTransport,
+  });
+};
+
+const emitAuthFail = ({ readStreamState, config, reason, status }) => {
+  readStreamState.authResolved = true;
+  readStreamState.authPassed = false;
+  readStreamState.terminalFailureReason = reason;
+  clearReadStreamReconnectTimer(readStreamState);
+
+  hermesTrace("sse.auth.fail", {
+    instanceId: config.instanceId,
+    reason,
+    status,
+  });
+
+  const resolvedStatus =
+    status ?? (reason === "http_401" ? 401 : reason === "http_403" ? 403 : 503);
+  const resolvedCode =
+    reason === "http_401"
+      ? "auth_unauthorized"
+      : reason === "http_403"
+        ? "auth_forbidden_scope"
+        : "execution_failed";
+
+  queueReadStreamOutput(
+    readStreamState,
+    toReadSseErrorOutput({
+      config,
+      reason,
+      message: `Hermes SSE stream failed (${reason}).`,
+      status: resolvedStatus,
+      code: resolvedCode,
+    }),
+  );
+};
+
+const scheduleSseReconnect = ({ config, _stream_cache, readStreamState, reason }) => {
+  if (readStreamState.fallbackToPoll === true || readStreamState.terminalFailureReason) {
+    return;
+  }
+  if (readStreamState.reconnectTimer !== undefined) {
+    return;
+  }
+
+  readStreamState.retryCount = Number(readStreamState.retryCount ?? 0) + 1;
+  const backoffMs = Math.min(
+    HERMES_SSE_RETRY_BASE_MS * 2 ** Math.min(readStreamState.retryCount - 1, 5),
+    HERMES_SSE_RETRY_MAX_MS,
+  );
+  const jitterMs = resolveDeterministicJitterMs(
+    readStreamState.instanceId,
+    readStreamState.retryCount,
+  );
+  const delayMs = backoffMs + jitterMs;
+  hermesTrace("sse.lifecycle.reconnect_scheduled", {
+    delayMs,
+    instanceId: config.instanceId,
+    jitterMs,
+    reason,
+    retryCount: readStreamState.retryCount,
+  });
+
+  readStreamState.reconnectTimer = setTimeout(() => {
+    readStreamState.reconnectTimer = undefined;
+    openSseReadStream({
+      config,
+      _stream_cache,
+      readStreamState,
+      trigger: "reconnect",
+    }).catch((_error) => {
+      // Error handling is performed inside openSseReadStream.
+    });
+  }, delayMs);
+};
+
+const handleSseOpenFailure = ({ config, _stream_cache, readStreamState, reason, status }) => {
+  readStreamState.currentAttemptFramesSeen = 0;
+  readStreamState.noFrameFailureCount = Number(readStreamState.noFrameFailureCount ?? 0) + 1;
+
+  if (reason === "http_401" || reason === "http_403") {
+    emitAuthFail({ readStreamState, config, reason, status });
+    return;
+  }
+
+  if (readStreamState.noFrameFailureCount >= HERMES_SSE_MAX_NO_FRAME_RETRIES) {
+    if (config.readTransport === "auto") {
+      readStreamState.terminalFailureReason = "max_no_frame_retries";
+      hermesTrace("sse.lifecycle.no_frame_threshold", {
+        instanceId: config.instanceId,
+        noFrameFailureCount: readStreamState.noFrameFailureCount,
+        status,
+      });
+      enablePollFallback({
+        readStreamState,
+        config,
+        reason: "max_no_frame_retries",
+      });
+      return;
+    }
+
+    readStreamState.terminalFailureReason = "max_no_frame_retries";
+    queueReadStreamOutput(
+      readStreamState,
+      toReadSseErrorOutput({
+        config,
+        reason: "max_no_frame_retries",
+        message: "Hermes SSE stream did not emit frames after repeated retries.",
+        status: status ?? 503,
+        code: "upstream_unavailable",
+      }),
+    );
+    hermesTrace("sse.lifecycle.no_frame_threshold", {
+      instanceId: config.instanceId,
+      noFrameFailureCount: readStreamState.noFrameFailureCount,
+      reason: "max_no_frame_retries",
+      status,
+    });
+    return;
+  }
+
+  scheduleSseReconnect({
+    config,
+    _stream_cache,
+    readStreamState,
+    reason,
+  });
+};
+
+const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigger }) => {
+  if (!isPlainObject(readStreamState)) {
+    return;
+  }
+  if (
+    readStreamState.opening === true ||
+    readStreamState.source ||
+    readStreamState.fallbackToPoll
+  ) {
+    return;
+  }
+  if (
+    readStreamState.terminalFailureReason &&
+    readStreamState.terminalFailureReason !== "max_no_frame_retries"
+  ) {
+    return;
+  }
+  if (typeof config.eventSourceFactory !== "function") {
+    return;
   }
 
   const streamUrl = resolveReadStreamUrl({ config, _stream_cache });
+  readStreamState.streamUrl = streamUrl;
+  readStreamState.opening = true;
+  clearReadStreamReconnectTimer(readStreamState);
+  hermesTrace("sse.lifecycle.open_attempt", {
+    instanceId: config.instanceId,
+    retryCount: Number(readStreamState.retryCount ?? 0),
+    streamUrl,
+    transport: config.readTransport,
+    trigger,
+  });
+
+  const preflight = await runSsePreflightProbe({
+    config,
+    streamUrl,
+    readStreamState,
+  });
+  if (preflight.authFailureReason) {
+    readStreamState.opening = false;
+    handleSseOpenFailure({
+      config,
+      _stream_cache,
+      readStreamState,
+      reason: preflight.authFailureReason,
+      status: preflight.status,
+    });
+    return;
+  }
+  if (preflight.transientReason) {
+    hermesTrace("sse.preflight.transient", {
+      instanceId: config.instanceId,
+      reason: preflight.transientReason,
+      status: preflight.status,
+    });
+  }
+  if (preflight.status !== undefined && preflight.status >= 200 && preflight.status < 300) {
+    markReadStreamAuthPass(readStreamState, config, "preflight_http_2xx");
+  }
+
   let source = undefined;
   try {
     source = config.eventSourceFactory(streamUrl, {
@@ -942,66 +1401,95 @@ const ensureSseReadStream = ({ config, _stream_cache }) => {
       },
     });
   } catch (_error) {
-    if (config.readTransport === "auto") {
-      return usePollFallbackState();
-    }
-    return {
-      usePollFallback: false,
-      outputs: [
-        toReadSseErrorOutput({
-          config,
-          reason: "stream_open_failed",
-          message: "Hermes SSE stream failed to open.",
-          code: "execution_failed",
-        }),
-      ],
-    };
+    readStreamState.opening = false;
+    handleSseOpenFailure({
+      config,
+      _stream_cache,
+      readStreamState,
+      reason: "stream_open_failed",
+      status: readStreamState.lastHttpStatus,
+    });
+    return;
   }
 
-  const supportsEventSourceApi =
-    source !== null &&
-    (typeof source === "object" || typeof source === "function") &&
-    (typeof source.addEventListener === "function" || "onmessage" in source || "onerror" in source);
-  if (!supportsEventSourceApi) {
+  if (!supportsEventSourceApi(source)) {
     if (typeof source?.close === "function") {
       source.close();
     }
-
-    if (config.readTransport === "auto") {
-      return usePollFallbackState();
-    }
-    return {
-      usePollFallback: false,
-      outputs: [
-        toReadSseErrorOutput({
-          config,
-          reason: "invalid_event_source",
-          message: "Hermes SSE stream implementation is invalid.",
-          status: 500,
-          code: "execution_failed",
-        }),
-      ],
-    };
+    readStreamState.opening = false;
+    handleSseOpenFailure({
+      config,
+      _stream_cache,
+      readStreamState,
+      reason: "invalid_event_source",
+      status: 500,
+    });
+    return;
   }
 
-  const readStreamState = {
-    identityKey,
-    source,
-    pendingOutputs: [],
-    detachFns: [],
-    fallbackToPoll: false,
-    emittedStreamError: false,
-  };
-  _stream_cache[cachekeys.READ_STREAM] = readStreamState;
+  readStreamState.source = source;
+  readStreamState.opening = false;
+  readStreamState.currentAttemptFramesSeen = 0;
+  readStreamState.terminalFailureReason = undefined;
+  hermesTrace("sse.lifecycle.open", {
+    instanceId: config.instanceId,
+    streamId: readStreamState.identityKey,
+    streamUrl,
+    transport: config.readTransport,
+  });
 
-  const enqueueStreamOutput = (output) => {
-    readStreamState.pendingOutputs.push(output);
+  const markFrameSeen = () => {
+    readStreamState.framesSeen = Number(readStreamState.framesSeen ?? 0) + 1;
+    readStreamState.currentAttemptFramesSeen =
+      Number(readStreamState.currentAttemptFramesSeen ?? 0) + 1;
+    readStreamState.noFrameFailureCount = 0;
   };
 
-  const handleEventMessage = (messageEvent) => {
-    const eventPayload = parseSsePayloadObject(messageEvent?.data);
-    if (!isMeaningfulReadRecord(eventPayload)) {
-      enqueueStreamOutput(
+  const handleEventLikeMessage = (messageEvent, eventType) => {
+    markFrameSeen();
+    markReadStreamAuthPass(readStreamState, config, "stream_open");
+    const payload = parseSsePayloadObject(messageEvent?.data);
+    const messageId = resolveSseMessageId({
+      messageEvent,
+      payload,
+    });
+    hermesTrace("sse.event.received", {
+      eventType,
+      instanceId: config.instanceId,
+      messageId,
+    });
+
+    if (isDuplicateSseMessage(readStreamState, messageId)) {
+      hermesTrace("sse.event.duplicate", {
+        eventType,
+        instanceId: config.instanceId,
+        messageId,
+      });
+      return;
+    }
+
+    if (eventType === "hermes.heartbeat") {
+      if (!isPlainObject(payload)) {
+        return;
+      }
+      const nextCursor = maybeTrimString(payload.cursor);
+      if (nextCursor) {
+        _stream_cache[cachekeys.CURSOR] = nextCursor;
+      }
+      hermesTrace("sse.event.heartbeat", {
+        cursor: nextCursor,
+        instanceId: config.instanceId,
+      });
+      return;
+    }
+
+    if (!isMeaningfulReadRecord(payload)) {
+      hermesTrace("sse.event.invalid_payload", {
+        instanceId: config.instanceId,
+        reason: "invalid_stream_event_payload",
+      });
+      queueReadStreamOutput(
+        readStreamState,
         toReadSseErrorOutput({
           config,
           reason: "invalid_stream_event_payload",
@@ -1013,18 +1501,25 @@ const ensureSseReadStream = ({ config, _stream_cache }) => {
       return;
     }
 
-    const nextCursor = maybeTrimString(eventPayload.cursor);
+    const nextCursor = maybeTrimString(payload.cursor);
     if (nextCursor) {
       _stream_cache[cachekeys.CURSOR] = nextCursor;
     }
 
-    enqueueStreamOutput(
+    hermesTrace("sse.event.dispatched", {
+      eventId: payload.eventId,
+      instanceId: config.instanceId,
+      kind: payload.kind,
+      sequence: payload.sequence,
+    });
+
+    queueReadStreamOutput(
+      readStreamState,
       toElementSuccessOutput({
         mode: "read",
         data: {
-          schemaVersion:
-            typeof eventPayload.schemaVersion === "string" ? eventPayload.schemaVersion : "v1",
-          event: eventPayload,
+          schemaVersion: typeof payload.schemaVersion === "string" ? payload.schemaVersion : "v1",
+          event: payload,
           cursor: nextCursor,
           hasMore: false,
         },
@@ -1035,19 +1530,24 @@ const ensureSseReadStream = ({ config, _stream_cache }) => {
     );
   };
 
-  const handleHeartbeatMessage = (messageEvent) => {
-    const heartbeatPayload = parseSsePayloadObject(messageEvent?.data);
-    if (!isPlainObject(heartbeatPayload)) {
-      return;
-    }
-
-    const nextCursor = maybeTrimString(heartbeatPayload.cursor);
-    if (nextCursor) {
-      _stream_cache[cachekeys.CURSOR] = nextCursor;
-    }
+  const handleStreamOpen = () => {
+    markReadStreamAuthPass(readStreamState, config, "stream_open");
   };
 
   const handleStreamError = () => {
+    const currentAttemptFramesSeen = Number(readStreamState.currentAttemptFramesSeen ?? 0);
+    const totalFramesSeen = Number(readStreamState.framesSeen ?? 0);
+    const hasFrameActivity = currentAttemptFramesSeen > 0 || totalFramesSeen > 0;
+
+    hermesTrace("sse.lifecycle.error", {
+      authResolved: readStreamState.authResolved === true,
+      framesSeen: totalFramesSeen,
+      instanceId: config.instanceId,
+      lastHttpStatus: readStreamState.lastHttpStatus,
+      retryCount: Number(readStreamState.retryCount ?? 0),
+      transport: config.readTransport,
+    });
+
     clearReadStreamListeners(readStreamState);
     if (typeof readStreamState.source?.close === "function") {
       try {
@@ -1058,31 +1558,171 @@ const ensureSseReadStream = ({ config, _stream_cache }) => {
     }
     readStreamState.source = undefined;
 
-    if (config.readTransport === "auto") {
-      readStreamState.fallbackToPoll = true;
+    if (hasFrameActivity) {
+      scheduleSseReconnect({
+        config,
+        _stream_cache,
+        readStreamState,
+        reason: "stream_closed_after_activity",
+      });
       return;
     }
 
-    if (!readStreamState.emittedStreamError) {
-      readStreamState.emittedStreamError = true;
-      enqueueStreamOutput(
-        toReadSseErrorOutput({
-          config,
-          reason: "stream_disconnected",
-          message: "Hermes SSE stream disconnected.",
-        }),
-      );
-    }
+    const status = readStreamState.lastHttpStatus;
+    const explicitAuthReason =
+      status === 401 ? "http_401" : status === 403 ? "http_403" : undefined;
+    handleSseOpenFailure({
+      config,
+      _stream_cache,
+      readStreamState,
+      reason: explicitAuthReason ?? "stream_error_no_frame",
+      status,
+    });
   };
 
   readStreamState.detachFns = [
-    attachEventSourceListener(readStreamState.source, "hermes.event", handleEventMessage),
-    attachEventSourceListener(readStreamState.source, "hermes.heartbeat", handleHeartbeatMessage),
+    attachEventSourceListener(readStreamState.source, "open", handleStreamOpen),
+    attachEventSourceListener(readStreamState.source, "message", (event) =>
+      handleEventLikeMessage(event, "message"),
+    ),
+    attachEventSourceListener(readStreamState.source, "hermes.event", (event) =>
+      handleEventLikeMessage(event, "hermes.event"),
+    ),
+    attachEventSourceListener(readStreamState.source, "hermes.heartbeat", (event) =>
+      handleEventLikeMessage(event, "hermes.heartbeat"),
+    ),
     attachEventSourceListener(readStreamState.source, "error", handleStreamError),
   ];
+};
+
+const ensureSseReadStream = async ({ config, _stream_cache, emitReadOutput }) => {
+  const identityKey = resolveReadStreamIdentityKey(config);
+  const targetInstanceId = config.instanceId;
+  if (!targetInstanceId) {
+    return {
+      usePollFallback: false,
+      outputs: [],
+    };
+  }
+
+  const registeredInstanceIds = Object.keys(ensureReadStreamRegistry(_stream_cache));
+  registeredInstanceIds
+    .filter((instanceId) => instanceId !== targetInstanceId)
+    .forEach((instanceId) => {
+      closeReadStreamByInstance(_stream_cache, instanceId, "instance_switched");
+    });
+
+  let readStreamState = getReadStreamStateByInstance(_stream_cache, targetInstanceId);
+  if (isPlainObject(readStreamState) && readStreamState.identityKey !== identityKey) {
+    closeReadStreamByInstance(_stream_cache, targetInstanceId, "reinitialize");
+    readStreamState = undefined;
+  }
+
+  if (!isPlainObject(readStreamState)) {
+    readStreamState = {
+      identityKey,
+      instanceId: targetInstanceId,
+      source: undefined,
+      pendingOutputs: [],
+      detachFns: [],
+      fallbackToPoll: false,
+      emitReadOutput: typeof emitReadOutput === "function" ? emitReadOutput : undefined,
+      authResolved: false,
+      authPassed: false,
+      reconnectTimer: undefined,
+      retryCount: 0,
+      framesSeen: 0,
+      currentAttemptFramesSeen: 0,
+      noFrameFailureCount: 0,
+      lastHttpStatus: undefined,
+      opening: false,
+      terminalFailureReason: undefined,
+      seenMessageIds: new Set(),
+      seenMessageOrder: [],
+    };
+    setReadStreamStateByInstance({
+      _stream_cache,
+      instanceId: targetInstanceId,
+      readStreamState,
+    });
+  } else if (typeof emitReadOutput === "function") {
+    readStreamState.emitReadOutput = emitReadOutput;
+  }
+
+  _stream_cache[cachekeys.READ_STREAM] = readStreamState;
+  if (readStreamState.fallbackToPoll === true) {
+    hermesTrace("sse.lifecycle.reuse", {
+      fallbackToPoll: true,
+      instanceId: config.instanceId,
+      streamId: identityKey,
+      transport: config.readTransport,
+    });
+    return {
+      usePollFallback: true,
+      outputs: [],
+    };
+  }
+
+  if (typeof config.eventSourceFactory !== "function") {
+    if (config.readTransport === "auto") {
+      hermesTrace("sse.lifecycle.open_skipped", {
+        instanceId: config.instanceId,
+        reason: "event_source_unavailable",
+        transport: config.readTransport,
+      });
+      enablePollFallback({
+        readStreamState,
+        config,
+        reason: "event_source_unavailable",
+      });
+      return {
+        usePollFallback: true,
+        outputs: [],
+      };
+    }
+
+    readStreamState.terminalFailureReason = "event_source_unavailable";
+    queueReadStreamOutput(
+      readStreamState,
+      toReadSseErrorOutput({
+        config,
+        reason: "event_source_unavailable",
+        message: "Hermes SSE transport is unavailable in this runtime.",
+        status: 500,
+        code: "execution_failed",
+      }),
+    );
+    return {
+      usePollFallback: false,
+      outputs: [],
+    };
+  }
+
+  hermesTrace("sse.lifecycle.reuse", {
+    fallbackToPoll: readStreamState.fallbackToPoll === true,
+    hasSource: readStreamState.source !== undefined,
+    instanceId: config.instanceId,
+    isOpening: readStreamState.opening === true,
+    retryCount: Number(readStreamState.retryCount ?? 0),
+    streamId: identityKey,
+    transport: config.readTransport,
+  });
+  if (
+    !readStreamState.source &&
+    readStreamState.opening !== true &&
+    readStreamState.reconnectTimer === undefined &&
+    !readStreamState.terminalFailureReason
+  ) {
+    await openSseReadStream({
+      config,
+      _stream_cache,
+      readStreamState,
+      trigger: "control_tick",
+    });
+  }
 
   return {
-    usePollFallback: false,
+    usePollFallback: readStreamState.fallbackToPoll === true,
     outputs: [],
   };
 };
@@ -1090,6 +1730,10 @@ const ensureSseReadStream = ({ config, _stream_cache }) => {
 const executeWriteFlow = async ({ config, _stream_cache, data_in }) => {
   const writePayload = normalizeWritePayload(data_in);
   if (writePayload === undefined || writePayload === null) {
+    hermesTrace("write.api.skip", {
+      instanceId: config.instanceId,
+      reason: "empty_payload",
+    });
     return [];
   }
 
@@ -1097,6 +1741,12 @@ const executeWriteFlow = async ({ config, _stream_cache, data_in }) => {
   const writeUrl = resolveApiUrl({
     path: config.writePath,
     baseUrl: config.baseUrl,
+  });
+  hermesTrace("write.api.request", {
+    commandId: command.commandId,
+    instanceId: command.instanceId,
+    method: "POST",
+    url: writeUrl,
   });
 
   let response = undefined;
@@ -1117,6 +1767,11 @@ const executeWriteFlow = async ({ config, _stream_cache, data_in }) => {
       config.timeoutMs,
     );
   } catch (error) {
+    hermesTrace("write.api.network_error", {
+      commandId: command.commandId,
+      instanceId: command.instanceId,
+      reason: error?.name === "AbortError" ? "timeout" : "network_error",
+    });
     return [
       toElementErrorOutput({
         mode: "write",
@@ -1135,6 +1790,25 @@ const executeWriteFlow = async ({ config, _stream_cache, data_in }) => {
   }
 
   const responsePayload = await parseJsonResponse(response);
+  hermesTrace("write.api.response", {
+    commandId: command.commandId,
+    instanceId: command.instanceId,
+    ok: response.ok,
+    status: response.status,
+  });
+  if (response.status === 401 || response.status === 403) {
+    hermesTrace("write.api.auth.fail", {
+      commandId: command.commandId,
+      instanceId: command.instanceId,
+      status: response.status,
+    });
+  } else {
+    hermesTrace("write.api.auth.pass", {
+      commandId: command.commandId,
+      instanceId: command.instanceId,
+      status: response.status,
+    });
+  }
   if (!response.ok) {
     return [
       toElementErrorOutput({
@@ -1154,6 +1828,12 @@ const executeWriteFlow = async ({ config, _stream_cache, data_in }) => {
   }
 
   _stream_cache[cachekeys.CONFIG] = config;
+  hermesTrace("write.api.dispatched", {
+    commandId: command.commandId,
+    instanceId: command.instanceId,
+    requestId: responsePayload?.requestId,
+    status: typeof responsePayload?.status === "string" ? responsePayload.status : undefined,
+  });
   return [
     toElementSuccessOutput({
       mode: "write",
@@ -1178,11 +1858,21 @@ const executeReadFlowPoll = async ({ config, _stream_cache }) => {
   const now = Date.now();
   const lastReadAt = Number(_stream_cache[cachekeys.LAST_READ_AT] ?? 0);
   if (config.pollIntervalMs > 0 && now - lastReadAt < config.pollIntervalMs) {
+    hermesTrace("read.poll.skip", {
+      instanceId: config.instanceId,
+      pollIntervalMs: config.pollIntervalMs,
+      reason: "poll_interval_not_elapsed",
+    });
     return [];
   }
   _stream_cache[cachekeys.LAST_READ_AT] = now;
 
   const readUrl = resolveReadPollUrl({ config, _stream_cache });
+  hermesTrace("read.poll.request", {
+    instanceId: config.instanceId,
+    method: "GET",
+    url: readUrl,
+  });
 
   let response = undefined;
   try {
@@ -1200,6 +1890,10 @@ const executeReadFlowPoll = async ({ config, _stream_cache }) => {
       config.timeoutMs,
     );
   } catch (error) {
+    hermesTrace("read.poll.network_error", {
+      instanceId: config.instanceId,
+      reason: error?.name === "AbortError" ? "timeout" : "network_error",
+    });
     return [
       toElementErrorOutput({
         mode: "read",
@@ -1217,6 +1911,22 @@ const executeReadFlowPoll = async ({ config, _stream_cache }) => {
   }
 
   const responsePayload = await parseJsonResponse(response);
+  hermesTrace("read.poll.response", {
+    instanceId: config.instanceId,
+    ok: response.ok,
+    status: response.status,
+  });
+  if (response.status === 401 || response.status === 403) {
+    hermesTrace("read.poll.auth.fail", {
+      instanceId: config.instanceId,
+      status: response.status,
+    });
+  } else {
+    hermesTrace("read.poll.auth.pass", {
+      instanceId: config.instanceId,
+      status: response.status,
+    });
+  }
   if (!response.ok) {
     return [
       toElementErrorOutput({
@@ -1258,10 +1968,22 @@ const executeReadFlowPoll = async ({ config, _stream_cache }) => {
 
   const readRecords = normalizeReadRecords(responsePayload);
   if (readRecords.length === 0) {
+    hermesTrace("read.poll.empty", {
+      hasMore: responsePayload.hasMore === true,
+      instanceId: config.instanceId,
+      nextCursor,
+    });
     return [];
   }
 
   const responseCursor = maybeTrimString(responsePayload.cursor);
+  hermesTrace("read.poll.dispatched", {
+    eventCount: readRecords.length,
+    hasMore: responsePayload.hasMore === true,
+    instanceId: config.instanceId,
+    nextCursor,
+    requestId: responsePayload?.requestId,
+  });
 
   return readRecords.map((event) => {
     return toElementSuccessOutput({
@@ -1282,23 +2004,35 @@ const executeReadFlowPoll = async ({ config, _stream_cache }) => {
   });
 };
 
-const executeReadFlow = async ({ config, _stream_cache }) => {
+const executeReadFlow = async ({ config, _stream_cache, emitReadOutput }) => {
+  hermesTrace("read.dispatch", {
+    instanceId: config.instanceId,
+    transport: config.readTransport,
+  });
   if (config.readTransport === "poll") {
-    closeReadStream(_stream_cache);
+    closeReadStream(_stream_cache, "transport_poll");
     return executeReadFlowPoll({ config, _stream_cache });
   }
 
-  const sseSetup = ensureSseReadStream({ config, _stream_cache });
+  const sseSetup = await ensureSseReadStream({ config, _stream_cache, emitReadOutput });
   if (sseSetup.outputs.length > 0) {
     return sseSetup.outputs;
   }
 
   const sseOutputs = drainReadStreamOutputs(_stream_cache);
   if (sseOutputs.length > 0) {
+    if (typeof emitReadOutput === "function") {
+      sseOutputs.forEach((output) => emitReadOutput(output));
+      return [];
+    }
     return sseOutputs;
   }
 
   if (config.readTransport === "auto" && sseSetup.usePollFallback) {
+    hermesTrace("read.dispatch.fallback_poll", {
+      instanceId: config.instanceId,
+      reason: "sse_fallback_enabled",
+    });
     return executeReadFlowPoll({ config, _stream_cache });
   }
 
@@ -1317,7 +2051,8 @@ const initElementInterface = (_stream_cache) => {
 
   const _leaflogic = (input$objArr, controlflow$obj) => {
     const _outflow_data$ = new Subject();
-    const data_in$ = input$objArr?.[0]?._stream ?? of(undefined);
+    const stream_read_out$ = new Subject();
+    const data_in$ = (input$objArr?.[0]?._stream ?? of(undefined)).pipe(startWith(undefined));
 
     const config$obj = configgen
       ? driveDataflowByCtrlflow(controlflow$obj, input$objArr, undefined, node_context, {
@@ -1334,26 +2069,63 @@ const initElementInterface = (_stream_cache) => {
           _control: { _stream: controlflow$obj._stream },
         };
 
-    const _ctrl_out$ = config$obj._control._stream.pipe(
+    const emitReadOutput = (output) => {
+      if (output === undefined) {
+        return;
+      }
+      hermesTrace("data.emit.sse", {
+        instanceId: _stream_cache[cachekeys.CONFIG]?.instanceId,
+        mode: output?.mode,
+        ok: output?.ok,
+      });
+      stream_read_out$.next({
+        ctrl: _stream_cache[ElemCacheKeyLUT.CTRLIN] ?? { _bname: "accio" },
+        outputs: [output],
+        source: "sse_push",
+      });
+    };
+
+    const control_readwrite_flow$ = config$obj._control._stream.pipe(
       withLatestFrom(config$obj._stream, data_in$),
       concatMap(async (merged_in) => {
         const _ctrl_in = merged_in[0];
         const rawConfig = merged_in[1];
         const _data_in = merged_in[2];
         _stream_cache[ElemCacheKeyLUT.CTRLIN] = _ctrl_in;
+        hermesTrace("control.tick.received", {
+          ctrlBottle: isBottle(_ctrl_in) ? _ctrl_in._bname : undefined,
+          hasInputBottle: isBottle(_data_in),
+          inputBottle: isBottle(_data_in) ? _data_in._bname : undefined,
+          refnode: _stream_cache[ElemCacheKeyLUT.REFNODE],
+        });
 
         try {
           const config = resolveHermesConfig(rawConfig, _stream_cache);
           _stream_cache[cachekeys.CONFIG] = config;
+          hermesTrace("control.tick.config_resolved", {
+            instanceId: config.instanceId,
+            mode: config.mode,
+            readTransport: config.readTransport,
+          });
           if (!["read", "both"].includes(config.mode)) {
-            closeReadStream(_stream_cache);
+            closeReadStream(_stream_cache, "mode_without_read");
           }
 
           const nextOutputs = [];
           const upstreamErrorBottle =
             isBottle(_data_in) && _data_in._bname === "error" ? _data_in : undefined;
           const emptyInputSentinel = isEmptyInputSentinel(_data_in);
+          if (emptyInputSentinel) {
+            hermesTrace("data.input.empty_sentinel", {
+              instanceId: config.instanceId,
+              mode: config.mode,
+            });
+          }
           if (upstreamErrorBottle) {
+            hermesTrace("data.input.error_passthrough", {
+              instanceId: config.instanceId,
+              mode: config.mode,
+            });
             nextOutputs.push(upstreamErrorBottle);
           }
 
@@ -1368,19 +2140,33 @@ const initElementInterface = (_stream_cache) => {
               data_in: _data_in,
             });
             nextOutputs.push(...writeOutputs);
+            hermesTrace("write.dispatch.complete", {
+              instanceId: config.instanceId,
+              outputCount: writeOutputs.length,
+            });
           }
 
           if (["read", "both"].includes(config.mode)) {
             const readOutputs = await executeReadFlow({
               config,
               _stream_cache,
+              emitReadOutput,
             });
             nextOutputs.push(...readOutputs);
+            hermesTrace("read.dispatch.complete", {
+              instanceId: config.instanceId,
+              outputCount: readOutputs.length,
+            });
           }
 
-          return { ctrl: _ctrl_in, outputs: nextOutputs };
+          return { ctrl: _ctrl_in, outputs: nextOutputs, source: "control_tick" };
         } catch (error) {
           if (error instanceof HermesDomainError) {
+            hermesTrace("control.tick.domain_error", {
+              code: error.code,
+              message: error.message,
+              status: error.status,
+            });
             return {
               ctrl: _ctrl_in,
               outputs: [
@@ -1399,15 +2185,35 @@ const initElementInterface = (_stream_cache) => {
                   },
                 }),
               ],
+              source: "control_tick",
             };
           }
-          return { ctrl: _ctrl_in, outputs: [toFatalErrorBottle(error)] };
+          hermesTrace("control.tick.fatal_error", {
+            code: error?.code,
+            message: error?.message,
+            status: error?.status,
+          });
+          return { ctrl: _ctrl_in, outputs: [toFatalErrorBottle(error)], source: "control_tick" };
         }
       }),
+    );
+
+    const _ctrl_out$ = merge(control_readwrite_flow$, stream_read_out$).pipe(
       map((flow_result) => {
         flow_result.outputs
           .filter((output) => output !== undefined)
-          .forEach((output) => _outflow_data$.next(output));
+          .forEach((output) => {
+            hermesTrace("data.emit.output", {
+              instanceId: output?.meta?.instanceId,
+              mode: output?.mode,
+              ok: output?.ok,
+              source: flow_result.source ?? "unknown",
+            });
+            _outflow_data$.next(output);
+          });
+        hermesTrace("control.tick.relay", {
+          source: flow_result.source ?? "unknown",
+        });
         return flow_result.ctrl;
       }),
       share(),

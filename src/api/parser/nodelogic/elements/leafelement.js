@@ -1,5 +1,5 @@
 import { etaReduceLambdaGraphs } from "../../eta.js";
-import { concatMap, map } from "rxjs/operators";
+import { concatMap, map, startWith } from "rxjs/operators";
 import { of, combineLatest } from "rxjs";
 import { executeLEAFLogicInSync, driveDataflowByCtrlflow } from "../../leaf.js";
 import axios from "axios";
@@ -533,9 +533,19 @@ const _leafelement = {
           // currently leafelement of type prompt supports this feature.
           lambdactrl.gos.etaTree.leafio.elementioLUT[refnode] = _std_elements_props.elementio$;
         }
+        const runtime_input$objArr =
+          elementname === "hermes"
+            ? input$objArr.map((_input) => {
+                return {
+                  ..._input,
+                  _stream: _input._stream.pipe(startWith(undefined)),
+                };
+              })
+            : input$objArr;
+
         const output$obj = driveDataflowByCtrlflow(
           { _stream: inflow_ctrl$ },
-          input$objArr,
+          runtime_input$objArr,
           undefined,
           { ...node_context, metastep: "element " + elementname },
           {

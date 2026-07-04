@@ -49,7 +49,7 @@ export default {
       new TerserPlugin({
         terserOptions: {
           compress: {
-            drop_console: isProd,
+            drop_console: false,
           },
           mangle: true,
           output: {
