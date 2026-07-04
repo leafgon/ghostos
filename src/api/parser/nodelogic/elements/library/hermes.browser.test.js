@@ -377,7 +377,7 @@ describe("hermes leafelement", () => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
       const [probeUrl, probeInit] = global.fetch.mock.calls[0];
       expect(requestHref(probeUrl)).toContain("/api/hermes/integration/events/stream");
-      expect(probeInit.method).toBe("HEAD");
+      expect(probeInit.method).toBe("GET");
       expect(probeInit.headers.Accept).toBe("text/event-stream");
       expect(instances).toHaveLength(1);
       expect(instances[0].url).toContain("/api/hermes/integration/events/stream");
@@ -575,6 +575,45 @@ describe("hermes leafelement", () => {
     }
   });
 
+  it("mode=read with readTransport=sse marks authResolved after preflight 200 before first frame", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const traceSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      instances[0].emit("error", { type: "error" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const traceLines = traceSpy.mock.calls.map(([message]) => `${message}`);
+      expect(
+        traceLines.some(
+          (line) =>
+            line.includes("event=sse.lifecycle.error") &&
+            line.includes("authResolved=true") &&
+            line.includes("lastHttpStatus=200"),
+        ),
+      ).toBe(true);
+    } finally {
+      ctrlSub.unsubscribe();
+      traceSpy.mockRestore();
+    }
+  });
+
   it("mode=read with readTransport=sse emits explicit auth fail for preflight 401", async () => {
     global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(401));
     const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
@@ -601,7 +640,7 @@ describe("hermes leafelement", () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [probeUrl, probeInit] = global.fetch.mock.calls[0];
     expect(requestHref(probeUrl)).toContain("/api/hermes/integration/events/stream");
-    expect(probeInit.method).toBe("HEAD");
+    expect(probeInit.method).toBe("GET");
     expect(probeInit.headers.Accept).toBe("text/event-stream");
     expect(instances).toHaveLength(0);
     expect(output._content.mode).toBe("read");

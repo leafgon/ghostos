@@ -1065,7 +1065,7 @@ const closeProbeResponseBody = async (response) => {
 
 const runSsePreflightProbe = async ({ config, streamUrl, readStreamState }) => {
   const probeTimeoutMs = Math.max(1000, Math.min(config.timeoutMs, 5000));
-  const probeMethod = "HEAD";
+  const probeMethod = "GET";
   hermesTrace("sse.preflight.request", {
     instanceId: config.instanceId,
     method: probeMethod,
