@@ -1,4 +1,4 @@
-import { Subject, merge, of } from "rxjs";
+import { Observable, Subject, merge, of } from "rxjs";
 import { concatMap, map, share, startWith, withLatestFrom } from "rxjs/operators";
 
 import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
@@ -20,6 +20,7 @@ const cachekeys = {
   LAST_READ_AT: "_hermes_last_read_at",
   READ_STREAM: "_hermes_read_stream",
   READ_STREAMS: "_hermes_read_streams",
+  DATA_SUBSCRIBER_COUNT: "_hermes_data_subscriber_count",
 };
 
 const HERMES_CODEBASE = "ghostos/api/parser/nodelogic/elements/library/hermes.js";
@@ -838,6 +839,18 @@ const clearReadStreamReconnectTimer = (readStreamState) => {
   }
 };
 
+const resolveDataSubscriberCount = (_stream_cache) => {
+  const resolved = Number(_stream_cache[cachekeys.DATA_SUBSCRIBER_COUNT] ?? 0);
+  if (!Number.isFinite(resolved) || Number.isNaN(resolved) || resolved <= 0) {
+    return 0;
+  }
+  return Math.floor(resolved);
+};
+
+const hasActiveDataSubscribers = (_stream_cache) => {
+  return resolveDataSubscriberCount(_stream_cache) > 0;
+};
+
 const closeReadStreamState = (readStreamState, reason = "unspecified") => {
   if (!isPlainObject(readStreamState)) {
     return;
@@ -1241,6 +1254,14 @@ const emitAuthFail = ({ readStreamState, config, reason, status }) => {
 };
 
 const scheduleSseReconnect = ({ config, _stream_cache, readStreamState, reason }) => {
+  if (!hasActiveDataSubscribers(_stream_cache)) {
+    hermesTrace("sse.lifecycle.reconnect_skipped", {
+      instanceId: config.instanceId,
+      reason: "no_data_subscribers",
+      retryCount: Number(readStreamState.retryCount ?? 0),
+    });
+    return;
+  }
   if (readStreamState.fallbackToPoll === true || readStreamState.terminalFailureReason) {
     return;
   }
@@ -1334,6 +1355,15 @@ const handleSseOpenFailure = ({ config, _stream_cache, readStreamState, reason, 
 
 const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigger }) => {
   if (!isPlainObject(readStreamState)) {
+    return;
+  }
+  if (!hasActiveDataSubscribers(_stream_cache)) {
+    hermesTrace("sse.lifecycle.open_skipped", {
+      instanceId: config.instanceId,
+      reason: "no_data_subscribers",
+      transport: config.readTransport,
+      trigger,
+    });
     return;
   }
   if (
@@ -1599,6 +1629,18 @@ const ensureSseReadStream = async ({ config, _stream_cache, emitReadOutput }) =>
   const identityKey = resolveReadStreamIdentityKey(config);
   const targetInstanceId = config.instanceId;
   if (!targetInstanceId) {
+    return {
+      usePollFallback: false,
+      outputs: [],
+    };
+  }
+  if (!hasActiveDataSubscribers(_stream_cache)) {
+    closeReadStreamByInstance(_stream_cache, targetInstanceId, "no_data_subscribers");
+    hermesTrace("sse.lifecycle.open_skipped", {
+      instanceId: config.instanceId,
+      reason: "no_data_subscribers",
+      transport: config.readTransport,
+    });
     return {
       usePollFallback: false,
       outputs: [],
@@ -2009,6 +2051,15 @@ const executeReadFlow = async ({ config, _stream_cache, emitReadOutput }) => {
     instanceId: config.instanceId,
     transport: config.readTransport,
   });
+  if (!hasActiveDataSubscribers(_stream_cache)) {
+    hermesTrace("read.dispatch.skip", {
+      instanceId: config.instanceId,
+      reason: "no_data_subscribers",
+      transport: config.readTransport,
+    });
+    closeReadStreamByInstance(_stream_cache, config.instanceId, "no_data_subscribers");
+    return [];
+  }
   if (config.readTransport === "poll") {
     closeReadStream(_stream_cache, "transport_poll");
     return executeReadFlowPoll({ config, _stream_cache });
@@ -2052,6 +2103,7 @@ const initElementInterface = (_stream_cache) => {
   const _leaflogic = (input$objArr, controlflow$obj) => {
     const _outflow_data$ = new Subject();
     const stream_read_out$ = new Subject();
+    _stream_cache[cachekeys.DATA_SUBSCRIBER_COUNT] = 0;
     const data_in$ = (input$objArr?.[0]?._stream ?? of(undefined)).pipe(startWith(undefined));
 
     const config$obj = configgen
@@ -2219,8 +2271,31 @@ const initElementInterface = (_stream_cache) => {
       share(),
     );
 
+    const _tracked_data_out$ = new Observable((subscriber) => {
+      const nextCount = resolveDataSubscriberCount(_stream_cache) + 1;
+      _stream_cache[cachekeys.DATA_SUBSCRIBER_COUNT] = nextCount;
+      hermesTrace("data.subscriber.add", {
+        count: nextCount,
+        refnode: _stream_cache[ElemCacheKeyLUT.REFNODE],
+      });
+
+      const sub = _outflow_data$.subscribe(subscriber);
+      return () => {
+        sub.unsubscribe();
+        const remainingCount = Math.max(0, resolveDataSubscriberCount(_stream_cache) - 1);
+        _stream_cache[cachekeys.DATA_SUBSCRIBER_COUNT] = remainingCount;
+        hermesTrace("data.subscriber.remove", {
+          count: remainingCount,
+          refnode: _stream_cache[ElemCacheKeyLUT.REFNODE],
+        });
+        if (remainingCount === 0) {
+          closeReadStream(_stream_cache, "no_data_subscribers");
+        }
+      };
+    });
+
     return {
-      _stream: _outflow_data$.pipe(share()),
+      _stream: _tracked_data_out$,
       _control: {
         _stream: _ctrl_out$.pipe(share()),
       },

@@ -408,6 +408,85 @@ describe("hermes leafelement", () => {
     }
   });
 
+  it("mode=read with readTransport=sse opens stream when control flow is subscribed", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(instances).toHaveLength(1);
+    } finally {
+      ctrlSub.unsubscribe();
+    }
+  });
+
+  it("mode=read with readTransport=sse keeps stream active while subscribers remain and closes when all unsubscribe", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const outSub = output$obj._stream.subscribe(() => {});
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(instances).toHaveLength(1);
+      expect(instances[0].closed).toBe(false);
+
+      outSub.unsubscribe();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(instances[0].closed).toBe(false);
+
+      ctrlSub.unsubscribe();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(instances[0].closed).toBe(true);
+
+      ctrlinput$.next({ _bname: "accio", idx: 2 });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(instances).toHaveLength(1);
+    } finally {
+      if (!ctrlSub.closed) {
+        ctrlSub.unsubscribe();
+      }
+      if (!outSub.closed) {
+        outSub.unsubscribe();
+      }
+    }
+  });
+
   it("mode=read with readTransport=sse handles default message events", async () => {
     global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
     const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
