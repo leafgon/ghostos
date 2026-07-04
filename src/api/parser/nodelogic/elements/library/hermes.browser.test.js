@@ -377,7 +377,7 @@ describe("hermes leafelement", () => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
       const [probeUrl, probeInit] = global.fetch.mock.calls[0];
       expect(requestHref(probeUrl)).toContain("/api/hermes/integration/events/stream");
-      expect(probeInit.method).toBe("GET");
+      expect(probeInit.method).toBe("HEAD");
       expect(probeInit.headers.Accept).toBe("text/event-stream");
       expect(instances).toHaveLength(1);
       expect(instances[0].url).toContain("/api/hermes/integration/events/stream");
@@ -640,7 +640,7 @@ describe("hermes leafelement", () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [probeUrl, probeInit] = global.fetch.mock.calls[0];
     expect(requestHref(probeUrl)).toContain("/api/hermes/integration/events/stream");
-    expect(probeInit.method).toBe("GET");
+    expect(probeInit.method).toBe("HEAD");
     expect(probeInit.headers.Accept).toBe("text/event-stream");
     expect(instances).toHaveLength(0);
     expect(output._content.mode).toBe("read");
@@ -693,13 +693,95 @@ describe("hermes leafelement", () => {
     expect(output._content.data.event.eventId).toBe("evt_poll_fallback_1");
   });
 
-  it("mode=read with readTransport=auto falls back to poll only after repeated no-frame SSE errors", async () => {
+  it("mode=read with readTransport=auto keeps reconnecting for authenticated short no-frame closures without poll fallback", async () => {
     vi.useFakeTimers();
     const traceSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     global.fetch = vi.fn().mockImplementation((requestUrl) => {
       const href = requestHref(requestUrl);
       if (href.includes("/api/hermes/integration/events/stream")) {
         return Promise.resolve(makeSseProbeResponse(200));
+      }
+      return Promise.resolve(makeJsonResponse(200, { schemaVersion: "v1", events: [] }));
+    });
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "auto",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      datainput$.next({ ignore: true });
+      ctrlinput$.next({ _bname: "accio" });
+      await vi.advanceTimersByTimeAsync(50);
+      expect(outputs).toHaveLength(0);
+      expect(instances).toHaveLength(1);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+
+      instances[0].emit("error", { type: "error" });
+      await vi.advanceTimersByTimeAsync(1200);
+      expect(instances).toHaveLength(2);
+
+      instances[1].emit("error", { type: "error" });
+      await vi.advanceTimersByTimeAsync(1600);
+      expect(instances).toHaveLength(3);
+
+      instances[2].emit("error", { type: "error" });
+      await vi.advanceTimersByTimeAsync(2500);
+      expect(instances.length).toBeGreaterThanOrEqual(4);
+
+      const requestHrefs = global.fetch.mock.calls.map(([requestUrl]) => requestHref(requestUrl));
+      expect(
+        requestHrefs.filter((href) => href.includes("/api/hermes/integration/events/stream")),
+      ).toHaveLength(1);
+      expect(
+        requestHrefs.some(
+          (href) =>
+            href.includes("/api/hermes/integration/events") &&
+            !href.includes("/api/hermes/integration/events/stream"),
+        ),
+      ).toBe(false);
+
+      const traceLines = traceSpy.mock.calls.map(([message]) => `${message}`);
+      expect(
+        traceLines.some(
+          (line) =>
+            line.includes("event=sse.lifecycle.fallback_poll_enabled") &&
+            line.includes("reason=max_no_frame_retries"),
+        ),
+      ).toBe(false);
+      expect(
+        traceLines.some(
+          (line) =>
+            line.includes("event=sse.lifecycle.reconnect_scheduled") &&
+            line.includes("reason=stream_closed_no_frame_authenticated"),
+        ),
+      ).toBe(true);
+    } finally {
+      traceSpy.mockRestore();
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+      vi.useRealTimers();
+    }
+  });
+
+  it("mode=read with readTransport=auto falls back to poll only after repeated no-frame SSE errors", async () => {
+    vi.useFakeTimers();
+    const traceSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    global.fetch = vi.fn().mockImplementation((requestUrl) => {
+      const href = requestHref(requestUrl);
+      if (href.includes("/api/hermes/integration/events/stream")) {
+        return Promise.resolve(makeSseProbeResponse(503));
       }
       return Promise.resolve(
         makeJsonResponse(200, {

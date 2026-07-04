@@ -1065,7 +1065,7 @@ const closeProbeResponseBody = async (response) => {
 
 const runSsePreflightProbe = async ({ config, streamUrl, readStreamState }) => {
   const probeTimeoutMs = Math.max(1000, Math.min(config.timeoutMs, 5000));
-  const probeMethod = "GET";
+  const probeMethod = "HEAD";
   hermesTrace("sse.preflight.request", {
     instanceId: config.instanceId,
     method: probeMethod,
@@ -1386,6 +1386,7 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
   const streamUrl = resolveReadStreamUrl({ config, _stream_cache });
   readStreamState.streamUrl = streamUrl;
   readStreamState.opening = true;
+  readStreamState.currentAttemptOpened = false;
   clearReadStreamReconnectTimer(readStreamState);
   hermesTrace("sse.lifecycle.open_attempt", {
     instanceId: config.instanceId,
@@ -1395,31 +1396,34 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
     trigger,
   });
 
-  const preflight = await runSsePreflightProbe({
-    config,
-    streamUrl,
-    readStreamState,
-  });
-  if (preflight.authFailureReason) {
-    readStreamState.opening = false;
-    handleSseOpenFailure({
+  if (readStreamState.preflightAttempted !== true) {
+    readStreamState.preflightAttempted = true;
+    const preflight = await runSsePreflightProbe({
       config,
-      _stream_cache,
+      streamUrl,
       readStreamState,
-      reason: preflight.authFailureReason,
-      status: preflight.status,
     });
-    return;
-  }
-  if (preflight.transientReason) {
-    hermesTrace("sse.preflight.transient", {
-      instanceId: config.instanceId,
-      reason: preflight.transientReason,
-      status: preflight.status,
-    });
-  }
-  if (preflight.status !== undefined && preflight.status >= 200 && preflight.status < 300) {
-    markReadStreamAuthPass(readStreamState, config, "preflight_http_2xx");
+    if (preflight.authFailureReason) {
+      readStreamState.opening = false;
+      handleSseOpenFailure({
+        config,
+        _stream_cache,
+        readStreamState,
+        reason: preflight.authFailureReason,
+        status: preflight.status,
+      });
+      return;
+    }
+    if (preflight.transientReason) {
+      hermesTrace("sse.preflight.transient", {
+        instanceId: config.instanceId,
+        reason: preflight.transientReason,
+        status: preflight.status,
+      });
+    }
+    if (preflight.status !== undefined && preflight.status >= 200 && preflight.status < 300) {
+      markReadStreamAuthPass(readStreamState, config, "preflight_http_2xx");
+    }
   }
 
   let source = undefined;
@@ -1473,6 +1477,7 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
     readStreamState.currentAttemptFramesSeen =
       Number(readStreamState.currentAttemptFramesSeen ?? 0) + 1;
     readStreamState.noFrameFailureCount = 0;
+    readStreamState.retryCount = 0;
   };
 
   const handleEventLikeMessage = (messageEvent, eventType) => {
@@ -1561,6 +1566,7 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
   };
 
   const handleStreamOpen = () => {
+    readStreamState.currentAttemptOpened = true;
     markReadStreamAuthPass(readStreamState, config, "stream_open");
   };
 
@@ -1568,6 +1574,7 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
     const currentAttemptFramesSeen = Number(readStreamState.currentAttemptFramesSeen ?? 0);
     const totalFramesSeen = Number(readStreamState.framesSeen ?? 0);
     const hasFrameActivity = currentAttemptFramesSeen > 0 || totalFramesSeen > 0;
+    const currentAttemptOpened = readStreamState.currentAttemptOpened === true;
 
     hermesTrace("sse.lifecycle.error", {
       authResolved: readStreamState.authResolved === true,
@@ -1587,6 +1594,7 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
       }
     }
     readStreamState.source = undefined;
+    readStreamState.currentAttemptOpened = false;
 
     if (hasFrameActivity) {
       scheduleSseReconnect({
@@ -1601,11 +1609,38 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
     const status = readStreamState.lastHttpStatus;
     const explicitAuthReason =
       status === 401 ? "http_401" : status === 403 ? "http_403" : undefined;
+    if (explicitAuthReason) {
+      handleSseOpenFailure({
+        config,
+        _stream_cache,
+        readStreamState,
+        reason: explicitAuthReason,
+        status,
+      });
+      return;
+    }
+
+    const isAuthenticatedSession =
+      readStreamState.authResolved === true && readStreamState.authPassed !== false;
+    const hasSuccessfulPreflight = status !== undefined && status >= 200 && status < 300;
+    if (currentAttemptOpened || isAuthenticatedSession || hasSuccessfulPreflight) {
+      readStreamState.noFrameFailureCount = 0;
+      scheduleSseReconnect({
+        config,
+        _stream_cache,
+        readStreamState,
+        reason: currentAttemptOpened
+          ? "stream_closed_no_frame_after_open"
+          : "stream_closed_no_frame_authenticated",
+      });
+      return;
+    }
+
     handleSseOpenFailure({
       config,
       _stream_cache,
       readStreamState,
-      reason: explicitAuthReason ?? "stream_error_no_frame",
+      reason: "stream_error_no_frame",
       status,
     });
   };
@@ -1671,10 +1706,12 @@ const ensureSseReadStream = async ({ config, _stream_cache, emitReadOutput }) =>
       emitReadOutput: typeof emitReadOutput === "function" ? emitReadOutput : undefined,
       authResolved: false,
       authPassed: false,
+      preflightAttempted: false,
       reconnectTimer: undefined,
       retryCount: 0,
       framesSeen: 0,
       currentAttemptFramesSeen: 0,
+      currentAttemptOpened: false,
       noFrameFailureCount: 0,
       lastHttpStatus: undefined,
       opening: false,
