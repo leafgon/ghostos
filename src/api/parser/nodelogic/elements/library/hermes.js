@@ -1168,6 +1168,69 @@ const resolveSseMessageId = ({ messageEvent, payload }) => {
   return undefined;
 };
 
+const resolveHermesEnvelopePayload = (payload) => {
+  if (isPlainObject(payload?.payload)) {
+    return payload.payload;
+  }
+  return isPlainObject(payload) ? payload : undefined;
+};
+
+const hasNonNullPayloadError = (payload) => {
+  const envelopePayload = resolveHermesEnvelopePayload(payload);
+  if (envelopePayload?.error !== undefined && envelopePayload?.error !== null) {
+    return true;
+  }
+  return payload?.error !== undefined && payload?.error !== null;
+};
+
+const resolveHermesEventFilterResult = (payload) => {
+  const kind = maybeTrimString(payload?.kind);
+  const envelopePayload = resolveHermesEnvelopePayload(payload);
+  const hasPayloadError = hasNonNullPayloadError(payload);
+
+  if (kind === "runtime.observed" && !hasPayloadError) {
+    return {
+      allowDispatch: false,
+      reason: "runtime_observed_noise",
+      discordEventType: undefined,
+      hasContentText: false,
+      hasPayloadError,
+    };
+  }
+
+  if (hasPayloadError) {
+    return {
+      allowDispatch: true,
+      reason: "payload_error",
+      discordEventType: maybeTrimString(envelopePayload?.discord?.eventType),
+      hasContentText:
+        envelopePayload?.content?.text !== undefined && envelopePayload?.content?.text !== null,
+      hasPayloadError,
+    };
+  }
+
+  const discordEventType = maybeTrimString(envelopePayload?.discord?.eventType);
+  const hasContentText =
+    envelopePayload?.content?.text !== undefined && envelopePayload?.content?.text !== null;
+  if (discordEventType !== "MESSAGE_CREATE" || !hasContentText) {
+    return {
+      allowDispatch: false,
+      reason: "not_user_message",
+      discordEventType,
+      hasContentText,
+      hasPayloadError,
+    };
+  }
+
+  return {
+    allowDispatch: true,
+    reason: "user_message",
+    discordEventType,
+    hasContentText,
+    hasPayloadError,
+  };
+};
+
 const isDuplicateSseMessage = (readStreamState, messageId) => {
   const normalizedMessageId = maybeTrimString(messageId);
   if (!normalizedMessageId) {
@@ -1518,6 +1581,16 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
       return;
     }
 
+    if (eventType !== "hermes.event") {
+      hermesTrace("sse.event.filtered", {
+        eventType,
+        instanceId: config.instanceId,
+        messageId,
+        reason: "unsupported_event_type",
+      });
+      return;
+    }
+
     if (!isMeaningfulReadRecord(payload)) {
       hermesTrace("sse.event.invalid_payload", {
         instanceId: config.instanceId,
@@ -1541,8 +1614,26 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
       _stream_cache[cachekeys.CURSOR] = nextCursor;
     }
 
+    const filterResult = resolveHermesEventFilterResult(payload);
+    if (!filterResult.allowDispatch) {
+      hermesTrace("sse.event.filtered", {
+        eventType,
+        hasContentText: filterResult.hasContentText,
+        hasPayloadError: filterResult.hasPayloadError,
+        instanceId: config.instanceId,
+        kind: payload.kind,
+        messageId,
+        reason: filterResult.reason,
+        discordEventType: filterResult.discordEventType,
+      });
+      return;
+    }
+
     hermesTrace("sse.event.dispatched", {
       eventId: payload.eventId,
+      discordEventType: filterResult.discordEventType,
+      hasContentText: filterResult.hasContentText,
+      hasPayloadError: filterResult.hasPayloadError,
       instanceId: config.instanceId,
       kind: payload.kind,
       sequence: payload.sequence,

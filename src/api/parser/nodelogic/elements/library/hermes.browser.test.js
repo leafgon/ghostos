@@ -146,6 +146,34 @@ const makeJsonResponse = (status, body) => {
   };
 };
 
+const makeSseEnvelopeEvent = ({
+  eventId,
+  sequence,
+  kind = "discord.message",
+  discordEventType = "MESSAGE_CREATE",
+  text = "hello",
+  error = null,
+  payload = {},
+}) => {
+  return {
+    schemaVersion: "v1",
+    eventId,
+    sequence,
+    kind,
+    instanceId: TEST_INSTANCE_ID,
+    payload: {
+      discord: {
+        eventType: discordEventType,
+      },
+      content: {
+        text,
+      },
+      error,
+      ...payload,
+    },
+  };
+};
+
 const requestHref = (requestUrl) => {
   return typeof requestUrl === "string" ? requestUrl : requestUrl?.href;
 };
@@ -386,13 +414,13 @@ describe("hermes leafelement", () => {
       instances[0].emit("open", { type: "open" });
 
       instances[0].emit("hermes.event", {
-        data: JSON.stringify({
-          schemaVersion: "v1",
-          eventId: "evt_sse_1",
-          sequence: 1,
-          instanceId: TEST_INSTANCE_ID,
-          payload: { text: "from-sse" },
-        }),
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_sse_1",
+            sequence: 1,
+            text: "from-sse",
+          }),
+        ),
       });
       await new Promise((resolve) => setTimeout(resolve, 20));
 
@@ -487,7 +515,7 @@ describe("hermes leafelement", () => {
     }
   });
 
-  it("mode=read with readTransport=sse handles default message events", async () => {
+  it("mode=read with readTransport=sse ignores default unnamed message events", async () => {
     global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
     const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
     const reducedLambdaObj = {
@@ -511,19 +539,17 @@ describe("hermes leafelement", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
       instances[0].emit("open", { type: "open" });
       instances[0].emit("message", {
-        data: JSON.stringify({
-          schemaVersion: "v1",
-          eventId: "evt_sse_message_1",
-          sequence: 11,
-          instanceId: TEST_INSTANCE_ID,
-          payload: { text: "from-default-message" },
-        }),
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_sse_message_1",
+            sequence: 11,
+            text: "from-default-message",
+          }),
+        ),
       });
       await new Promise((resolve) => setTimeout(resolve, 20));
 
-      expect(outputs).toHaveLength(1);
-      expect(outputs[0]._content.ok).toBe(true);
-      expect(outputs[0]._content.data.event.eventId).toBe("evt_sse_message_1");
+      expect(outputs).toHaveLength(0);
     } finally {
       ctrlSub.unsubscribe();
       outSub.unsubscribe();
@@ -553,13 +579,13 @@ describe("hermes leafelement", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
       instances[0].emit("open", { type: "open" });
       instances[0].emit("hermes.event", {
-        data: JSON.stringify({
-          schemaVersion: "v1",
-          eventId: "evt_sse_close_1",
-          sequence: 12,
-          instanceId: TEST_INSTANCE_ID,
-          payload: { text: "close-soon" },
-        }),
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_sse_close_1",
+            sequence: 12,
+            text: "close-soon",
+          }),
+        ),
       });
       instances[0].emit("error", { type: "error" });
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -648,6 +674,149 @@ describe("hermes leafelement", () => {
     expect(output._content.error.code).toBe("auth_unauthorized");
     expect(output._content.error.status).toBe(401);
     expect(output._content.error.details.reason).toBe("http_401");
+  });
+
+  it("mode=read with readTransport=sse filters out runtime.observed noise without payload error", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      instances[0].emit("open", { type: "open" });
+      instances[0].emit("hermes.event", {
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_runtime_observed_1",
+            sequence: 20,
+            kind: "runtime.observed",
+            discordEventType: "STATUS_UPDATE",
+            text: null,
+            error: null,
+          }),
+        ),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(outputs).toHaveLength(0);
+    } finally {
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+    }
+  });
+
+  it("mode=read with readTransport=sse keeps runtime.observed when payload.error is not null", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      instances[0].emit("open", { type: "open" });
+      instances[0].emit("hermes.event", {
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_runtime_observed_error_1",
+            sequence: 21,
+            kind: "runtime.observed",
+            discordEventType: "STATUS_UPDATE",
+            text: null,
+            error: { code: "upstream_error", message: "simulated" },
+          }),
+        ),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0]._content.mode).toBe("read");
+      expect(outputs[0]._content.ok).toBe(true);
+      expect(outputs[0]._content.data.event.eventId).toBe("evt_runtime_observed_error_1");
+    } finally {
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+    }
+  });
+
+  it("mode=read with readTransport=sse filters non-message Discord events and null text payloads", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      instances[0].emit("open", { type: "open" });
+      instances[0].emit("hermes.event", {
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_filtered_non_message_create_1",
+            sequence: 22,
+            discordEventType: "MESSAGE_UPDATE",
+            text: "updated-content",
+          }),
+        ),
+      });
+      instances[0].emit("hermes.event", {
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_filtered_null_text_1",
+            sequence: 23,
+            discordEventType: "MESSAGE_CREATE",
+            text: null,
+          }),
+        ),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(outputs).toHaveLength(0);
+    } finally {
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+    }
   });
 
   it("mode=read with readTransport=auto falls back to poll when SSE is unavailable", async () => {
@@ -905,13 +1074,13 @@ describe("hermes leafelement", () => {
       await vi.advanceTimersByTimeAsync(50);
       instances[0].emit("open", { type: "open" });
       instances[0].emit("hermes.event", {
-        data: JSON.stringify({
-          schemaVersion: "v1",
-          eventId: "evt_dedupe_1",
-          sequence: 1,
-          instanceId: TEST_INSTANCE_ID,
-          payload: { text: "first" },
-        }),
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_dedupe_1",
+            sequence: 1,
+            text: "first",
+          }),
+        ),
       });
       await vi.advanceTimersByTimeAsync(50);
 
@@ -921,22 +1090,22 @@ describe("hermes leafelement", () => {
 
       instances[1].emit("open", { type: "open" });
       instances[1].emit("hermes.event", {
-        data: JSON.stringify({
-          schemaVersion: "v1",
-          eventId: "evt_dedupe_1",
-          sequence: 1,
-          instanceId: TEST_INSTANCE_ID,
-          payload: { text: "duplicate" },
-        }),
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_dedupe_1",
+            sequence: 1,
+            text: "duplicate",
+          }),
+        ),
       });
       instances[1].emit("hermes.event", {
-        data: JSON.stringify({
-          schemaVersion: "v1",
-          eventId: "evt_dedupe_2",
-          sequence: 2,
-          instanceId: TEST_INSTANCE_ID,
-          payload: { text: "second" },
-        }),
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_dedupe_2",
+            sequence: 2,
+            text: "second",
+          }),
+        ),
       });
       await vi.advanceTimersByTimeAsync(50);
 
