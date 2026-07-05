@@ -1170,9 +1170,83 @@ const resolveSseMessageId = ({ messageEvent, payload }) => {
 
 const HERMES_ENVELOPE_WRAPPER_KEYS = ["payload", "event", "data"];
 const HERMES_ENVELOPE_MAX_DEPTH = 6;
+const HERMES_USER_MESSAGE_KINDS = new Set(["discord.message.received"]);
+
+const normalizeKindToken = (value) => {
+  const normalized = maybeTrimString(value);
+  return normalized ? normalized.toLowerCase() : undefined;
+};
+
+const normalizeDiscordEventTypeToken = (value) => {
+  const normalized = maybeTrimString(value);
+  return normalized ? normalized.toUpperCase() : undefined;
+};
+
+const resolveTextFromUnknownContent = (value) => {
+  if (typeof value === "string") {
+    return maybeTrimString(value);
+  }
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  const contentFields = ["text", "content", "body", "message", "value"];
+  for (const field of contentFields) {
+    const nextValue = maybeTrimString(value[field]);
+    if (nextValue) {
+      return nextValue;
+    }
+  }
+  return undefined;
+};
+
+const resolveEnvelopeContentText = (candidate) => {
+  const contentCandidates = [
+    candidate?.content,
+    candidate?.contentText,
+    candidate?.text,
+    candidate?.message?.content,
+    candidate?.message?.text,
+    candidate?.discord?.content,
+    candidate?.discord?.message?.content,
+    candidate?.discord?.message?.text,
+  ];
+
+  for (const contentCandidate of contentCandidates) {
+    const resolvedText = resolveTextFromUnknownContent(contentCandidate);
+    if (resolvedText) {
+      return resolvedText;
+    }
+  }
+  return undefined;
+};
 
 const hasEnvelopeContentText = (candidate) => {
-  return candidate?.content?.text !== undefined && candidate?.content?.text !== null;
+  return resolveEnvelopeContentText(candidate) !== undefined;
+};
+
+const hasExplicitNonUserActorSignal = (candidate) => {
+  const explicitActorFlags = [
+    candidate?.author?.bot,
+    candidate?.author?.isBot,
+    candidate?.message?.author?.bot,
+    candidate?.message?.author?.isBot,
+    candidate?.discord?.author?.bot,
+    candidate?.discord?.author?.isBot,
+    candidate?.self,
+    candidate?.isSelf,
+    candidate?.message?.self,
+    candidate?.message?.isSelf,
+    candidate?.discord?.self,
+    candidate?.discord?.isSelf,
+    candidate?.system,
+    candidate?.isSystem,
+    candidate?.message?.system,
+    candidate?.message?.isSystem,
+    candidate?.discord?.system,
+    candidate?.discord?.isSystem,
+  ];
+  return explicitActorFlags.some((flag) => flag === true);
 };
 
 const collectHermesEnvelopeObjects = (payload) => {
@@ -1209,11 +1283,62 @@ const collectHermesEnvelopeObjects = (payload) => {
   return resolved;
 };
 
-const resolveHermesUserMessagePayload = (envelopeObjects) => {
-  return envelopeObjects.find((candidate) => {
-    const discordEventType = maybeTrimString(candidate?.discord?.eventType);
-    return discordEventType === "MESSAGE_CREATE" && hasEnvelopeContentText(candidate);
+const resolveHermesEnvelopeKind = (payload, envelopeObjects) => {
+  const payloadKind = normalizeKindToken(payload?.kind);
+  if (payloadKind) {
+    return payloadKind;
+  }
+
+  for (const candidate of envelopeObjects) {
+    const kind = normalizeKindToken(candidate?.kind);
+    if (kind) {
+      return kind;
+    }
+  }
+
+  return undefined;
+};
+
+const resolveHermesUserMessagePayload = (payload, envelopeObjects) => {
+  const envelopeKind = resolveHermesEnvelopeKind(payload, envelopeObjects);
+  const hasUserMessageKindSignal =
+    envelopeKind !== undefined && HERMES_USER_MESSAGE_KINDS.has(envelopeKind);
+
+  const descriptors = envelopeObjects.map((candidate) => {
+    const kind = normalizeKindToken(candidate?.kind);
+    const discordEventType = normalizeDiscordEventTypeToken(candidate?.discord?.eventType);
+    const contentText = resolveEnvelopeContentText(candidate);
+    return {
+      candidate,
+      kind,
+      discordEventType,
+      contentText,
+      hasContentText: contentText !== undefined,
+      hasUserMessageKindSignal:
+        hasUserMessageKindSignal || (kind !== undefined && HERMES_USER_MESSAGE_KINDS.has(kind)),
+      hasMessageCreateSignal: discordEventType === "MESSAGE_CREATE",
+    };
   });
+
+  const directMatch = descriptors.find((descriptor) => {
+    return (
+      descriptor.hasContentText &&
+      (descriptor.hasUserMessageKindSignal || descriptor.hasMessageCreateSignal)
+    );
+  });
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const hasMessageSignal = descriptors.some((descriptor) => {
+    return descriptor.hasUserMessageKindSignal || descriptor.hasMessageCreateSignal;
+  });
+  if (!hasMessageSignal) {
+    return undefined;
+  }
+
+  const textOnlyMatch = descriptors.find((descriptor) => descriptor.hasContentText);
+  return textOnlyMatch;
 };
 
 const resolveHermesEnvelopePayload = (payload, envelopeObjects) => {
@@ -1224,9 +1349,9 @@ const resolveHermesEnvelopePayload = (payload, envelopeObjects) => {
     return undefined;
   }
 
-  const userMessagePayload = resolveHermesUserMessagePayload(resolvedObjects);
+  const userMessagePayload = resolveHermesUserMessagePayload(payload, resolvedObjects);
   if (userMessagePayload) {
-    return userMessagePayload;
+    return userMessagePayload.candidate;
   }
 
   const payloadErrorCandidate = resolvedObjects.find((candidate) => {
@@ -1261,15 +1386,24 @@ const hasNonNullPayloadError = (payload, envelopeObjects) => {
 };
 
 const resolveHermesEventFilterResult = (payload) => {
-  const kind = maybeTrimString(payload?.kind);
   const envelopeObjects = collectHermesEnvelopeObjects(payload);
-  const userMessagePayload = resolveHermesUserMessagePayload(envelopeObjects);
+  const kind = resolveHermesEnvelopeKind(payload, envelopeObjects);
+  const userMessagePayload = resolveHermesUserMessagePayload(payload, envelopeObjects);
   const envelopePayload = resolveHermesEnvelopePayload(payload, envelopeObjects);
   const hasPayloadError = hasNonNullPayloadError(payload, envelopeObjects);
+  const hasExplicitNonUserActor = envelopeObjects.some((candidate) =>
+    hasExplicitNonUserActorSignal(candidate),
+  );
 
-  const normalizedPayload = userMessagePayload ?? envelopePayload;
-  const discordEventType = maybeTrimString(normalizedPayload?.discord?.eventType);
-  const hasContentText = hasEnvelopeContentText(normalizedPayload);
+  const normalizedPayload = userMessagePayload?.candidate ?? envelopePayload;
+  const discordEventType =
+    userMessagePayload?.discordEventType ??
+    normalizeDiscordEventTypeToken(normalizedPayload?.discord?.eventType);
+  const hasContentText = userMessagePayload?.hasContentText
+    ? true
+    : normalizedPayload
+      ? hasEnvelopeContentText(normalizedPayload)
+      : false;
   const hasUserMessage = userMessagePayload !== undefined;
 
   if (kind === "runtime.observed" && !hasPayloadError && !hasUserMessage) {
@@ -1292,7 +1426,17 @@ const resolveHermesEventFilterResult = (payload) => {
     };
   }
 
-  if (!hasUserMessage || discordEventType !== "MESSAGE_CREATE" || !hasContentText) {
+  if (hasExplicitNonUserActor) {
+    return {
+      allowDispatch: false,
+      reason: "not_user_message",
+      discordEventType,
+      hasContentText,
+      hasPayloadError,
+    };
+  }
+
+  if (!hasUserMessage || !hasContentText) {
     return {
       allowDispatch: false,
       reason: "not_user_message",
