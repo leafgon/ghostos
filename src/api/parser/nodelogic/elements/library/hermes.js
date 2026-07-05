@@ -1168,32 +1168,116 @@ const resolveSseMessageId = ({ messageEvent, payload }) => {
   return undefined;
 };
 
-const resolveHermesEnvelopePayload = (payload) => {
-  if (isPlainObject(payload?.payload)) {
-    return payload.payload;
-  }
-  return isPlainObject(payload) ? payload : undefined;
+const HERMES_ENVELOPE_WRAPPER_KEYS = ["payload", "event", "data"];
+const HERMES_ENVELOPE_MAX_DEPTH = 6;
+
+const hasEnvelopeContentText = (candidate) => {
+  return candidate?.content?.text !== undefined && candidate?.content?.text !== null;
 };
 
-const hasNonNullPayloadError = (payload) => {
-  const envelopePayload = resolveHermesEnvelopePayload(payload);
-  if (envelopePayload?.error !== undefined && envelopePayload?.error !== null) {
-    return true;
+const collectHermesEnvelopeObjects = (payload) => {
+  if (!isPlainObject(payload)) {
+    return [];
   }
-  return payload?.error !== undefined && payload?.error !== null;
+
+  const queue = [{ value: payload, depth: 0 }];
+  const visited = new Set();
+  const resolved = [];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const currentValue = current?.value;
+    const currentDepth = Number.isInteger(current?.depth) ? current.depth : 0;
+    if (!isPlainObject(currentValue) || visited.has(currentValue)) {
+      continue;
+    }
+    visited.add(currentValue);
+    resolved.push(currentValue);
+
+    if (currentDepth >= HERMES_ENVELOPE_MAX_DEPTH) {
+      continue;
+    }
+
+    for (const wrapperKey of HERMES_ENVELOPE_WRAPPER_KEYS) {
+      const nextValue = currentValue[wrapperKey];
+      if (isPlainObject(nextValue)) {
+        queue.push({ value: nextValue, depth: currentDepth + 1 });
+      }
+    }
+  }
+
+  return resolved;
+};
+
+const resolveHermesUserMessagePayload = (envelopeObjects) => {
+  return envelopeObjects.find((candidate) => {
+    const discordEventType = maybeTrimString(candidate?.discord?.eventType);
+    return discordEventType === "MESSAGE_CREATE" && hasEnvelopeContentText(candidate);
+  });
+};
+
+const resolveHermesEnvelopePayload = (payload, envelopeObjects) => {
+  const resolvedObjects = Array.isArray(envelopeObjects)
+    ? envelopeObjects
+    : collectHermesEnvelopeObjects(payload);
+  if (resolvedObjects.length === 0) {
+    return undefined;
+  }
+
+  const userMessagePayload = resolveHermesUserMessagePayload(resolvedObjects);
+  if (userMessagePayload) {
+    return userMessagePayload;
+  }
+
+  const payloadErrorCandidate = resolvedObjects.find((candidate) => {
+    return candidate?.error !== undefined && candidate?.error !== null;
+  });
+  if (payloadErrorCandidate) {
+    return payloadErrorCandidate;
+  }
+
+  const discordEventCandidate = resolvedObjects.find((candidate) => {
+    return maybeTrimString(candidate?.discord?.eventType) !== undefined;
+  });
+  if (discordEventCandidate) {
+    return discordEventCandidate;
+  }
+
+  const contentCandidate = resolvedObjects.find((candidate) => hasEnvelopeContentText(candidate));
+  if (contentCandidate) {
+    return contentCandidate;
+  }
+
+  return resolvedObjects[0];
+};
+
+const hasNonNullPayloadError = (payload, envelopeObjects) => {
+  const resolvedObjects = Array.isArray(envelopeObjects)
+    ? envelopeObjects
+    : collectHermesEnvelopeObjects(payload);
+  return resolvedObjects.some((candidate) => {
+    return candidate?.error !== undefined && candidate?.error !== null;
+  });
 };
 
 const resolveHermesEventFilterResult = (payload) => {
   const kind = maybeTrimString(payload?.kind);
-  const envelopePayload = resolveHermesEnvelopePayload(payload);
-  const hasPayloadError = hasNonNullPayloadError(payload);
+  const envelopeObjects = collectHermesEnvelopeObjects(payload);
+  const userMessagePayload = resolveHermesUserMessagePayload(envelopeObjects);
+  const envelopePayload = resolveHermesEnvelopePayload(payload, envelopeObjects);
+  const hasPayloadError = hasNonNullPayloadError(payload, envelopeObjects);
 
-  if (kind === "runtime.observed" && !hasPayloadError) {
+  const normalizedPayload = userMessagePayload ?? envelopePayload;
+  const discordEventType = maybeTrimString(normalizedPayload?.discord?.eventType);
+  const hasContentText = hasEnvelopeContentText(normalizedPayload);
+  const hasUserMessage = userMessagePayload !== undefined;
+
+  if (kind === "runtime.observed" && !hasPayloadError && !hasUserMessage) {
     return {
       allowDispatch: false,
       reason: "runtime_observed_noise",
-      discordEventType: undefined,
-      hasContentText: false,
+      discordEventType,
+      hasContentText,
       hasPayloadError,
     };
   }
@@ -1202,17 +1286,13 @@ const resolveHermesEventFilterResult = (payload) => {
     return {
       allowDispatch: true,
       reason: "payload_error",
-      discordEventType: maybeTrimString(envelopePayload?.discord?.eventType),
-      hasContentText:
-        envelopePayload?.content?.text !== undefined && envelopePayload?.content?.text !== null,
+      discordEventType,
+      hasContentText,
       hasPayloadError,
     };
   }
 
-  const discordEventType = maybeTrimString(envelopePayload?.discord?.eventType);
-  const hasContentText =
-    envelopePayload?.content?.text !== undefined && envelopePayload?.content?.text !== null;
-  if (discordEventType !== "MESSAGE_CREATE" || !hasContentText) {
+  if (!hasUserMessage || discordEventType !== "MESSAGE_CREATE" || !hasContentText) {
     return {
       allowDispatch: false,
       reason: "not_user_message",

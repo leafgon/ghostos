@@ -767,6 +767,118 @@ describe("hermes leafelement", () => {
     }
   });
 
+  it("mode=read with readTransport=sse dispatches wrapped user message payloads", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      instances[0].emit("open", { type: "open" });
+      instances[0].emit("hermes.event", {
+        data: JSON.stringify({
+          schemaVersion: "v1",
+          eventId: "evt_wrapped_user_message_1",
+          sequence: 24,
+          kind: "discord.message",
+          payload: {
+            discord: {
+              eventType: "STATUS_UPDATE",
+            },
+            content: {
+              text: null,
+            },
+            event: {
+              discord: {
+                eventType: "MESSAGE_CREATE",
+              },
+              content: {
+                text: "wrapped-user-message",
+              },
+            },
+          },
+        }),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0]._content.mode).toBe("read");
+      expect(outputs[0]._content.ok).toBe(true);
+      expect(outputs[0]._content.data.event.eventId).toBe("evt_wrapped_user_message_1");
+    } finally {
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+    }
+  });
+
+  it("mode=read with readTransport=sse keeps runtime.observed when wrapped user message is present", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      instances[0].emit("open", { type: "open" });
+      instances[0].emit("hermes.event", {
+        data: JSON.stringify({
+          schemaVersion: "v1",
+          eventId: "evt_runtime_observed_wrapped_1",
+          sequence: 25,
+          kind: "runtime.observed",
+          data: {
+            event: {
+              discord: {
+                eventType: "MESSAGE_CREATE",
+              },
+              content: {
+                text: "wrapped-runtime-message",
+              },
+            },
+          },
+        }),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0]._content.mode).toBe("read");
+      expect(outputs[0]._content.ok).toBe(true);
+      expect(outputs[0]._content.data.event.eventId).toBe("evt_runtime_observed_wrapped_1");
+    } finally {
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+    }
+  });
+
   it("mode=read with readTransport=sse filters non-message Discord events and null text payloads", async () => {
     global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
     const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
