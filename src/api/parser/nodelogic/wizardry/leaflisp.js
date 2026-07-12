@@ -448,6 +448,100 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = {}) => {
     },
   };
 };
+
+const createLEAFlispRuntime = ({ globals = {}, _probefunc, _tracefunc } = {}) =>
+  new PocketLisp(
+    {
+      globals: {
+        ...runtime,
+        ...leafLISPStdLib({ _probefunc, _tracefunc }),
+        ...globals,
+      },
+      utils,
+    },
+    literals,
+  );
+
+const assertValidLEAFlispBindingName = (bindingName) => {
+  if (typeof bindingName !== "string" || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(bindingName)) {
+    throw new Error(`Invalid LEAFlisp binding name: ${String(bindingName)}`);
+  }
+};
+
+const formatLEAFlispInterpreterError = (error, refnode, preamble_len) => {
+  if ("errors" in error) {
+    return error.errors
+      .map((err) => {
+        const msg =
+          error.type === "Parser"
+            ? `line: ${err.line - preamble_len} - ${err.message}`
+            : `line: ${err.position?.line - preamble_len} - ${err.message}`;
+        return `LEAFlisp error: {refnode: ${refnode}}: ${msg}`;
+      })
+      .join("\n");
+  }
+
+  return `LEAFlisp error: ${refnode}: unidentified execution failure. please check your leaflisp code for anomalies. exception: ${error.message}`;
+};
+
+const leaflispValueToJS = (value) => {
+  if (value === undefined || value === null || value === runtime.Nothing) {
+    return null;
+  }
+
+  if (value instanceof PLHashMap) {
+    return Array.from(value.value.entries()).reduce((acc, [key, item]) => {
+      return { ...acc, [leaflispValueToJS(key)]: leaflispValueToJS(item) };
+    }, {});
+  }
+
+  if (value instanceof PLVector) {
+    return value.value.map((item) => leaflispValueToJS(item));
+  }
+
+  if (typeof value.toJS === "function") {
+    return value.toJS();
+  }
+
+  return value;
+};
+
+const buildLEAFlispPreamble = (inputData, { inputBinding = "inport", bindings = {} } = {}) => {
+  assertValidLEAFlispBindingName(inputBinding);
+
+  const preambleParts = [`(def ${inputBinding} ${parseJsonToLEAFlisp(inputData ?? [])})`];
+
+  Object.entries(bindings).forEach(([bindingName, bindingValue]) => {
+    assertValidLEAFlispBindingName(bindingName);
+    preambleParts.push(`(def ${bindingName} ${parseJsonToLEAFlisp(bindingValue)})`);
+  });
+
+  return preambleParts.join("");
+};
+
+const executeLEAFlisp = (inputData, leaflispCode, options = {}) => {
+  const {
+    runtimeLEAFlisp = createLEAFlispRuntime(options),
+    refnode = "executeLEAFlisp",
+    inputBinding = "inport",
+    bindings = {},
+  } = options;
+
+  if (typeof leaflispCode !== "string") {
+    throw new Error("executeLEAFlisp requires leaflispCode to be a string.");
+  }
+
+  const preamble = buildLEAFlispPreamble(inputData, { inputBinding, bindings });
+  const preamble_len = preamble.split(/\r\n|\r|\n/).length;
+  const wiredlispcode = `${preamble}${leaflispCode}`;
+
+  try {
+    return leaflispValueToJS(runtimeLEAFlisp.insituexecute(wiredlispcode));
+  } catch (error) {
+    throw new Error(formatLEAFlispInterpreterError(error, refnode, preamble_len));
+  }
+};
+
 // a function to initialize a globally-scoped runtimeLEAFlisp instance,
 // App.js runs this and handles the global instance reference as soon as the master etaTree is initialized.
 const init_gRuntimeLEAFlisp = (_etaTree, accio_bottles) => {
@@ -1306,4 +1400,11 @@ const _leaflisp = {
     },
 };
 
-export { _leaflisp, parseJsonToLEAFlisp, runLEAFlispcode, init_gRuntimeLEAFlisp };
+export {
+  _leaflisp,
+  createLEAFlispRuntime,
+  executeLEAFlisp,
+  parseJsonToLEAFlisp,
+  runLEAFlispcode,
+  init_gRuntimeLEAFlisp,
+};

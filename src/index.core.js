@@ -22,6 +22,8 @@ import { destroySoundStageNode } from "./api/parser/nodelogic/elements/library/s
 import { initializeSoundStage } from "./api/parser/nodelogic/elements/library/sound_lib.js";
 import { parseJsonToLEAFlisp } from "./api/parser/nodelogic/wizardry/leaflisp.js";
 import { runLEAFlispcode } from "./api/parser/nodelogic/wizardry/leaflisp.js";
+import { createLEAFlispRuntime } from "./api/parser/nodelogic/wizardry/leaflisp.js";
+import { executeLEAFlisp } from "./api/parser/nodelogic/wizardry/leaflisp.js";
 import { SHA1 } from "./api/utils/crypto.js";
 import { etaTreeForest } from "./api/parser/etatreeforest.js";
 import { encodeUnicode } from "./api/utils/leafbase64.js";
@@ -63,6 +65,8 @@ export {
   doUnbottle,
   destroySoundStageNode,
   initializeSoundStage,
+  createLEAFlispRuntime,
+  executeLEAFlisp,
   parseJsonToLEAFlisp,
   runLEAFlispcode,
   SHA1,
