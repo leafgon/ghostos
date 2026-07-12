@@ -582,7 +582,7 @@ const _leafstdlib_dataflow_api = (type) => {
           "html",
           "form",
           "directus",
-          "openai",
+          "token",
           "rancher",
           "hermes",
           "cortex",
