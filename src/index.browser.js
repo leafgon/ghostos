@@ -26,6 +26,8 @@ import { parseJsonToLEAFlisp } from "./index.core.js";
 import { runLEAFlispcode } from "./index.core.js";
 import { SHA1 } from "./index.core.js";
 import { etaTreeForest } from "./index.core.js";
+import { reducedLEAFGraph } from "./index.core.js";
+import { executeLEAFGraph } from "./index.core.js";
 import { encodeUnicode } from "./index.core.js";
 import { decodeUnicode } from "./index.core.js";
 import { fetchMultiKeyedData } from "./index.core.js";
@@ -72,6 +74,8 @@ export {
   runLEAFlispcode,
   SHA1,
   etaTreeForest,
+  reducedLEAFGraph,
+  executeLEAFGraph,
   encodeUnicode,
   decodeUnicode,
   fetchMultiKeyedData,
