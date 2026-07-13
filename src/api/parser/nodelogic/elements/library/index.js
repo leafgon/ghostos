@@ -14,6 +14,7 @@ import { props as _html, cachekeys as _html_cachekeys } from "./html.js";
 import { props as _form } from "./form.js";
 import { props as _directus } from "./directus.js";
 import { props as _hermes, cachekeys as _hermes_cachekeys } from "./hermes.js";
+import { props as _cortex, cachekeys as _cortex_cachekeys } from "./cortex.js";
 import { doBottle } from "../../datautils/bottling.js";
 
 const ElemCacheKeyLUT = {
@@ -32,6 +33,7 @@ const ElemCacheKeyLUT = {
   sound: _sound_cachekeys,
   html: _html_cachekeys,
   hermes: _hermes_cachekeys,
+  cortex: _cortex_cachekeys,
 };
 
 // datakey="defaultio", "screenio" or "elementio", may expand further as the usage scenario expands
@@ -61,6 +63,7 @@ const _std_elements_lut = {
   form: _form,
   directus: _directus,
   hermes: _hermes,
+  cortex: _cortex,
 };
 
 const initStdElementProps = (_cache, elementname) => {
