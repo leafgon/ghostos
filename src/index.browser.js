@@ -20,10 +20,14 @@ import { doBottle } from "./index.core.js";
 import { doUnbottle } from "./index.core.js";
 import { destroySoundStageNode } from "./index.core.js";
 import { initializeSoundStage } from "./index.core.js";
+import { createLEAFlispRuntime } from "./index.core.js";
+import { executeLEAFlisp } from "./index.core.js";
 import { parseJsonToLEAFlisp } from "./index.core.js";
 import { runLEAFlispcode } from "./index.core.js";
 import { SHA1 } from "./index.core.js";
 import { etaTreeForest } from "./index.core.js";
+import { reducedLEAFGraph } from "./index.core.js";
+import { executeLEAFGraph } from "./index.core.js";
 import { encodeUnicode } from "./index.core.js";
 import { decodeUnicode } from "./index.core.js";
 import { fetchMultiKeyedData } from "./index.core.js";
@@ -64,10 +68,14 @@ export {
   doUnbottle,
   destroySoundStageNode,
   initializeSoundStage,
+  createLEAFlispRuntime,
+  executeLEAFlisp,
   parseJsonToLEAFlisp,
   runLEAFlispcode,
   SHA1,
   etaTreeForest,
+  reducedLEAFGraph,
+  executeLEAFGraph,
   encodeUnicode,
   decodeUnicode,
   fetchMultiKeyedData,
