@@ -440,6 +440,16 @@ const normalizePayloadRef = (payloadRef) => {
   return normalizedPayloadRef;
 };
 
+const resolveIntentPayloadRef = (intent) => {
+  if (intent.payloadRef !== undefined) {
+    return normalizePayloadRef(intent.payloadRef);
+  }
+  if (Object.hasOwn(intent, "payload")) {
+    return normalizePayloadRef({ inline: intent.payload });
+  }
+  return normalizePayloadRef(intent.payloadRef);
+};
+
 const rejectCallbackFields = (intent) => {
   const rejectedField = Object.keys(intent).find((key) => CALLBACK_FIELDS.has(key));
   if (rejectedField) {
@@ -559,7 +569,7 @@ const normalizeIntentFields = (intent) => {
     workloadType,
     priority,
     mode,
-    payloadRef: normalizePayloadRef(intent.payloadRef),
+    payloadRef: resolveIntentPayloadRef(intent),
   };
 
   const timeoutMs = normalizePositiveInteger({
