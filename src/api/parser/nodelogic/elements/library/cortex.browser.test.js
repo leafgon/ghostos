@@ -270,6 +270,41 @@ describe("cortex leafelement", () => {
     expect(output._content.status).toBe("succeeded");
   });
 
+  it("reconstructs payloadRef.inline from payload when payloadRef is missing", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(makeJsonResponse(202, acceptedResponse("job-payload-fallback")))
+      .mockResolvedValueOnce(makeJsonResponse(200, completedResponse("job-payload-fallback")));
+
+    const payload = {
+      prompt: "hello from payload",
+      variables: {
+        topic: "cortex",
+      },
+    };
+    const { output$obj, datainput$, ctrlinput$ } = initCortexFlow();
+    const [output] = await collectOutputs({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: doBottle("intent", {
+        schemaVersion: "v1",
+        workloadType: "chat",
+        priority: "p1_interactive",
+        mode: "async",
+        payload,
+        idempotencyKey: "idem-payload-fallback",
+      }),
+    });
+
+    const submittedBody = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(submittedBody.payloadRef).toEqual({
+      inline: payload,
+    });
+    expect(submittedBody).not.toHaveProperty("payload");
+    expect(output._content.status).toBe("succeeded");
+  });
+
   it("submits async mode through the same accepted response and maps uri payloadRef results", async () => {
     global.fetch = vi
       .fn()

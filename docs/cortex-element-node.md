@@ -31,7 +31,7 @@ type CortexIntentContent = {
   workloadType: CortexWorkloadType;
   priority: CortexPriority;
   mode?: CortexMode;
-  payloadRef: CortexInputPayloadRef;
+  payloadRef?: CortexInputPayloadRef;
 
   idempotencyKey?: string;
   intentId?: string;
@@ -85,7 +85,9 @@ Validation rules:
 - `priority` must be one of the `CortexPriority` values.
 - `mode` defaults to `"async"` when omitted or blank. Explicit values must be
   `"sync"` or `"async"`.
-- `payloadRef` must contain exactly one of `uri` or `inline`.
+- `payloadRef`, when present, must contain exactly one of `uri` or `inline`.
+- If `payloadRef` is omitted and `payload` is present, the node reconstructs
+  `payloadRef` as `{ inline: payload }` for the normalized Cortex request.
 - `payloadRef.uri`, when used, must be a non-empty string after trimming.
 - `payloadRef.sizeBytes`, when present, must be an integer greater than or
   equal to `0`.
