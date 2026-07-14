@@ -198,6 +198,7 @@ describe("cortex leafelement", () => {
     const submittedBody = JSON.parse(requestInit.body);
     expect(submittedBody.mode).toBe("sync");
     expect(submittedBody.idempotencyKey).toBe("idem-sync-1");
+    expect(submittedBody.cortexInstanceId).toBe(TEST_REFNODE);
 
     expect(output._bname).toBe("outcome");
     expect(output._content.ok).toBe(true);
@@ -214,7 +215,59 @@ describe("cortex leafelement", () => {
       sizeBytes: undefined,
       checksum: undefined,
     });
+    expect(output._content.workload.cortexInstanceId).toBe(TEST_REFNODE);
     expect(output._content.workload.operationTypeDerived).toBe("ai.jobs.command:chat:sync");
+  });
+
+  it("overwrites caller-supplied cortexInstanceId with the leaf element uuid", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(makeJsonResponse(202, acceptedResponse("job-element-instance")))
+      .mockResolvedValueOnce(makeJsonResponse(200, completedResponse("job-element-instance")));
+
+    const { output$obj, datainput$, ctrlinput$ } = initCortexFlow();
+    const [output] = await collectOutputs({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: intentBottle({
+        idempotencyKey: "idem-element-instance",
+        cortexInstanceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      }),
+    });
+
+    const submittedBody = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(submittedBody.cortexInstanceId).toBe(TEST_REFNODE);
+    expect(output._content.workload.cortexInstanceId).toBe(TEST_REFNODE);
+  });
+
+  it("defaults missing optional intent fields", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(makeJsonResponse(202, acceptedResponse("job-default-schema")))
+      .mockResolvedValueOnce(makeJsonResponse(200, completedResponse("job-default-schema")));
+
+    const { output$obj, datainput$, ctrlinput$ } = initCortexFlow();
+    const [output] = await collectOutputs({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: intentBottle({
+        idempotencyKey: "idem-default-schema",
+        schemaVersion: undefined,
+        mode: undefined,
+        timeoutMs: undefined,
+        maxAttempts: undefined,
+      }),
+    });
+
+    const submittedBody = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(submittedBody.schemaVersion).toBe("v1");
+    expect(submittedBody.mode).toBe("async");
+    expect(submittedBody.timeoutMs).toBe(2000);
+    expect(submittedBody.maxAttempts).toBe(2);
+    expect(output._content.mode).toBe("async");
+    expect(output._content.status).toBe("succeeded");
   });
 
   it("submits async mode through the same accepted response and maps uri payloadRef results", async () => {
@@ -252,6 +305,88 @@ describe("cortex leafelement", () => {
       checksum: "sha256:abc",
     });
     expect(output._content.workload.operationTypeDerived).toBe("ai.jobs.command:chat:async");
+  });
+
+  it("maps leaf-server result.inline responses as inline outcome results", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(makeJsonResponse(202, acceptedResponse("job-direct-result")))
+      .mockResolvedValueOnce(
+        makeJsonResponse(200, {
+          schemaVersion: "v1",
+          jobId: "job-direct-result",
+          status: "completed",
+          requestId: "req-direct-result",
+          result: {
+            inline: {
+              answer: "hi",
+              usage: {
+                inputTokens: 3,
+                outputTokens: 1,
+              },
+            },
+          },
+        }),
+      );
+
+    const { output$obj, datainput$, ctrlinput$ } = initCortexFlow();
+    const [output] = await collectOutputs({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: intentBottle({ idempotencyKey: "idem-direct-result" }),
+    });
+
+    expect(output._content.ok).toBe(true);
+    expect(output._content.result).toEqual({
+      kind: "inline",
+      value: {
+        answer: "hi",
+        usage: {
+          inputTokens: 3,
+          outputTokens: 1,
+        },
+      },
+      uri: undefined,
+      mimeType: undefined,
+      sizeBytes: undefined,
+      checksum: undefined,
+    });
+  });
+
+  it("uses a 2 second default interval between GET result polls", async () => {
+    vi.useFakeTimers();
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(makeJsonResponse(202, acceptedResponse("job-default-poll")))
+      .mockResolvedValueOnce(
+        makeJsonResponse(409, {
+          error: { code: "not_ready", message: "Job result is not ready." },
+        }),
+      )
+      .mockResolvedValueOnce(makeJsonResponse(200, completedResponse("job-default-poll")));
+
+    const { output$obj, datainput$, ctrlinput$ } = initCortexFlow({ pollIntervalMs: undefined });
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    const outPromise = firstValueFrom(output$obj._stream.pipe(take(1), toArray()));
+
+    try {
+      datainput$.next(intentBottle({ idempotencyKey: "idem-default-poll" }));
+      ctrlinput$.next({ _bname: "accio" });
+      await vi.advanceTimersByTimeAsync(2);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1);
+
+      const [output] = await outPromise;
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(output._content.status).toBe("succeeded");
+    } finally {
+      ctrlSub.unsubscribe();
+    }
   });
 
   it.each([
@@ -513,7 +648,6 @@ describe("cortex leafelement", () => {
   });
 
   it.each([
-    ["missing schemaVersion", { schemaVersion: undefined }],
     ["unsupported workloadType", { workloadType: "audio" }],
     ["unsupported priority", { priority: "urgent" }],
     ["unsupported mode", { mode: "stream" }],
