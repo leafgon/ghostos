@@ -18,7 +18,7 @@ const cachekeys = {
 const CORTEX_CODEBASE = "ghostos/api/parser/nodelogic/elements/library/cortex.js";
 const DEFAULT_JOBS_PATH = "/api/cortex/jobs";
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
-const DEFAULT_POLL_INTERVAL_MS = 1000;
+const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_MAX_SUBMIT_ATTEMPTS = 3;
 const DEFAULT_MAX_POLL_ATTEMPTS = 60;
 const DEFAULT_TOTAL_TIMEOUT_MS = 120000;
@@ -504,7 +504,7 @@ const normalizeIntentFields = (intent) => {
 
   rejectCallbackFields(intent);
 
-  const schemaVersion = trimString(intent.schemaVersion);
+  const schemaVersion = trimString(intent.schemaVersion) || "v1";
   if (schemaVersion !== "v1") {
     throw new CortexRuntimeError("validation_failed", "schemaVersion must be 'v1'.", {
       httpStatus: 400,
@@ -544,7 +544,7 @@ const normalizeIntentFields = (intent) => {
       },
     );
   }
-  const mode = trimString(intent.mode);
+  const mode = trimString(intent.mode) || "async";
   if (!MODES.has(mode)) {
     throw new CortexRuntimeError("validation_failed", "mode must be sync or async.", {
       httpStatus: 400,
@@ -562,15 +562,17 @@ const normalizeIntentFields = (intent) => {
     payloadRef: normalizePayloadRef(intent.payloadRef),
   };
 
-  const timeoutMs = normalizeOptionalInteger({
+  const timeoutMs = normalizePositiveInteger({
     value: intent.timeoutMs,
     field: "timeoutMs",
+    fallback: 2000,
     min: 1,
     max: 3600000,
   });
-  const maxAttempts = normalizeOptionalInteger({
+  const maxAttempts = normalizePositiveInteger({
     value: intent.maxAttempts,
     field: "maxAttempts",
+    fallback: 2,
     min: 1,
     max: 1000,
   });
@@ -581,8 +583,8 @@ const normalizeIntentFields = (intent) => {
     max: Number.MAX_SAFE_INTEGER,
   });
 
-  if (timeoutMs !== undefined) normalized.timeoutMs = timeoutMs;
-  if (maxAttempts !== undefined) normalized.maxAttempts = maxAttempts;
+  normalized.timeoutMs = timeoutMs;
+  normalized.maxAttempts = maxAttempts;
   if (intent.providerHints !== undefined) {
     if (!isPlainObject(intent.providerHints)) {
       throw new CortexRuntimeError("validation_failed", "providerHints must be an object.", {
@@ -596,6 +598,22 @@ const normalizeIntentFields = (intent) => {
   if (costBudgetUsd !== undefined) normalized.costBudgetUsd = costBudgetUsd;
 
   return normalized;
+};
+
+const resolveElementCortexInstanceId = (refnode) => {
+  const cortexInstanceId = trimString(refnode);
+  if (!UUID_REGEX.test(cortexInstanceId)) {
+    throw new CortexRuntimeError(
+      "validation_failed",
+      "Cortex leaf element UUID must be a UUID string.",
+      {
+        httpStatus: 400,
+        retryable: false,
+        details: { field: "refnode" },
+      },
+    );
+  }
+  return cortexInstanceId;
 };
 
 const stableBottleIdentity = (intentBottle) => {
@@ -678,7 +696,10 @@ const normalizeIntentBottle = async ({ intentBottle, refnode }) => {
     });
   }
 
-  const intent = intentBottle._content;
+  const intent = {
+    ...intentBottle._content,
+    cortexInstanceId: resolveElementCortexInstanceId(refnode),
+  };
   const normalizedIntent = normalizeIntentFields(intent);
   const requestBodyWithoutIdempotencyKey = { ...normalizedIntent };
   const explicitIdempotencyKey = maybeTrimString(intent.idempotencyKey);
@@ -831,6 +852,41 @@ const mapPayloadRefToOutcomeResult = (payloadRef, resultEnvelope = {}) => {
   return undefined;
 };
 
+const mapCortexResultToOutcomeResult = (resultEnvelope) => {
+  if (resultEnvelope === undefined || resultEnvelope === null) {
+    return undefined;
+  }
+
+  if (isPlainObject(resultEnvelope) && Object.hasOwn(resultEnvelope, "payloadRef")) {
+    return mapPayloadRefToOutcomeResult(resultEnvelope.payloadRef, resultEnvelope);
+  }
+
+  if (
+    isPlainObject(resultEnvelope) &&
+    (Object.hasOwn(resultEnvelope, "inline") || Object.hasOwn(resultEnvelope, "uri"))
+  ) {
+    return mapPayloadRefToOutcomeResult(resultEnvelope, resultEnvelope);
+  }
+
+  if (
+    isPlainObject(resultEnvelope) &&
+    Object.hasOwn(resultEnvelope, "metadata") &&
+    Object.keys(resultEnvelope).length === 1
+  ) {
+    return mapPayloadRefToOutcomeResult(undefined, resultEnvelope);
+  }
+
+  const metadataSource = isPlainObject(resultEnvelope?.metadata) ? resultEnvelope.metadata : {};
+  return {
+    kind: "inline",
+    value: resultEnvelope,
+    uri: undefined,
+    mimeType: maybeTrimString(metadataSource.mimeType),
+    sizeBytes: Number.isInteger(metadataSource.sizeBytes) ? metadataSource.sizeBytes : undefined,
+    checksum: maybeTrimString(metadataSource.checksum),
+  };
+};
+
 const makeBaseOutcome = ({
   normalized,
   idempotencyKey,
@@ -952,10 +1008,7 @@ const makeTerminalOutcome = ({ entry, responsePayload }) => {
       status,
       ok: true,
       refnode: entry.refnode,
-      result: mapPayloadRefToOutcomeResult(
-        responsePayload.result?.payloadRef,
-        responsePayload.result,
-      ),
+      result: mapCortexResultToOutcomeResult(responsePayload.result),
       submittedAt: entry.submittedAt,
       acceptedAt: entry.acceptedAt,
       completedAt: nowIso(),
