@@ -7,7 +7,7 @@
  *
  */
 import { map, share, takeUntil, switchMap, withLatestFrom, filter } from "rxjs/operators";
-import { merge, BehaviorSubject, Subject } from "rxjs";
+import { merge, BehaviorSubject, Subject, zip } from "rxjs";
 import { LEAFIOmetamodel } from "../metamodel.js";
 //import { processLEAFNodeLogic } from './breezyforest';
 import Graph from "graphology";
@@ -897,11 +897,14 @@ const driveDataflowByCtrlflow = (
 
   const inflow_data$ =
     data_inflow$objArr.length > 1
-      ? merge(...data_inflow$objArr.map((_in$obj) => _in$obj._stream))
+      ? zip(...data_inflow$objArr.map((_in$obj) => _in$obj._stream))
       : data_inflow$objArr[0]._stream;
+  const inflow_ctrl_data$ =
+    data_inflow$objArr.length > 1
+      ? zip(inflow_ctrl$obj._stream, inflow_data$)
+      : inflow_ctrl$obj._stream.pipe(withLatestFrom(inflow_data$));
 
-  const _outflow_ctrl$ = inflow_ctrl$obj._stream.pipe(
-    withLatestFrom(inflow_data$),
+  const _outflow_ctrl$ = inflow_ctrl_data$.pipe(
     switchMap((_combined_in) => {
       if (["806e0a4b-badf-42a0-85af-5ad306385c58"].includes(context.refnode))
         console.log("start debugging");

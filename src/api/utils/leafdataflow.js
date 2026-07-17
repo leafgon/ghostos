@@ -45,6 +45,8 @@ const isArrayOfArrays = (a) => {
 
 const flattenArray = (x) => (Array.isArray(x) ? x.flatMap((_x) => _x) : x);
 
+const zipSynchronizedDataflows = (flow$Arr) => zip(...flow$Arr);
+
 const exitDataBus = ({ _bus, _cond = (_) => true, _flatten = false } = {}) => {
   if (_flatten)
     return Array.isArray(_bus)
@@ -351,7 +353,7 @@ const combineDataflows = (
     const combinedflow$obj = {
       _stream: of("ctrl_nudge").pipe(
         concatMap((_ctrl_in) => {
-          return combineLatest(flow$Arr.map((x) => x._stream)).pipe(
+          return zipSynchronizedDataflows(flow$Arr.map((x) => x._stream)).pipe(
             map((_) => {
               //const resolved_ = await Promise.resolve(_); // as per the discussion in https://stackoverflow.com/questions/27746304/how-do-i-tell-if-an-object-is-a-promise
               if (nodeuuid?.slice(0, 4) === "9857")
@@ -377,7 +379,9 @@ const combineDataflows = (
       combinedflow$obj._control = {
         _stream: of("ctrl_nudge").pipe(
           concatMap((_ctrl_in) => {
-            return combineLatest(flow$Arr.map((x) => x?._control?._stream).filter((_) => _)).pipe(
+            return zipSynchronizedDataflows(
+              flow$Arr.map((x) => x?._control?._stream).filter((_) => _),
+            ).pipe(
               map((_) => {
                 // spark_dev_note: (23/Mar/2023)
                 // #ctrl_accio
@@ -729,7 +733,7 @@ const chronosDataflow = (
           //            return _combined_in.slice(1)
           //    })
           //) :
-          combineLatest(datain$arr)
+          zipSynchronizedDataflows(datain$arr)
         : merge(...datain$arr);
   };
 
