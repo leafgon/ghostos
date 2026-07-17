@@ -37,6 +37,45 @@ describe("executeLEAFlisp", () => {
     expect(second).toBe(5);
   });
 
+  it("parses JSON strings into leaflisp values", () => {
+    const result = executeLEAFlisp(
+      [],
+      '(return (parse-json "{\\"hello\\":true,\\"count\\":0,\\"label\\":\\"\\",\\"nothing\\":null}"))',
+    );
+
+    expect(result).toEqual({
+      hello: true,
+      count: 0,
+      label: "",
+      nothing: null,
+    });
+  });
+
+  it("preserves falsy values in parsed JSON arrays", () => {
+    const numbers = executeLEAFlisp([], '(return (parse-json "[0,1]"))');
+    const bools = executeLEAFlisp([], '(return (parse-json "[false,true]"))');
+    const strings = executeLEAFlisp([], '(return (parse-json "[\\"\\",\\"leaf\\"]"))');
+    const nulls = executeLEAFlisp([], '(return (parse-json "[null,null]"))');
+
+    expect(numbers).toEqual([0, 1]);
+    expect(bools).toEqual([false, true]);
+    expect(strings).toEqual(["", "leaf"]);
+    expect(nulls).toEqual([null, null]);
+  });
+
+  it("keeps parse focused on numeric strings", () => {
+    expect(executeLEAFlisp([], '(return (parse "42"))')).toBe(42);
+    expect(() => executeLEAFlisp([], '(return (parse "{\\"hello\\":true}"))')).toThrow(
+      /Invalid number/,
+    );
+  });
+
+  it("throws a parse-json error for malformed JSON", () => {
+    expect(() => executeLEAFlisp([], '(return (parse-json "{\\"hello\\":}"))')).toThrow(
+      /Invalid JSON string/,
+    );
+  });
+
   it("throws execution errors with leaflisp context", () => {
     expect(() => executeLEAFlisp(1, "(return (+ inport missing-value))")).toThrow(/LEAFlisp error/);
   });

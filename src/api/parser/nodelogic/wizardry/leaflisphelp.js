@@ -9,6 +9,11 @@ parse:  a function to convert a string representation of a number into \n\
         usage: (parse <a-num-string of type string>) returns a number, \n\
         of type integer or float, representing the parsed value. \n\
 ------- \n\
+parse-json:  a function to convert a valid JSON string into LEAFlisp data.\n\
+        usage: (parse-json <a-json-string of type string>) returns the parsed\n\
+        LEAFlisp value, such as a hash map, vector, string, number, boolean,\n\
+        or null value.\n\
+------- \n\
 str:    a function to convert a number, of type integer or float, into its \n\
         string representation.\n\
 --------------------------------------------------------------------------\n\

@@ -150,7 +150,7 @@ const parseJsonToLEAFlispObj = (x, isfirst = true) => {
     ? plString(x)
     : inputtype === "object"
       ? Array.isArray(x)
-        ? plVector(...x.filter((_) => _).map((value) => parseJsonToLEAFlispObj(value, false)))
+        ? plVector(...x.map((value) => parseJsonToLEAFlispObj(value, false)))
         : [null, undefined].includes(x)
           ? runtime.Nothing
           : plHashMap(
@@ -363,6 +363,16 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = {}) => {
       else parsednum = parseDecimalString(target_str);
       if (parsednum.decimals === 0) return plNumber(parsednum.intValue);
       else return plNumber(parsednum.intValue, parsednum.decimals);
+    },
+    "parse-json": (_str) => {
+      const target_str = _str.toJSON();
+      let parsedJson;
+      try {
+        parsedJson = JSON.parse(target_str);
+      } catch (error) {
+        throw new StdRuntimeError(`Invalid JSON string: ${target_str}`);
+      }
+      return parseJsonToLEAFlispObj(parsedJson);
     },
     "merge-dict": (hashmap1, hashmap2) => {
       if (hashmap1.constructor !== PLHashMap)
