@@ -194,6 +194,10 @@ const _leafchronosflow = {
               _control: controlflow$obj,
             };
           } else {
+            if (!("_default" in reduced_lambda_obj)) {
+              return { _stream: merged_data_in$, _control: controlflow$obj };
+            }
+
             // naive zip is the default mix mode
             const blankprefunc = (_data_in) => {
               //const _data_out = doUnbottle(undefined, _data_in);
