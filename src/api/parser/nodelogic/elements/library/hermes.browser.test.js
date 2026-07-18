@@ -174,6 +174,28 @@ const makeSseEnvelopeEvent = ({
   };
 };
 
+const makePublicSseEvent = ({ eventId, text = "hello" }) => {
+  return {
+    schemaVersion: "v1",
+    eventId,
+    instanceId: TEST_INSTANCE_ID,
+    guildId: "123456789012345678",
+    channelId: "223456789012345678",
+    kind: "MESSAGE_CREATE",
+    createdAt: "2026-07-18T12:00:00.000Z",
+    content: {
+      text,
+      attachments: [],
+    },
+    channel: {
+      channelId: "223456789012345678",
+      name: "general",
+      type: "GUILD_TEXT",
+      metadataStatus: "resolved",
+    },
+  };
+};
+
 const requestHref = (requestUrl) => {
   return typeof requestUrl === "string" ? requestUrl : requestUrl?.href;
 };
@@ -379,6 +401,54 @@ describe("hermes leafelement", () => {
     expect(output._content.data.event.eventId).toBe("evt_both_1");
   });
 
+  it("mode=read with channelName filters sends repeated canonical query params", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      makeJsonResponse(200, {
+        schemaVersion: "v1",
+        events: [
+          {
+            eventId: "evt_named_channel_1",
+            sequence: 1,
+            instanceId: TEST_INSTANCE_ID,
+            channelId: "223456789012345678",
+            content: { text: "named-channel-event" },
+          },
+        ],
+        nextCursor: "cursor-named-channel-1",
+        hasMore: false,
+        requestId: "req-named-channel-1",
+      }),
+    );
+
+    const { output$obj, datainput$, ctrlinput$ } = initHermesFlowWithConfig({
+      mode: "read",
+      readTransport: "poll",
+      instanceId: TEST_INSTANCE_ID,
+      guildId: "123456789012345678",
+      channelName: ["general", "support"],
+      pollIntervalMs: 0,
+    });
+
+    const output = await runTick({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: { _bname: "empty", _content: null },
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const requestUrl = `${global.fetch.mock.calls[0][0]}`;
+    const requestParams = requestUrl.split("?")[1].split("&");
+    const channelNameValues = requestParams
+      .filter((entry) => entry.startsWith("channelName="))
+      .map((entry) => decodeURIComponent(entry.slice("channelName=".length)));
+    expect(requestUrl).toContain("/api/hermes/integration/events?");
+    expect(channelNameValues).toEqual(["general", "support"]);
+    expect(requestParams.some((entry) => entry.startsWith("channelNames="))).toBe(false);
+    expect(output._content.ok).toBe(true);
+    expect(output._content.data.event.eventId).toBe("evt_named_channel_1");
+  });
+
   it("mode=read with readTransport=sse opens stream without data input and emits pushed events", async () => {
     global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
     const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
@@ -404,11 +474,13 @@ describe("hermes leafelement", () => {
 
       expect(global.fetch).toHaveBeenCalledTimes(1);
       const [probeUrl, probeInit] = global.fetch.mock.calls[0];
-      expect(requestHref(probeUrl)).toContain("/api/hermes/integration/events/stream");
+      expect(requestHref(probeUrl)).toContain("/api/hermes/integration/events");
+      expect(requestHref(probeUrl)).not.toContain("/api/hermes/integration/events/stream");
       expect(probeInit.method).toBe("HEAD");
       expect(probeInit.headers.Accept).toBe("text/event-stream");
       expect(instances).toHaveLength(1);
-      expect(instances[0].url).toContain("/api/hermes/integration/events/stream");
+      expect(instances[0].url).toContain("/api/hermes/integration/events");
+      expect(instances[0].url).not.toContain("/api/hermes/integration/events/stream");
       expect(outputs).toHaveLength(0);
 
       instances[0].emit("open", { type: "open" });
@@ -433,6 +505,62 @@ describe("hermes leafelement", () => {
     } finally {
       ctrlSub.unsubscribe();
       outSub.unsubscribe();
+    }
+  });
+
+  it("mode=read with readTransport=sse emits public payloads and reconnects with SSE id cursor", async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await vi.advanceTimersByTimeAsync(50);
+      expect(instances).toHaveLength(1);
+
+      const sseCursor = "opaque.cursor/one==";
+      instances[0].emit("open", { type: "open" });
+      instances[0].emit("hermes.event", {
+        lastEventId: sseCursor,
+        data: JSON.stringify(
+          makePublicSseEvent({
+            eventId: "evt_public_sse_1",
+            text: "from-public-contract",
+          }),
+        ),
+      });
+      await vi.advanceTimersByTimeAsync(50);
+
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0]._content.ok).toBe(true);
+      expect(outputs[0]._content.data.cursor).toBe(sseCursor);
+      expect(outputs[0]._content.data.event.eventId).toBe("evt_public_sse_1");
+      expect(outputs[0]._content.data.event.kind).toBe("MESSAGE_CREATE");
+
+      instances[0].emit("error", { type: "error" });
+      await vi.advanceTimersByTimeAsync(1200);
+
+      expect(instances).toHaveLength(2);
+      expect(instances[1].url).toContain(`cursor=${encodeURIComponent(sseCursor)}`);
+    } finally {
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+      vi.useRealTimers();
     }
   });
 
@@ -665,7 +793,8 @@ describe("hermes leafelement", () => {
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [probeUrl, probeInit] = global.fetch.mock.calls[0];
-    expect(requestHref(probeUrl)).toContain("/api/hermes/integration/events/stream");
+    expect(requestHref(probeUrl)).toContain("/api/hermes/integration/events");
+    expect(requestHref(probeUrl)).not.toContain("/api/hermes/integration/events/stream");
     expect(probeInit.method).toBe("HEAD");
     expect(probeInit.headers.Accept).toBe("text/event-stream");
     expect(instances).toHaveLength(0);
@@ -1069,9 +1198,8 @@ describe("hermes leafelement", () => {
   it("mode=read with readTransport=auto keeps reconnecting for authenticated short no-frame closures without poll fallback", async () => {
     vi.useFakeTimers();
     const traceSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    global.fetch = vi.fn().mockImplementation((requestUrl) => {
-      const href = requestHref(requestUrl);
-      if (href.includes("/api/hermes/integration/events/stream")) {
+    global.fetch = vi.fn().mockImplementation((_requestUrl, requestInit = {}) => {
+      if (requestInit.method === "HEAD") {
         return Promise.resolve(makeSseProbeResponse(200));
       }
       return Promise.resolve(makeJsonResponse(200, { schemaVersion: "v1", events: [] }));
@@ -1113,17 +1241,11 @@ describe("hermes leafelement", () => {
       await vi.advanceTimersByTimeAsync(2500);
       expect(instances.length).toBeGreaterThanOrEqual(4);
 
-      const requestHrefs = global.fetch.mock.calls.map(([requestUrl]) => requestHref(requestUrl));
-      expect(
-        requestHrefs.filter((href) => href.includes("/api/hermes/integration/events/stream")),
-      ).toHaveLength(1);
-      expect(
-        requestHrefs.some(
-          (href) =>
-            href.includes("/api/hermes/integration/events") &&
-            !href.includes("/api/hermes/integration/events/stream"),
-        ),
-      ).toBe(false);
+      const requestMethods = global.fetch.mock.calls.map(([_requestUrl, requestInit = {}]) => {
+        return requestInit.method;
+      });
+      expect(requestMethods.filter((method) => method === "HEAD")).toHaveLength(1);
+      expect(requestMethods.some((method) => method === "GET")).toBe(false);
 
       const traceLines = traceSpy.mock.calls.map(([message]) => `${message}`);
       expect(
@@ -1151,9 +1273,8 @@ describe("hermes leafelement", () => {
   it("mode=read with readTransport=auto falls back to poll only after repeated no-frame SSE errors", async () => {
     vi.useFakeTimers();
     const traceSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    global.fetch = vi.fn().mockImplementation((requestUrl) => {
-      const href = requestHref(requestUrl);
-      if (href.includes("/api/hermes/integration/events/stream")) {
+    global.fetch = vi.fn().mockImplementation((_requestUrl, requestInit = {}) => {
+      if (requestInit.method === "HEAD") {
         return Promise.resolve(makeSseProbeResponse(503));
       }
       return Promise.resolve(
@@ -1213,14 +1334,10 @@ describe("hermes leafelement", () => {
       ctrlinput$.next({ _bname: "accio", idx: 2 });
       await vi.advanceTimersByTimeAsync(50);
 
-      const requestHrefs = global.fetch.mock.calls.map(([requestUrl]) => requestHref(requestUrl));
-      expect(
-        requestHrefs.some(
-          (href) =>
-            href.includes("/api/hermes/integration/events") &&
-            !href.includes("/api/hermes/integration/events/stream"),
-        ),
-      ).toBe(true);
+      const requestMethods = global.fetch.mock.calls.map(([_requestUrl, requestInit = {}]) => {
+        return requestInit.method;
+      });
+      expect(requestMethods.some((method) => method === "GET")).toBe(true);
       expect(outputs).toHaveLength(1);
       expect(outputs[0]._content.mode).toBe("read");
       expect(outputs[0]._content.ok).toBe(true);
@@ -1249,9 +1366,8 @@ describe("hermes leafelement", () => {
 
   it("dedupes repeated SSE events across reconnects by message id", async () => {
     vi.useFakeTimers();
-    global.fetch = vi.fn().mockImplementation((requestUrl) => {
-      const href = requestHref(requestUrl);
-      if (href.includes("/api/hermes/integration/events/stream")) {
+    global.fetch = vi.fn().mockImplementation((_requestUrl, requestInit = {}) => {
+      if (requestInit.method === "HEAD") {
         return Promise.resolve(makeSseProbeResponse(200));
       }
       return Promise.resolve(makeJsonResponse(200, { schemaVersion: "v1", events: [] }));

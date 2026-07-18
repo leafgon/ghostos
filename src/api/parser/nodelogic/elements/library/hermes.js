@@ -25,7 +25,7 @@ const cachekeys = {
 
 const HERMES_CODEBASE = "ghostos/api/parser/nodelogic/elements/library/hermes.js";
 const HERMES_DEFAULT_READ_PATH = "/api/hermes/integration/events";
-const HERMES_DEFAULT_READ_STREAM_PATH = "/api/hermes/integration/events/stream";
+const HERMES_DEFAULT_READ_STREAM_PATH = HERMES_DEFAULT_READ_PATH;
 const HERMES_DEFAULT_WRITE_PATH = "/api/hermes/egress-commands";
 const HERMES_DEFAULT_LIMIT = 100;
 const HERMES_DEFAULT_TIMEOUT_MS = 15000;
@@ -102,6 +102,18 @@ const maybeTrimString = (value) => {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const maybeOpaqueString = (value) => {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+};
+
+const normalizeRepeatedStrings = (value) => {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  const values = Array.isArray(value) ? value : [value];
+  return values.map((entry) => maybeTrimString(entry)).filter((entry) => entry !== undefined);
 };
 
 const encodeTraceValue = (value) => {
@@ -291,7 +303,11 @@ const resolveHermesConfig = (rawConfig, _stream_cache) => {
     "";
   const guildId = trimString(parsedConfig.guildId ?? "");
   const channelId = trimString(parsedConfig.channelId ?? "");
-  const cursorFromConfig = maybeTrimString(parsedConfig.cursor);
+  const channelNames = [
+    ...normalizeRepeatedStrings(parsedConfig.channelName),
+    ...normalizeRepeatedStrings(parsedConfig.channelNames),
+  ];
+  const cursorFromConfig = maybeOpaqueString(parsedConfig.cursor);
   const sinceEventId = maybeTrimString(parsedConfig.sinceEventId);
   const requestHeaders = resolveHeaders(parsedConfig.headers ?? parsedConfig.requestHeaders);
   const credentials = resolveCredentialsMode(parsedConfig);
@@ -346,6 +362,11 @@ const resolveHermesConfig = (rawConfig, _stream_cache) => {
       sinceEventId,
     });
   }
+  if (channelId && channelNames.length > 0) {
+    throw new HermesConfigError("Hermes config channelId cannot be combined with channelName.", {
+      field: "channelName",
+    });
+  }
   if (["read", "both"].includes(mode) && !instanceId) {
     throw new HermesConfigError("Hermes config instanceId is required for read mode.", {
       field: "instanceId",
@@ -375,7 +396,8 @@ const resolveHermesConfig = (rawConfig, _stream_cache) => {
     instanceId,
     guildId,
     channelId,
-    cursor: cursorFromConfig ?? maybeTrimString(_stream_cache[cachekeys.CURSOR]),
+    channelNames,
+    cursor: cursorFromConfig ?? maybeOpaqueString(_stream_cache[cachekeys.CURSOR]),
     sinceEventId,
     requestHeaders,
     credentials,
@@ -594,11 +616,12 @@ const resolveApiUrl = ({ path, baseUrl, query = {} }) => {
       ? `${normalizedBaseUrl.replace(/\/+$/, "")}/${normalizedPath.replace(/^\/+/, "")}`
       : normalizedPath;
 
-  const queryEntries = Object.entries(query)
-    .filter(
-      ([_key, value]) => value !== undefined && value !== null && `${value}`.trim().length > 0,
-    )
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(`${value}`.trim())}`);
+  const queryEntries = Object.entries(query).flatMap(([key, value]) => {
+    const values = Array.isArray(value) ? value : [value];
+    return values
+      .filter((entry) => entry !== undefined && entry !== null && `${entry}`.length > 0)
+      .map((entry) => `${encodeURIComponent(key)}=${encodeURIComponent(`${entry}`)}`);
+  });
   if (queryEntries.length === 0) {
     return urlBase;
   }
@@ -910,7 +933,7 @@ const drainReadStreamOutputs = (_stream_cache) => {
 };
 
 const resolveReadCursor = ({ config, _stream_cache }) => {
-  return maybeTrimString(_stream_cache[cachekeys.CURSOR]) ?? config.cursor;
+  return maybeOpaqueString(_stream_cache[cachekeys.CURSOR]) ?? config.cursor;
 };
 
 const resolveReadQuery = ({ config, _stream_cache, includeLimit }) => {
@@ -919,6 +942,7 @@ const resolveReadQuery = ({ config, _stream_cache, includeLimit }) => {
     instanceId: config.instanceId,
     guildId: config.guildId || undefined,
     channelId: config.channelId || undefined,
+    channelName: config.channelNames.length > 0 ? config.channelNames : undefined,
     cursor: cursor ?? undefined,
     sinceEventId: cursor ? undefined : config.sinceEventId,
     limit: includeLimit ? config.limit : undefined,
@@ -961,6 +985,7 @@ const resolveReadStreamIdentityKey = (config) => {
     instanceId: config.instanceId,
     guildId: config.guildId || "",
     channelId: config.channelId || "",
+    channelNames: config.channelNames,
     credentials: config.credentials,
     requestHeaders: headerEntries,
   });
@@ -1150,17 +1175,21 @@ const supportsEventSourceApi = (source) => {
   );
 };
 
+const resolveSseCursor = (messageEvent) => {
+  return maybeOpaqueString(messageEvent?.lastEventId);
+};
+
 const resolveSseMessageId = ({ messageEvent, payload }) => {
   const candidates = [
-    payload?.message_id,
-    payload?.messageId,
+    messageEvent?.lastEventId,
     payload?.eventId,
     payload?.id,
+    payload?.message_id,
+    payload?.messageId,
     payload?.cursor,
-    messageEvent?.lastEventId,
   ];
   for (const candidate of candidates) {
-    const normalizedCandidate = maybeTrimString(candidate);
+    const normalizedCandidate = maybeOpaqueString(candidate);
     if (normalizedCandidate) {
       return normalizedCandidate;
     }
@@ -1171,6 +1200,7 @@ const resolveSseMessageId = ({ messageEvent, payload }) => {
 const HERMES_ENVELOPE_WRAPPER_KEYS = ["payload", "event", "data"];
 const HERMES_ENVELOPE_MAX_DEPTH = 6;
 const HERMES_USER_MESSAGE_KINDS = new Set(["discord.message.received"]);
+const HERMES_DISCORD_MESSAGE_EVENT_TYPES = new Set(["MESSAGE_CREATE"]);
 
 const normalizeKindToken = (value) => {
   const normalized = maybeTrimString(value);
@@ -1306,17 +1336,21 @@ const resolveHermesUserMessagePayload = (payload, envelopeObjects) => {
 
   const descriptors = envelopeObjects.map((candidate) => {
     const kind = normalizeKindToken(candidate?.kind);
+    const gatewayEventType = normalizeDiscordEventTypeToken(candidate?.kind);
     const discordEventType = normalizeDiscordEventTypeToken(candidate?.discord?.eventType);
     const contentText = resolveEnvelopeContentText(candidate);
     return {
       candidate,
       kind,
+      gatewayEventType,
       discordEventType,
       contentText,
       hasContentText: contentText !== undefined,
       hasUserMessageKindSignal:
         hasUserMessageKindSignal || (kind !== undefined && HERMES_USER_MESSAGE_KINDS.has(kind)),
-      hasMessageCreateSignal: discordEventType === "MESSAGE_CREATE",
+      hasMessageCreateSignal:
+        HERMES_DISCORD_MESSAGE_EVENT_TYPES.has(discordEventType) ||
+        HERMES_DISCORD_MESSAGE_EVENT_TYPES.has(gatewayEventType),
     };
   });
 
@@ -1398,6 +1432,7 @@ const resolveHermesEventFilterResult = (payload) => {
   const normalizedPayload = userMessagePayload?.candidate ?? envelopePayload;
   const discordEventType =
     userMessagePayload?.discordEventType ??
+    userMessagePayload?.gatewayEventType ??
     normalizeDiscordEventTypeToken(normalizedPayload?.discord?.eventType);
   const hasContentText = userMessagePayload?.hasContentText
     ? true
@@ -1771,6 +1806,7 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
     markFrameSeen();
     markReadStreamAuthPass(readStreamState, config, "stream_open");
     const payload = parseSsePayloadObject(messageEvent?.data);
+    const sseCursor = resolveSseCursor(messageEvent);
     const messageId = resolveSseMessageId({
       messageEvent,
       payload,
@@ -1794,7 +1830,7 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
       if (!isPlainObject(payload)) {
         return;
       }
-      const nextCursor = maybeTrimString(payload.cursor);
+      const nextCursor = maybeOpaqueString(payload.cursor);
       if (nextCursor) {
         _stream_cache[cachekeys.CURSOR] = nextCursor;
       }
@@ -1833,7 +1869,7 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
       return;
     }
 
-    const nextCursor = maybeTrimString(payload.cursor);
+    const nextCursor = sseCursor;
     if (nextCursor) {
       _stream_cache[cachekeys.CURSOR] = nextCursor;
     }
