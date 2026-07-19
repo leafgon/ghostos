@@ -1012,6 +1012,68 @@ Implementation rules:
 9. Node-level errors must produce typed error events, not ambiguous data.
 10. Cancellation must stop future attempts without corrupting idempotency state.
 
+## Runtime Options and Observability Contract
+
+This package has browser-facing builds and should not assume a single server
+process, `process.env`, or Prometheus transport. Rollout controls and
+observability must be passed through runtime configuration and explicit sinks.
+Environment variables and Prometheus exporters are host adapters, not the
+package-level contract.
+
+Repo-facing runtime options:
+
+```js
+{
+  featureFlags: {
+    defaultTriggerMode: "legacy" | "policy",
+    enableTriggerPolicy: false,
+    dataTriggeredNodeTypes: [],
+    idempotentSideEffects: false,
+    dualTraceExecution: false,
+  },
+  observability: {
+    traceSink,
+    metricSink,
+    logSink,
+  },
+}
+```
+
+Feature flag resolution order:
+
+1. Per-execution runtime config passed through existing `runtimeconfig` /
+   `_config`.
+2. Graph or node metadata.
+3. Package defaults.
+4. Build-time environment variables only as host-provided defaults for bundled
+   deployments.
+5. `globalThis` overrides only for local/debug tooling, not production policy.
+
+Required sinks:
+
+```js
+traceSink.emit(event);
+metricSink.record(name, labels, value);
+logSink.debug(event);
+logSink.info(event);
+logSink.warn(event);
+logSink.error(event);
+```
+
+Sink requirements:
+
+- Default sinks are no-op, except safe local logging may be enabled explicitly
+  after redaction.
+- Browser hosts may provide callback, event, or in-memory sinks.
+- Node/server hosts may adapt sinks to logs, OpenTelemetry, Prometheus, or
+  leaf-server APIs.
+- This package emits structured, redacted events; it does not own the metrics
+  backend.
+- Tests must include no-op sinks and in-memory sinks so browser builds do not
+  depend on Node environment variables or Prometheus.
+- Every sink event must pass through the shared redaction utility unless the
+  event schema is an explicit narrow allow-list.
+
 ## Runtime Refactor Plan
 
 ### Phase 1: Define Runtime Contracts
@@ -1023,6 +1085,7 @@ Scope:
 - Add event envelope types.
 - Add idempotency/retry/replay contracts.
 - Add trace field conventions.
+- Add runtime options and observability sink contracts.
 
 Implementation tasks:
 
@@ -1034,7 +1097,10 @@ Implementation tasks:
 6. Add a core node inventory fixture derived from `_leafstdlib_dataflow_api()`.
 7. Add a `leafelement` adapter inventory fixture derived from
    `leafelement.editorconfig.allowednames` and `initStdElementProps()`.
-8. Add tests for schema validation, inventory completeness, and redaction.
+8. Add `GhostRuntimeOptions` and transport-neutral observability sink schemas.
+9. Add no-op and in-memory test sinks.
+10. Add tests for schema validation, inventory completeness, sink behavior, and
+    redaction.
 
 Acceptance criteria:
 
@@ -1046,6 +1112,10 @@ Acceptance criteria:
 - `leafelement` classification resolves by `args.elementname`, not only by the
   outer `leafelement` node type.
 - Unknown trigger policy fails validation.
+- Runtime option resolution works through `_config` without requiring
+  `process.env`.
+- Browser/no-op observability mode does not require Prometheus or a Node
+  metrics backend.
 - Side-effecting nodes without idempotency metadata are flagged.
 - Traces can identify execution cause without exposing secrets.
 
@@ -1093,30 +1163,44 @@ Scope:
 
 Implementation tasks:
 
-1. Add runtime feature flags.
+1. Add runtime feature flag resolution through `GhostRuntimeOptions`.
 2. Keep legacy `driveDataflowByCtrlflow()` behavior available.
 3. Add dual-trace instrumentation:
    - legacy would-execute
    - new would-execute
    - actual executed
    - suppressed duplicate
-4. Add metrics for divergence.
+4. Emit divergence metrics through `metricSink`.
 
-Feature flag examples:
+Runtime option example:
 
-```text
-GHOSTOS_DEFAULT_TRIGGER_MODE=legacy
-GHOSTOS_ENABLE_TRIGGER_POLICY=true
-GHOSTOS_DATA_TRIGGERED_NODE_TYPES=http_action,queue_publish,db_write,hermes_write
-GHOSTOS_IDEMPOTENT_SIDE_EFFECTS=true
-GHOSTOS_DUAL_TRACE_EXECUTION=true
+```js
+{
+  featureFlags: {
+    defaultTriggerMode: "legacy",
+    enableTriggerPolicy: true,
+    dataTriggeredNodeTypes: ["http", "directus", "hermes", "cortex"],
+    idempotentSideEffects: true,
+    dualTraceExecution: true,
+  },
+  observability: {
+    traceSink,
+    metricSink,
+    logSink,
+  },
+}
 ```
+
+Hosts may map environment variables such as `GHOSTOS_ENABLE_TRIGGER_POLICY` into
+`GhostRuntimeOptions`, but package code should read resolved runtime options,
+not environment variables directly.
 
 Acceptance criteria:
 
 - Existing graphs run unchanged by default.
 - Opt-in nodes use new trigger policy.
 - Dual trace shows control-only ticks no longer execute opted-in data-driven nodes.
+- Browser builds can run with no-op sinks and no environment variables.
 
 ### Phase 4: Migrate Side-Effecting Nodes
 
@@ -1347,7 +1431,9 @@ This test should be generic and reusable for every side-effecting node adapter. 
 
 ## Observability
 
-Add runtime metrics:
+Emit runtime metric events through `metricSink.record(name, labels, value)`.
+These names are package-level event names. A Node/server host may map them to
+Prometheus, OpenTelemetry, logs, or another backend.
 
 - `ghostos_node_execution_total{node_type, trigger, status}`
 - `ghostos_node_execution_suppressed_total{node_type, reason}`
@@ -1357,6 +1443,8 @@ Add runtime metrics:
 - `ghostos_replay_total{node_type, status}`
 - `ghostos_config_update_total{node_type, behavior}`
 - `ghostos_control_event_total{intent}`
+
+Emit trace events through `traceSink.emit(event)`.
 
 Trace fields:
 
@@ -1372,6 +1460,9 @@ Trace fields:
 - idempotency decision
 - retry count
 - config version
+
+Emit logs through `logSink`. Direct `console` usage should be local/debug-only
+or wrapped by a host-provided sink. Browser builds must work with no-op sinks.
 
 Do not log:
 
@@ -1433,15 +1524,18 @@ The first patch should not be Hermes-specific. It should establish the reusable 
 4. Add idempotency storage contract, store interface, and memory test store.
 5. Add durable-store adapter contract and tests for restart, concurrent
    reservation, TTL, stale in-flight recovery, and worker sharing behavior.
-6. Add node classification and trigger policy schema.
-7. Add runtime event envelope helpers that apply redaction before trace/log
+6. Add `GhostRuntimeOptions`, feature flag resolution, and transport-neutral
+   `traceSink`, `metricSink`, and `logSink` interfaces.
+7. Add no-op and in-memory test sinks for browser-safe observability.
+8. Add node classification and trigger policy schema.
+9. Add runtime event envelope helpers that apply redaction before trace/log
    output.
-8. Add the legacy flow object adapter and generic data/control execution
-   helpers.
-9. Add generic idempotent side-effect wrapper that requires an explicit
-   `idempotencyStore` for production side-effecting nodes.
-10. Add tests proving control-only ticks do not execute data-driven nodes.
-11. Add a generic side-effect adapter test harness.
+10. Add the legacy flow object adapter and generic data/control execution
+    helpers.
+11. Add generic idempotent side-effect wrapper that requires an explicit
+    `idempotencyStore` for production side-effecting nodes.
+12. Add tests proving control-only ticks do not execute data-driven nodes.
+13. Add a generic side-effect adapter test harness.
 
 After that, migrate individual node adapters, including Hermes, onto the shared wrapper and trigger policy.
 
