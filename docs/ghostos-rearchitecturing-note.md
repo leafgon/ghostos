@@ -1512,32 +1512,54 @@ Rollback:
 - Preserve trace redaction and observability.
 - Keep server-side idempotency as the final authority for external side effects.
 
-## Recommended First Broad Patch
+## Recommended Foundation Patch Series
 
-The first patch should not be Hermes-specific. It should establish the reusable runtime foundation:
+The first phase should not be Hermes-specific, but it must land as small,
+ordered patches instead of one broad runtime patch. Each patch should own one
+contract, one review surface, and the tests needed to prove that contract.
 
-1. Add shared redaction and safe logging utilities.
-2. Replace, remove, or feature-gate raw logging in high-risk runtime and adapter
-   paths before richer traces are emitted.
-3. Add tests proving redaction covers control data, headers, cookies, request
-   configs, responses, error objects, signed URLs, and sensitive payload fields.
-4. Add idempotency storage contract, store interface, and memory test store.
-5. Add durable-store adapter contract and tests for restart, concurrent
-   reservation, TTL, stale in-flight recovery, and worker sharing behavior.
-6. Add `GhostRuntimeOptions`, feature flag resolution, and transport-neutral
-   `traceSink`, `metricSink`, and `logSink` interfaces.
-7. Add no-op and in-memory test sinks for browser-safe observability.
-8. Add node classification and trigger policy schema.
-9. Add runtime event envelope helpers that apply redaction before trace/log
-   output.
-10. Add the legacy flow object adapter and generic data/control execution
-    helpers.
-11. Add generic idempotent side-effect wrapper that requires an explicit
-    `idempotencyStore` for production side-effecting nodes.
-12. Add tests proving control-only ticks do not execute data-driven nodes.
-13. Add a generic side-effect adapter test harness.
+1. Redaction-only patch:
+   - Add shared redaction and safe logging utilities.
+   - Replace, remove, or feature-gate raw logging in high-risk runtime and
+     adapter paths before richer traces are emitted.
+   - Add tests proving redaction covers control data, headers, cookies, request
+     configs, responses, error objects, signed URLs, and sensitive payload
+     fields.
+2. Runtime options and sink interfaces patch:
+   - Add `GhostRuntimeOptions`, feature flag resolution, and transport-neutral
+     `traceSink`, `metricSink`, and `logSink` interfaces.
+   - Add no-op and in-memory test sinks for browser-safe observability.
+3. Runtime event envelope patch:
+   - Add runtime event envelope helpers.
+   - Ensure envelope trace and log output passes through the shared redaction
+     utility before it reaches any sink.
+4. Node classification and trigger policy patch:
+   - Add node classification and trigger policy schema.
+   - Add helpers and tests for classification and trigger policy resolution.
+5. Idempotency store contract patch:
+   - Add idempotency storage contract, store interface, and memory test store.
+   - Add tests for reservation, success, failure, duplicate decisions, and TTL.
+6. Durable-store contract patch:
+   - Add durable-store adapter contract.
+   - Add conformance tests for restart, concurrent reservation, TTL, stale
+     in-flight recovery, and worker sharing behavior.
+7. Generic side-effect wrapper patch:
+   - Add generic idempotent side-effect wrapper.
+   - Require an explicit `idempotencyStore` for production side-effecting nodes.
+   - Add tests for duplicate suppression and fail-fast behavior when required
+     idempotency metadata or storage is missing.
+8. Generic execution helpers and legacy adapter patch:
+   - Add the legacy flow object adapter and generic data/control execution
+     helpers.
+   - Add tests proving control-only ticks do not execute data-driven nodes.
+9. Generic side-effect adapter harness patch:
+   - Add a reusable side-effect adapter test harness.
+   - Keep Hermes as a later adapter migration target, not part of the foundation
+     patch series.
 
-After that, migrate individual node adapters, including Hermes, onto the shared wrapper and trigger policy.
+After this foundation series lands, migrate individual node adapters, including
+Hermes, onto the shared wrapper and trigger policy in separate adapter-specific
+patches.
 
 ## Resolved Design Decisions
 
