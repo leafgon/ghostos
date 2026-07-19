@@ -253,6 +253,8 @@ The concrete inventory for this repository is derived from:
 - `src/api/parser/breezyforest.js`
   - `getLEAFNodeCoreLogic()` maps active LEAF node types to implementation
     objects.
+  - This dispatch map is authoritative for runnable runtime node types, even
+    when a type is absent from `_leafstdlib_dataflow_api()`.
 - `src/api/parser/nodelogic/`
   - core node processing logic.
 - `src/api/parser/nodelogic/elements/leafelement.js`
@@ -288,6 +290,8 @@ idempotency requirements where applicable. The initial classification table is:
 | `leafdeckheart`   | `src/api/parser/nodelogic/elements/leafdeckheart.js`      | structural stateful transform     | `data` or `all-inputs`                        | P2       | Deck aggregation must preserve parent event IDs and declare join semantics.                                                                |
 | `leafdeckdiamond` | `src/api/parser/nodelogic/elements/leafdeckdiamond.js`    | structural transform              | `data`                                        | P2       | Should remain data-driven and avoid control-triggered rebroadcast.                                                                         |
 | `leafdeckclub`    | `src/api/parser/nodelogic/elements/leafdeckclub.js`       | structural source/transform       | `data`                                        | P2       | Initialization data and deck output must become explicit data events.                                                                      |
+| `leafgnav`        | legacy dispatch in `src/api/parser/breezyforest.js`       | blocked legacy UI node            | none                                          | P4       | Runnable through `getLEAFNodeCoreLogic()` but absent from metadata; reject for new graphs and require `leafelement` `gnav` instead.        |
+| `leafpopupview`   | legacy dispatch in `src/api/parser/breezyforest.js`       | blocked legacy UI node            | none                                          | P4       | Runnable through `getLEAFNodeCoreLogic()` but absent from metadata; reject for new graphs and require `leafelement` `popup` instead.       |
 | `leafelement`     | `src/api/parser/nodelogic/elements/leafelement.js`        | adapter host                      | element-specific                              | P0       | The wrapper must resolve classification from `elementname`; it must not treat all elements as one runtime class.                           |
 | `leafgraph`       | `src/api/parser/nodelogic/abstraction/leafgraph.js`       | composite/orchestrator            | `control` plus declared data policy           | P2       | Graph expansion and nested execution must preserve trigger cause across graph boundaries.                                                  |
 | `leaflambdagraph` | `src/api/parser/nodelogic/abstraction/leaflambdagraph.js` | composite transform/orchestrator  | `data` or `control` by declaration            | P2       | Lambda graph execution must distinguish data recompute from lifecycle control.                                                             |
@@ -351,13 +355,18 @@ registry:
 Inventory acceptance gates:
 
 1. Runtime classification tests must enumerate `Object.keys(_leafstdlib_dataflow_api())`.
-2. The only unclassified core node types allowed by tests are explicitly obsolete or metadata-only entries listed above.
-3. `leafradioRX` and `leafradioTX` must be rejected for new graphs.
-4. `leafelement` classification must dispatch by `args.elementname`.
-5. Runtime classification tests must enumerate `leafelement.editorconfig.allowednames`.
-6. Allowed element names without wired adapters must fail fast with an unsupported-adapter error, not silently fall back.
-7. Wired adapter files that are not allowed names must remain unreachable until explicitly added to metadata.
-8. P0 adapters must not opt into data-triggered execution until idempotency, retry, replay, and redaction metadata are present.
+2. Runtime classification tests must enumerate the concrete dispatch keys in
+   `getLEAFNodeCoreLogic()`, not only metadata-derived node types.
+3. The only unclassified core node types allowed by tests are explicitly obsolete,
+   metadata-only, blocked, or legacy-dispatch entries listed above.
+4. `leafradioRX` and `leafradioTX` must be rejected for new graphs.
+5. `leafgnav` and `leafpopupview` must be rejected for new graphs; use their
+   `leafelement` adapter equivalents instead.
+6. `leafelement` classification must dispatch by `args.elementname`.
+7. Runtime classification tests must enumerate `leafelement.editorconfig.allowednames`.
+8. Allowed element names without wired adapters must fail fast with an unsupported-adapter error, not silently fall back.
+9. Wired adapter files that are not allowed names must remain unreachable until explicitly added to metadata.
+10. P0 adapters must not opt into data-triggered execution until idempotency, retry, replay, and redaction metadata are present.
 
 ## Trigger Policies
 
@@ -1107,17 +1116,22 @@ Implementation tasks:
 3. Add helper to resolve trigger policy.
 4. Add helper to wrap legacy payloads into runtime envelopes.
 5. Add redaction utility for trace/log fields.
-6. Add a core node inventory fixture derived from `_leafstdlib_dataflow_api()`.
-7. Add a `leafelement` adapter inventory fixture derived from
+6. Add a metadata node inventory fixture derived from `_leafstdlib_dataflow_api()`.
+7. Add a runtime dispatch inventory fixture derived from the concrete keys in
+   `getLEAFNodeCoreLogic()`.
+8. Add a `leafelement` adapter inventory fixture derived from
    `leafelement.editorconfig.allowednames` and `initStdElementProps()`.
-8. Add `GhostRuntimeOptions` and transport-neutral observability sink schemas.
-9. Add no-op and in-memory test sinks.
-10. Add tests for schema validation, inventory completeness, sink behavior, and
+9. Add `GhostRuntimeOptions` and transport-neutral observability sink schemas.
+10. Add no-op and in-memory test sinks.
+11. Add tests for schema validation, inventory completeness, sink behavior, and
     redaction.
 
 Acceptance criteria:
 
 - Every non-obsolete node from `_leafstdlib_dataflow_api()` can be classified.
+- Every runnable dispatch key from `getLEAFNodeCoreLogic()` is classified or
+  rejected; legacy dispatch-only keys such as `leafgnav` and `leafpopupview`
+  must not remain available for new graphs.
 - Every allowed `leafelement` name is either classified with a wired adapter or
   explicitly blocked as unsupported.
 - `leafradioRX` and `leafradioTX` are rejected for new graphs as obsolete node
