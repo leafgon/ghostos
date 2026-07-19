@@ -242,6 +242,123 @@ Contract:
 - emits typed control intents
 - does not mutate external state unless also classified as side-effecting
 
+## Repo Node Inventory
+
+The concrete inventory for this repository is derived from:
+
+- `src/api/metamodel.js`
+  - `_leafstdlib_dataflow_api()` defines `_breezyforestapi`, the editor/runtime
+    registry of LEAF node types.
+  - `leafelement.editorconfig.allowednames` defines the allowed element names.
+- `src/api/parser/breezyforest.js`
+  - `getLEAFNodeCoreLogic()` maps active LEAF node types to implementation
+    objects.
+- `src/api/parser/nodelogic/`
+  - core node processing logic.
+- `src/api/parser/nodelogic/elements/leafelement.js`
+  - the shared `leafelement` dispatcher.
+- `src/api/parser/nodelogic/elements/library/`
+  - concrete element adapter logic.
+
+Migration priorities:
+
+| Priority | Meaning                                                                                   |
+| -------- | ----------------------------------------------------------------------------------------- |
+| P0       | Side-effecting, external, or incident-relevant adapter; migrate before changing defaults. |
+| P1       | Stateful, source, join, device, or timing behavior; migrate before broad graph opt-in.    |
+| P2       | Boundary, composite, dynamic, or UI behavior; migrate before removing compatibility mode. |
+| P3       | Pure transform or low-risk sink; migrate after higher-risk behavior is covered.           |
+| P4       | Obsolete, metadata-only, or structural type; block, deprecate, or document explicitly.    |
+
+### Core LEAF Node Types
+
+Every non-obsolete entry in `_leafstdlib_dataflow_api()` must have runtime
+metadata for classification, trigger policy, join policy where applicable, and
+idempotency requirements where applicable. The initial classification table is:
+
+| Node type         | Implementation                                            | Runtime class                     | Default trigger                               | Priority | Migration detail                                                                                                                           |
+| ----------------- | --------------------------------------------------------- | --------------------------------- | --------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `leafradioRX`     | `src/api/parser/nodelogic/io/leafradioRX.js`              | obsolete source                   | none                                          | P4       | Present in metadata but obsolete and not exported from `io/index.js`; new graphs must reject it and legacy graphs need explicit migration. |
+| `leafradioTX`     | `src/api/parser/nodelogic/io/leafradioTX.js`              | obsolete sink/action              | none                                          | P4       | Present in metadata but obsolete and not exported from `io/index.js`; new graphs must reject it and legacy graphs need explicit migration. |
+| `leafoutflowport` | `src/api/parser/nodelogic/io/leafoutflowport.js`          | graph boundary sink               | `data` or `primary-input`                     | P2       | Should forward newly emitted graph data, not replay latest data on a generic control tick.                                                 |
+| `leafinflowport`  | `src/api/parser/nodelogic/io/leafinflowport.js`           | graph boundary source             | `data`                                        | P2       | Should convert graph input into runtime data events with parent event identity.                                                            |
+| `leafmemoryio`    | `src/api/parser/nodelogic/io/leafmemoryio.js`             | stateful transform                | `data`                                        | P1       | Writes runtime `mnemosyne` memory; if persistent/global memory is enabled, classify that mode as side-effecting with idempotency.          |
+| `leafscreenio`    | `src/api/parser/nodelogic/io/leafscreenio.js`             | UI sink/source bridge             | `data`                                        | P2       | Browser/window behavior must be explicit; display updates should be data-driven and user-input emissions should be source events.          |
+| `leafdeckspade`   | `src/api/parser/nodelogic/elements/leafdeckspade.js`      | structural stateful transform     | `data` or `all-inputs`                        | P2       | Deck aggregation must preserve parent event IDs and declare join semantics.                                                                |
+| `leafdeckheart`   | `src/api/parser/nodelogic/elements/leafdeckheart.js`      | structural stateful transform     | `data` or `all-inputs`                        | P2       | Deck aggregation must preserve parent event IDs and declare join semantics.                                                                |
+| `leafdeckdiamond` | `src/api/parser/nodelogic/elements/leafdeckdiamond.js`    | structural transform              | `data`                                        | P2       | Should remain data-driven and avoid control-triggered rebroadcast.                                                                         |
+| `leafdeckclub`    | `src/api/parser/nodelogic/elements/leafdeckclub.js`       | structural source/transform       | `data`                                        | P2       | Initialization data and deck output must become explicit data events.                                                                      |
+| `leafelement`     | `src/api/parser/nodelogic/elements/leafelement.js`        | adapter host                      | element-specific                              | P0       | The wrapper must resolve classification from `elementname`; it must not treat all elements as one runtime class.                           |
+| `leafgraph`       | `src/api/parser/nodelogic/abstraction/leafgraph.js`       | composite/orchestrator            | `control` plus declared data policy           | P2       | Graph expansion and nested execution must preserve trigger cause across graph boundaries.                                                  |
+| `leaflambdagraph` | `src/api/parser/nodelogic/abstraction/leaflambdagraph.js` | composite transform/orchestrator  | `data` or `control` by declaration            | P2       | Lambda graph execution must distinguish data recompute from lifecycle control.                                                             |
+| `leafanchor`      | `src/api/parser/nodelogic/abstraction/leafanchor.js`      | structural metadata               | none                                          | P4       | No runtime execution should be required beyond graph structure validation.                                                                 |
+| `leafspelldef`    | `src/api/parser/nodelogic/abstraction/leafspelldef.js`    | declaration metadata              | compile-time                                  | P4       | Defines spell metadata; runtime execution should be avoided unless explicitly modeled.                                                     |
+| `leafspell`       | `src/api/parser/nodelogic/abstraction/leafspell.js`       | dynamic transform/orchestrator    | `data`                                        | P2       | Spell invocation must inherit the resolved spell classification; side-effecting spells require metadata.                                   |
+| `leafloopyspell`  | `src/api/parser/nodelogic/abstraction/leafloopyspell.js`  | stateful transform/orchestrator   | `data` or declared join                       | P2       | Loop/replay semantics must be explicit and bounded.                                                                                        |
+| `leafsyncflow`    | metadata only in `src/api/metamodel.js`                   | join policy placeholder           | none until wired                              | P4       | Registered in metadata but not mapped in `getLEAFNodeCoreLogic()`; either wire to a helper or deprecate.                                   |
+| `leafchronosflow` | `src/api/parser/nodelogic/dataflow/leafchronosflow.js`    | stateful join/timing transform    | declared join or `timer`                      | P1       | Chronos behavior must become explicit join/timer metadata instead of implicit control sampling.                                            |
+| `leafasyncflow`   | mapped to `_leafchronosflow` in `breezyforest.js`         | async join/timing transform       | declared join or `timer`                      | P1       | Alias behavior must be documented and tested as a Chronos policy variant.                                                                  |
+| `leafmixflow`     | `src/api/parser/nodelogic/dataflow/leafmixflow.js`        | join transform                    | `primary-input`, `all-inputs`, or `any-input` | P1       | `merge`, `concat`, `combineLatest`, and related modes must map to declared join policies.                                                  |
+| `leafgateflow`    | `src/api/parser/nodelogic/dataflow/leafgateflow.js`       | pure filter/router                | `data`                                        | P1       | Gate decisions should execute on data events and include rejected-event trace decisions where useful.                                      |
+| `leaflabel`       | `src/api/parser/nodelogic/datautils/leaflabel.js`         | pure transform                    | `data`                                        | P3       | Labeling must preserve parent event identity.                                                                                              |
+| `leafdelabel`     | `src/api/parser/nodelogic/datautils/leafdelabel.js`       | pure transform                    | `data`                                        | P3       | Delabeling must preserve parent event identity.                                                                                            |
+| `leafbottle`      | `src/api/parser/nodelogic/datautils/leafbottle.js`        | pure transform                    | `data`                                        | P3       | Bottling should be deterministic and retain provenance.                                                                                    |
+| `leafunbottle`    | `src/api/parser/nodelogic/datautils/leafunbottle.js`      | pure transform/filter             | `data`                                        | P3       | Missing bottle keys should be observable as filtered/no-output decisions.                                                                  |
+| `leafcrate`       | `src/api/parser/nodelogic/datautils/leafcrate.js`         | pure transform                    | `data`                                        | P3       | Crate shaping should be deterministic.                                                                                                     |
+| `leafconfig`      | `src/api/parser/nodelogic/datautils/leafconfig.js`        | config transform/source           | `data` or `refresh_config`                    | P2       | Config changes affect future processing by default; recompute requires explicit policy.                                                    |
+| `leaflisp`        | `src/api/parser/nodelogic/wizardry/leaflisp.js`           | dynamic pure transform by default | `data`                                        | P2       | Lisp evaluation is pure unless the resolved lambda or host helper declares side effects.                                                   |
+
+### `leafelement` Adapter Types
+
+`leafelement` is a special node type. Its `elementname` is constrained by
+`editorconfig.allowednames`, and the concrete runtime behavior is supplied by
+`src/api/parser/nodelogic/elements/library/` through
+`initStdElementProps()`. Runtime metadata must therefore be keyed by both
+`type: "leafelement"` and `args.elementname`.
+
+| Element name  | Adapter status                                                            | Runtime class                                           | Default trigger                                         | Priority | Migration detail                                                                                                          |
+| ------------- | ------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `gnav`        | wired: `library/gnav.js`                                                  | UI sink/source bridge                                   | `data` plus typed UI control                            | P2       | Navigation UI updates should be data-driven; user navigation events should emit source data events.                       |
+| `popup`       | wired: `library/popup.js`                                                 | UI sink/source bridge                                   | `data` plus typed UI control                            | P2       | Popup display is a sink; user actions or close events are source events.                                                  |
+| `editor`      | wired: `library/editor.js`                                                | UI stateful sink/source                                 | `data` plus typed UI control                            | P2       | Editor content updates and emitted edits require separate sink/source event identities.                                   |
+| `text`        | wired: `library/text.js`                                                  | UI sink/pure transform                                  | `data`                                                  | P3       | Text rendering should not replay on control-only ticks.                                                                   |
+| `prompt`      | wired: `library/prompt.js`                                                | UI source/sink                                          | `data` plus typed UI control                            | P2       | Prompt submissions must become source data events; prompt rendering is a sink.                                            |
+| `http`        | wired: `library/http.js`                                                  | source for safe reads; side-effecting action for writes | `data`                                                  | P0       | `GET` can be modeled as source/read; `POST`, `PUT`, `PATCH`, and `DELETE` require idempotency metadata and bounded retry. |
+| `href`        | wired: `library/href.js`                                                  | browser navigation side effect                          | `data`                                                  | P0       | Assigning `window.location.href` is externally visible navigation and must not be replayed from control ticks.            |
+| `mediaplayer` | wired: `library/mediaplayer.js`                                           | UI/media sink                                           | `data` plus typed media control                         | P2       | Playback commands are side-effect-like browser actions and need explicit command identity if repeated.                    |
+| `image`       | wired: `library/image.js`                                                 | UI sink/pure transform                                  | `data`                                                  | P3       | Image display should be data-driven and provenance-preserving.                                                            |
+| `mediainput`  | wired: `library/mediainput.js`                                            | browser media source                                    | `control` lifecycle, then source data events            | P1       | Device permission, stream start/stop, and emitted frames/blobs must be typed source lifecycle behavior.                   |
+| `midi`        | wired: `library/midi.js`                                                  | external device source/sink                             | `control` lifecycle, then source data events            | P1       | MIDI open/close is lifecycle control; inbound/outbound messages require stable event identity.                            |
+| `sound`       | wired: `library/sound.js`                                                 | browser audio stateful sink/source                      | `data` plus typed media control                         | P1       | Audio graph mutation and playback are stateful browser side effects; command identity is needed for replay safety.        |
+| `html`        | wired: `library/html.js`                                                  | pure transform/UI sink                                  | `data`                                                  | P3       | Template compilation should be config/future-only; rendered output should preserve input provenance.                      |
+| `form`        | wired: `library/form.js`                                                  | UI stateful sink/source                                 | `data` plus typed UI control                            | P2       | Form rendering is a sink; submitted values are source data events.                                                        |
+| `directus`    | wired: `library/directus.js`                                              | source for reads; side-effecting action for writes      | `data`                                                  | P0       | Directus writes require domain command IDs, idempotency, redaction, and retry policy before opt-in.                       |
+| `token`       | allowed name, no wired adapter                                            | blocked/metadata-only                                   | none                                                    | P4       | Keep blocked until an adapter and explicit security contract exist.                                                       |
+| `rancher`     | allowed name and adapter file exists, but not wired in `library/index.js` | side-effecting external API if enabled                  | `data`                                                  | P0       | Do not expose until wired intentionally with idempotency, credential handling, and redaction.                             |
+| `hermes`      | wired: `library/hermes.js`                                                | source plus side-effecting action                       | `data` for writes; `control`/source lifecycle for reads | P0       | Egress commands require idempotency; read/poll/SSE events require source dedupe and cursor semantics.                     |
+| `cortex`      | wired: `library/cortex.js`                                                | side-effecting job submission plus poll source          | `data`                                                  | P0       | Job submission already has adapter-level idempotency behavior; migrate onto shared runtime metadata and wrapper.          |
+| `hippocampus` | allowed name, no wired adapter                                            | blocked/metadata-only                                   | none                                                    | P4       | Keep blocked until an adapter and memory/persistence contract exist.                                                      |
+
+Additional adapter files currently outside the reachable `leafelement`
+registry:
+
+| Adapter file                                                    | Current status                                                                           | Required decision                                                                                                                                            |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/api/parser/nodelogic/elements/library/openai.js`           | file exists but `openai` is not in `allowednames` and is not wired in `library/index.js` | Treat as unavailable. If exposed later, classify as P0 side-effecting external API/job adapter with idempotency, credential, redaction, and retry contracts. |
+| `src/api/parser/nodelogic/elements/library/rancher.js`          | file exists and `rancher` is allowed, but it is not wired in `library/index.js`          | Either wire intentionally with P0 side-effecting external API metadata or remove/deprecate the allowed name.                                                 |
+| `src/api/parser/nodelogic/elements/library/wizardryelements.js` | helper/experimental element code, not wired through `initStdElementProps()`              | Keep out of runtime inventory until it is registered deliberately.                                                                                           |
+
+Inventory acceptance gates:
+
+1. Runtime classification tests must enumerate `Object.keys(_leafstdlib_dataflow_api())`.
+2. The only unclassified core node types allowed by tests are explicitly obsolete or metadata-only entries listed above.
+3. `leafradioRX` and `leafradioTX` must be rejected for new graphs.
+4. `leafelement` classification must dispatch by `args.elementname`.
+5. Runtime classification tests must enumerate `leafelement.editorconfig.allowednames`.
+6. Allowed element names without wired adapters must fail fast with an unsupported-adapter error, not silently fall back.
+7. Wired adapter files that are not allowed names must remain unreachable until explicitly added to metadata.
+8. P0 adapters must not opt into data-triggered execution until idempotency, retry, replay, and redaction metadata are present.
+
 ## Trigger Policies
 
 Add explicit trigger policy metadata to node runtime metadata. This should be available to runtime compilation, tracing, and tests.
@@ -664,11 +781,20 @@ Implementation tasks:
 3. Add helper to resolve trigger policy.
 4. Add helper to wrap legacy payloads into runtime envelopes.
 5. Add redaction utility for trace/log fields.
-6. Add tests for schema validation and redaction.
+6. Add a core node inventory fixture derived from `_leafstdlib_dataflow_api()`.
+7. Add a `leafelement` adapter inventory fixture derived from
+   `leafelement.editorconfig.allowednames` and `initStdElementProps()`.
+8. Add tests for schema validation, inventory completeness, and redaction.
 
 Acceptance criteria:
 
-- Every node can be classified.
+- Every non-obsolete node from `_leafstdlib_dataflow_api()` can be classified.
+- Every allowed `leafelement` name is either classified with a wired adapter or
+  explicitly blocked as unsupported.
+- `leafradioRX` and `leafradioTX` are rejected for new graphs as obsolete node
+  types.
+- `leafelement` classification resolves by `args.elementname`, not only by the
+  outer `leafelement` node type.
 - Unknown trigger policy fails validation.
 - Side-effecting nodes without idempotency metadata are flagged.
 - Traces can identify execution cause without exposing secrets.
