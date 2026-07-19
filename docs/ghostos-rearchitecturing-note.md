@@ -662,7 +662,9 @@ Adapter mapping rules:
    typed as replay.
 6. `datalogic.pre` runs before the normalized data enters the policy driver.
 7. `leaflogic` is invoked through bridge streams so existing node logic still
-   sees `inputObjArr` and `controlObj`.
+   sees `inputObjArr` and `controlObj`. This preserves the call signature and
+   composite flow-object shape only; it does not automatically rewrite
+   adapter-internal subscriptions or side-effect triggers.
 8. `datalogic.post` runs before the legacy output `_stream` publishes data.
 9. Output control envelopes are converted back to `_control._stream` emissions
    with updated `_config.traces`.
@@ -681,23 +683,34 @@ legacy composite flow objects
 This keeps the first runtime patch narrow: add policy-aware drivers and a
 compatibility adapter without forcing every `src/api/parser/nodelogic/**`
 implementation to switch to the lower-level stream primitives immediately.
+However, the adapter is only a boundary bridge. It cannot make an internally
+control-driven side-effecting adapter data-safe unless the adapter's internal
+side-effect path is also migrated, gated by typed intent, or wrapped at the
+side-effect call site.
 
 Adapter acceptance criteria:
 
 - `driveNodeByRuntimePolicy()` returns the same composite output shape expected
   by `eta.js`, `leaf.js`, `leafelement.js`, and existing node libraries.
-- Existing `leaflogic(inputObjArr, controlObj)` functions can run unchanged
-  behind the adapter.
+- Existing `leaflogic(inputObjArr, controlObj)` functions can keep their
+  signature and composite flow-object contract behind the adapter.
 - Existing `datalogic.pre` and `datalogic.post` hooks execute in the same order
   relative to node logic as they do today.
 - The adapter can run in compatibility mode with legacy control-driven behavior
   and in opt-in mode with data-driven behavior for selected node types.
+- In opt-in mode, a side-effecting adapter is not considered safe merely because
+  it is hosted behind the bridge; its internal control subscriptions must be
+  audited and either made data-driven, restricted to typed non-write control
+  intent, or wrapped around the exact side-effect call.
 - Dual trace records both legacy would-execute and policy-driver decisions.
 - `metaCtrl$` emissions are traceable and cannot implicitly replay data.
 - A side-effecting adapter opted into data-driven execution cannot execute from
   a control-only legacy tick.
 - Tests cover at least one pure transform, one join/stateful node, and one
   `leafelement` adapter through the legacy-object adapter.
+- Tests for side-effecting adapters include a legacy-shaped adapter with an
+  internal `_control._stream.pipe(withLatestFrom(...))` path and prove
+  control-only ticks cannot re-dispatch the side effect after opt-in.
 
 ## Idempotency Contract
 
@@ -1146,8 +1159,11 @@ Acceptance criteria:
   `data_inflow$objArr`, `meta_ctrl_in$`, `context`, and transformation hooks.
 - `driveNodeByRuntimePolicy()` returns the current composite output shape with
   `_stream` and `_control._stream`.
-- Existing `leaflogic` and `datalogic.pre/post` hooks can run unchanged through
-  the adapter.
+- Existing `leaflogic` and `datalogic.pre/post` hooks keep their current
+  signature and ordering through the adapter.
+- Side-effecting `leaflogic` implementations with internal control-driven write
+  paths must be migrated internally or guarded at the side-effect call site
+  before they opt into data-driven execution.
 - Data-driven nodes do not execute on control-only ticks.
 - Control-driven nodes require typed control intent.
 - Multi-input joins are deterministic under tested event sequences.
@@ -1222,6 +1238,9 @@ Acceptance criteria:
 
 - Each migrated node declares idempotency metadata.
 - Repeated control ticks do not duplicate side effects.
+- Adapter-internal control streams that previously sampled latest data for
+  writes are split, gated by typed non-write intent, or moved behind the
+  generic idempotent side-effect wrapper.
 - Retry behavior is bounded.
 - Missing idempotency key fails fast where required.
 
