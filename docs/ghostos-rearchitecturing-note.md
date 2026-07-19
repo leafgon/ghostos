@@ -864,6 +864,38 @@ Rules:
 9. Preserve server-side authorization and validation.
 10. Client/runtime dedupe is defense in depth, not a substitute for server idempotency.
 
+### Redaction First
+
+Redaction is a prerequisite for runtime envelopes, richer traces, dual trace,
+idempotency diagnostics, replay diagnostics, and side-effect adapter migration.
+The first broad runtime patch must add shared redaction and safe logging before
+new trace fields or envelope payloads are emitted broadly.
+
+Required redaction behavior:
+
+- Redact recursively by key for objects, arrays, request configs, response
+  headers, error objects, control payloads, data payloads, and trace fields.
+- Redact known sensitive keys and header names, including `authorization`,
+  `cookie`, `set-cookie`, `token`, `secret`, `password`, `apiKey`, `api-key`,
+  `x-api-key`, `X-CSRF-Token`, `refresh_token`, `access_token`, and private key
+  fields.
+- Redact full signed URLs and credential-bearing query parameters.
+- Preserve non-sensitive correlation fields such as node ID, event ID, attempt
+  ID, status code, error code, retry count, and short hash prefixes.
+- Prefer allow-listed trace fields for side-effect adapters over logging raw
+  request/response envelopes.
+
+Required logging behavior:
+
+- Existing side-effect adapter `console.log`, `console.warn`, and
+  `console.error` calls must be removed, feature-gated for local debugging, or
+  routed through the safe logging utility before the adapter opts into richer
+  runtime tracing.
+- P0 adapters must have redaction tests before data-triggered execution,
+  idempotency diagnostics, or dual trace are enabled for them.
+- No new runtime trace/envelope field may be logged unless it passes through the
+  shared redaction utility or is included in a narrow allow-list.
+
 ## Determinism Requirements
 
 For a fixed ordered sequence of data, control, timer, config, retry, and replay events, a node should produce the same ordered output sequence.
@@ -1306,12 +1338,19 @@ Rollback:
 
 The first patch should not be Hermes-specific. It should establish the reusable runtime foundation:
 
-1. Add node classification and trigger policy schema.
-2. Add runtime event envelope helpers.
-3. Add generic idempotent side-effect wrapper.
-4. Add data-driven and control-driven execution helpers.
-5. Add tests proving control-only ticks do not execute data-driven nodes.
-6. Add a generic side-effect adapter test harness.
+1. Add shared redaction and safe logging utilities.
+2. Replace, remove, or feature-gate raw logging in high-risk runtime and adapter
+   paths before richer traces are emitted.
+3. Add tests proving redaction covers control data, headers, cookies, request
+   configs, responses, error objects, signed URLs, and sensitive payload fields.
+4. Add node classification and trigger policy schema.
+5. Add runtime event envelope helpers that apply redaction before trace/log
+   output.
+6. Add the legacy flow object adapter and generic data/control execution
+   helpers.
+7. Add generic idempotent side-effect wrapper.
+8. Add tests proving control-only ticks do not execute data-driven nodes.
+9. Add a generic side-effect adapter test harness.
 
 After that, migrate individual node adapters, including Hermes, onto the shared wrapper and trigger policy.
 
