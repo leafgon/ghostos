@@ -483,6 +483,7 @@ Control event shape:
   "eventId": "uuid",
   "eventKind": "control",
   "intent": "refresh_config",
+  "legacyControlPayload": null,
   "targetNodeId": "node uuid",
   "graphInstanceId": "uuid",
   "sequence": 17,
@@ -492,6 +493,55 @@ Control event shape:
   }
 }
 ```
+
+Typed control intent is a normalized runtime interpretation, not a requirement
+that legacy control data be bottled. A legacy control bottle, a plain object, an
+`_config` delta, scheduler metadata, or an already-typed control object may be
+the resolver input. The normalized output is a control envelope with an explicit
+`intent`; the original legacy value is retained separately as
+`legacyControlPayload` for compatibility tracing and legacy handler delivery.
+
+### Legacy Control Intent Resolver
+
+The compatibility bridge must resolve legacy control emissions through a
+deterministic allow-list. It must not infer retry, replay, data execution, or
+side-effect permission from arbitrary control ticks.
+
+Resolver inputs:
+
+- `inflowCtrlObj._stream` emissions
+- `metaCtrl$` emissions
+- observed `_config` version/hash changes
+- scheduler, poller, lifecycle, retry, and replay metadata supplied by the host
+
+Resolver algorithm:
+
+1. If the input is already a typed control object with a valid `intent`, accept
+   it after schema validation.
+2. If the input has explicit retry metadata, resolve `retry` only when
+   `targetAttemptId` is present.
+3. If the input has explicit replay metadata, resolve `replay` only when
+   `targetEventId` is present.
+4. If the input is an observed `_config` version/hash change, resolve
+   `refresh_config`.
+5. If host metadata identifies a scheduler or polling source, resolve `poll`.
+6. If host metadata identifies lifecycle open/start or close/stop, resolve
+   `start` or `stop`.
+7. If the input is a legacy control bottle, inspect only allow-listed bottle
+   names. Do not treat plain `ctrl_accio` as start, poll, retry, replay, or data
+   execution.
+8. If no rule matches, resolve `legacy_tick` in compatibility mode.
+
+Unknown-signal behavior:
+
+- Compatibility mode resolves unknown or ambiguous control signals to
+  `legacy_tick`, preserves the original input as `legacyControlPayload`, and
+  records a trace decision.
+- New or migrated typed-control nodes fail validation for unknown intents,
+  retry without `targetAttemptId`, replay without `targetEventId`, or control
+  events that sample data without declared policy.
+- Opted-in data-driven and side-effecting nodes must not execute from
+  `legacy_tick`.
 
 Replay event shape:
 
@@ -1347,6 +1397,15 @@ Acceptance criteria:
 - Nodes distinguish startup from retry/replay.
 - Control events that sample data must declare why.
 - Replay and retry are auditable.
+- Plain `ctrl_accio` resolves to `legacy_tick`, not `start`, `poll`, `retry`,
+  `replay`, or data execution.
+- Observed `_config` version/hash change resolves to `refresh_config`.
+- Scheduler or poller metadata resolves to `poll`.
+- Retry without `targetAttemptId` and replay without `targetEventId` fail
+  validation for new or migrated nodes.
+- Unknown legacy control bottles resolve to `legacy_tick` in compatibility mode
+  and fail validation for new or migrated typed-control nodes.
+- Opted-in data-driven side-effecting nodes do not execute on `legacy_tick`.
 
 ### Phase 7: Change Defaults
 
@@ -1689,8 +1748,8 @@ and feature flags.
    Stateful nodes must declare checkpoint and replay semantics before config
    recompute can sample previous data. Side-effecting nodes must reject
    config-driven replay unless they declare a specific safe replay policy.
-7. During compatibility mode, existing `ctrl_accio` ticks map conservatively to
-   typed control intents:
+7. During compatibility mode, existing control ticks pass through the legacy
+   control intent resolver and map conservatively to typed control intents:
 
    | Legacy signal                              | Typed intent     |
    | ------------------------------------------ | ---------------- |
@@ -1702,8 +1761,10 @@ and feature flags.
    | explicit replay metadata with target event | `replay`         |
    | ambiguous control-only tick                | `legacy_tick`    |
 
-   `legacy_tick` is traceable compatibility state, not a replay intent. Opted-in
-   data-driven nodes must not execute from it.
+   Plain `ctrl_accio` and unknown control bottles resolve to `legacy_tick`.
+   `legacy_tick` is traceable compatibility state, not a start, poll, retry,
+   replay, or data execution intent. Opted-in data-driven nodes must not execute
+   from it.
 
 8. Shared runtime helpers are the long-term node-library contract. The compiler
    may wrap existing node functions during migration, but compiler wrapping is a
