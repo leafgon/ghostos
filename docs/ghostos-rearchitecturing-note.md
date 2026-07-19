@@ -506,6 +506,10 @@ Retry event shape:
 
 Create runtime helpers so node authors do not hand-roll trigger behavior with ad hoc Rx pipelines.
 
+The bare helper APIs below are lower-level primitives. They are not the first
+repo-facing migration API because the current runtime is built around composite
+flow objects rather than independent data and control streams.
+
 ### Data-Driven Helper
 
 ```js
@@ -567,6 +571,133 @@ Required join policies:
 - `windowed`
 
 Each output event must record which input event IDs caused it.
+
+## Legacy Flow Object Adapter Contract
+
+The first migration layer should preserve the current runtime object contract
+while routing execution through explicit trigger policies internally. Existing
+node logic and element adapters should not need ad hoc rewiring before the new
+drivers can be introduced.
+
+Current flow object shapes:
+
+```js
+type LegacyDataFlowObject = {
+  _stream: Observable<unknown>,
+  _control?: LegacyControlFlowObject,
+};
+
+type LegacyControlFlowObject = {
+  _stream: Observable<unknown>,
+  _config?: Record<string, unknown>,
+};
+
+type LegacyNodeOutputObject = {
+  _stream: Observable<unknown>,
+  _control: LegacyControlFlowObject,
+};
+```
+
+Current transformation shape:
+
+```js
+type LegacyTransformation = {
+  leaflogic?: (inputObjArr, controlObj) => LegacyNodeOutputObject,
+  datalogic?: {
+    pre?: (data) => unknown,
+    post?: (data) => unknown,
+  },
+};
+```
+
+The repo-facing migration helper should accept and return the legacy composite
+shape:
+
+```js
+driveNodeByRuntimePolicy({
+  inflowCtrlObj,
+  dataInflowObjArr,
+  metaCtrl$,
+  context,
+  policy,
+  transformation,
+});
+```
+
+Where:
+
+- `inflowCtrlObj` is the current control object with `_stream` and `_config`.
+- `dataInflowObjArr` is the current array of input objects with `_stream`.
+- `metaCtrl$` is the optional auxiliary control stream currently passed through
+  `driveDataflowByCtrlflow()`.
+- `context` carries runtime location, trace, node, graph, and adapter metadata.
+- `policy` is the resolved trigger policy and classification metadata.
+- `transformation` preserves existing `leaflogic` and `datalogic.pre/post`
+  hooks.
+
+It must return:
+
+```js
+{
+  _stream,
+  _control: {
+    _stream,
+    _config,
+  },
+}
+```
+
+Adapter mapping rules:
+
+1. Each legacy data emission becomes a runtime data envelope before handler
+   execution.
+2. Each legacy control emission becomes a typed control envelope when it maps to
+   a known intent; otherwise it becomes `legacy_tick`.
+3. `legacy_tick` may drive compatibility-mode behavior only. It must not drive
+   data-oriented side effects for opted-in nodes.
+4. `inflowCtrlObj._config` becomes sampled runtime config context. It must not
+   be treated as a data event.
+5. `metaCtrl$` becomes auxiliary control input. It may carry lifecycle or
+   adapter-local coordination, but it is not replay intent unless explicitly
+   typed as replay.
+6. `datalogic.pre` runs before the normalized data enters the policy driver.
+7. `leaflogic` is invoked through bridge streams so existing node logic still
+   sees `inputObjArr` and `controlObj`.
+8. `datalogic.post` runs before the legacy output `_stream` publishes data.
+9. Output control envelopes are converted back to `_control._stream` emissions
+   with updated `_config.traces`.
+10. Output data envelopes are converted back to `_stream` emissions while
+    preserving parent event IDs in trace metadata.
+
+The intended layering is:
+
+```text
+legacy composite flow objects
+  -> runtime event envelopes
+  -> policy driver
+  -> legacy composite output object
+```
+
+This keeps the first runtime patch narrow: add policy-aware drivers and a
+compatibility adapter without forcing every `src/api/parser/nodelogic/**`
+implementation to switch to the lower-level stream primitives immediately.
+
+Adapter acceptance criteria:
+
+- `driveNodeByRuntimePolicy()` returns the same composite output shape expected
+  by `eta.js`, `leaf.js`, `leafelement.js`, and existing node libraries.
+- Existing `leaflogic(inputObjArr, controlObj)` functions can run unchanged
+  behind the adapter.
+- Existing `datalogic.pre` and `datalogic.post` hooks execute in the same order
+  relative to node logic as they do today.
+- The adapter can run in compatibility mode with legacy control-driven behavior
+  and in opt-in mode with data-driven behavior for selected node types.
+- Dual trace records both legacy would-execute and policy-driver decisions.
+- `metaCtrl$` emissions are traceable and cannot implicitly replay data.
+- A side-effecting adapter opted into data-driven execution cannot execute from
+  a control-only legacy tick.
+- Tests cover at least one pure transform, one join/stateful node, and one
+  `leafelement` adapter through the legacy-object adapter.
 
 ## Idempotency Contract
 
@@ -804,21 +935,30 @@ Acceptance criteria:
 Scope:
 
 - Implement shared data-driven, control-driven, timer-driven, retry, replay, and multi-input drivers.
-- Keep legacy driver available for compatibility.
+- Add a legacy flow object adapter that preserves the current `_stream` /
+  `_control._stream` contract.
+- Keep legacy driver behavior available for compatibility.
 
 Implementation tasks:
 
-1. Implement `driveNodeByDataflow()`.
-2. Implement `driveNodeByCtrlflow()`.
-3. Implement `driveNodeByJoinPolicy()`.
-4. Implement `driveNodeByTimer()`.
-5. Implement idempotent side-effect wrapper.
-6. Implement retry wrapper with injectable scheduler.
-7. Implement replay resolver.
-8. Add trace events for driver decisions.
+1. Implement `driveNodeByRuntimePolicy()` for legacy composite flow objects.
+2. Implement `driveNodeByDataflow()`.
+3. Implement `driveNodeByCtrlflow()`.
+4. Implement `driveNodeByJoinPolicy()`.
+5. Implement `driveNodeByTimer()`.
+6. Implement idempotent side-effect wrapper.
+7. Implement retry wrapper with injectable scheduler.
+8. Implement replay resolver.
+9. Add trace events for adapter and driver decisions.
 
 Acceptance criteria:
 
+- `driveNodeByRuntimePolicy()` accepts current `inflow_ctrl$obj`,
+  `data_inflow$objArr`, `meta_ctrl_in$`, `context`, and transformation hooks.
+- `driveNodeByRuntimePolicy()` returns the current composite output shape with
+  `_stream` and `_control._stream`.
+- Existing `leaflogic` and `datalogic.pre/post` hooks can run unchanged through
+  the adapter.
 - Data-driven nodes do not execute on control-only ticks.
 - Control-driven nodes require typed control intent.
 - Multi-input joins are deterministic under tested event sequences.
