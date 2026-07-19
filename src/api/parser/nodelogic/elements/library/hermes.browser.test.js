@@ -22,8 +22,6 @@ const TEST_COMMAND = {
     allowedMentions: {},
     replyToMessageId: null,
   },
-  issuedAt: "2026-07-02T11:59:00Z",
-  expiresAt: "2026-07-02T12:10:00Z",
 };
 
 const EMPTY_SENTINEL_INPUTS = [
@@ -325,6 +323,10 @@ describe("hermes leafelement", () => {
     const [requestUrl, requestInit] = global.fetch.mock.calls[0];
     expect(requestHref(requestUrl)).toContain("/api/hermes/egress-commands");
     expect(requestInit.method).toBe("POST");
+    const requestBody = JSON.parse(requestInit.body);
+    expect(requestBody.commandId).toBe(TEST_COMMAND.commandId);
+    expect(requestBody.issuedAt).toBeUndefined();
+    expect(requestBody.expiresAt).toBeUndefined();
 
     expect(output._bname).toBe("elementio");
     expect(output._content.element).toBe("hermes");

@@ -409,18 +409,6 @@ const resolveHermesConfig = (rawConfig, _stream_cache) => {
   };
 };
 
-const normalizeRfc3339UTC = (value, fieldName) => {
-  const raw = trimString(value);
-  const parsed = new Date(raw);
-  if (!raw || Number.isNaN(parsed.getTime())) {
-    throw new HermesDomainError("validation_failed", `${fieldName} must be RFC3339 UTC.`, {
-      status: 400,
-      details: { field: fieldName },
-    });
-  }
-  return parsed.toISOString().replace(".000Z", "Z");
-};
-
 const requireUUIDField = (value, fieldName) => {
   const normalized = trimString(value);
   if (!UUID_REGEX.test(normalized)) {
@@ -576,15 +564,6 @@ const normalizeWriteCommandEnvelope = ({ payload, config }) => {
     commandPayload.replyToMessageId = replyToMessageId;
   }
 
-  const issuedAt = normalizeRfc3339UTC(command.issuedAt, "issuedAt");
-  const expiresAt = normalizeRfc3339UTC(command.expiresAt, "expiresAt");
-  if (new Date(issuedAt) > new Date(expiresAt)) {
-    throw new HermesDomainError("validation_failed", "issuedAt must be <= expiresAt.", {
-      status: 400,
-      details: { field: "issuedAt" },
-    });
-  }
-
   return {
     schemaVersion: "v1",
     commandId,
@@ -595,8 +574,6 @@ const normalizeWriteCommandEnvelope = ({ payload, config }) => {
     channelId,
     type,
     payload: commandPayload,
-    issuedAt,
-    expiresAt,
   };
 };
 
