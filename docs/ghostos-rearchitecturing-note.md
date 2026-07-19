@@ -434,7 +434,15 @@ Example metadata:
 
 ## Runtime Event Envelope
 
-Introduce a runtime event envelope for data, control, timer, retry, and replay events. The envelope can wrap existing node payloads internally so user-level LEAF code does not need to migrate all at once.
+Introduce a runtime event envelope for data, control, timer, retry, and replay
+events. The envelope can wrap existing node payloads internally so user-level
+LEAF code does not need to migrate all at once.
+
+For compatibility-mode legacy handlers, envelopes are internal runtime
+structures. Existing `datalogic.pre`, `leaflogic`, and `datalogic.post` code must
+see the same raw payloads, bottles, and control objects they see today. Runtime
+metadata is exposed separately through a stable read-only runtime context, not
+by replacing the payload object passed through legacy `_stream` emissions.
 
 Recommended shape:
 
@@ -447,6 +455,7 @@ Recommended shape:
   "sequence": 42,
   "createdAt": "2026-07-19T00:00:00.000Z",
   "payload": {},
+  "payloadKind": "raw|bottle|empty_sentinel",
   "trace": {
     "parentEventIds": [],
     "trigger": "data"
@@ -460,6 +469,9 @@ Requirements:
 - `sequence` is monotonic per source node.
 - `graphInstanceId` scopes runtime execution.
 - `parentEventIds` preserve causality.
+- `payload` contains the original legacy value exactly as emitted.
+- `payloadKind` records whether the payload is a raw value, a bottle, or an
+  empty-data sentinel without changing the payload shape.
 - `trigger` records the cause of execution.
 - domain-specific idempotency keys remain available in payload or metadata.
 - runtime `eventId` is a fallback execution key, not a substitute for domain command identity when the domain provides one.
@@ -658,8 +670,8 @@ It must return:
 
 Adapter mapping rules:
 
-1. Each legacy data emission becomes a runtime data envelope before handler
-   execution.
+1. Each legacy data emission is wrapped in an internal runtime data envelope
+   before policy evaluation.
 2. Each legacy control emission becomes a typed control envelope when it maps to
    a known intent; otherwise it becomes `legacy_tick`.
 3. `legacy_tick` may drive compatibility-mode behavior only. It must not drive
@@ -669,16 +681,24 @@ Adapter mapping rules:
 5. `metaCtrl$` becomes auxiliary control input. It may carry lifecycle or
    adapter-local coordination, but it is not replay intent unless explicitly
    typed as replay.
-6. `datalogic.pre` runs before the normalized data enters the policy driver.
-7. `leaflogic` is invoked through bridge streams so existing node logic still
-   sees `inputObjArr` and `controlObj`. This preserves the call signature and
-   composite flow-object shape only; it does not automatically rewrite
-   adapter-internal subscriptions or side-effect triggers.
-8. `datalogic.post` runs before the legacy output `_stream` publishes data.
-9. Output control envelopes are converted back to `_control._stream` emissions
-   with updated `_config.traces`.
-10. Output data envelopes are converted back to `_stream` emissions while
-    preserving parent event IDs in trace metadata.
+6. In compatibility mode, the bridge unwraps the envelope before invoking
+   `datalogic.pre`; `datalogic.pre` receives the original raw payload or bottle,
+   so `isBottle(data)` and `_bname` checks continue to work.
+7. The policy driver uses envelope metadata for trigger decisions, tracing,
+   retry, replay, and idempotency decisions. It must not require legacy
+   `leaflogic` implementations to inspect or mutate envelopes.
+8. `leaflogic` is invoked through bridge streams so existing node logic still
+   sees `inputObjArr` and `controlObj` with legacy-shaped `_stream` emissions.
+   This preserves the call signature and composite flow-object shape only; it
+   does not automatically rewrite adapter-internal subscriptions or side-effect
+   triggers.
+9. In compatibility mode, `datalogic.post` receives the legacy output payload
+   from `leaflogic`, not a runtime envelope.
+10. After `datalogic.post`, output data is wrapped into a runtime envelope for
+    trace and causality propagation, then converted back to legacy `_stream`
+    emissions while preserving parent event IDs in trace metadata.
+11. Output control envelopes are converted back to `_control._stream` emissions
+    with updated `_config.traces`.
 
 The intended layering is:
 
@@ -705,6 +725,10 @@ Adapter acceptance criteria:
   signature and composite flow-object contract behind the adapter.
 - Existing `datalogic.pre` and `datalogic.post` hooks execute in the same order
   relative to node logic as they do today.
+- Compatibility-mode `datalogic.pre`, `leaflogic`, and `datalogic.post` receive
+  legacy payloads and bottles, not runtime envelopes.
+- Runtime context is available as a separate read-only object; it must not be
+  merged into bottle content or legacy payload objects.
 - The adapter can run in compatibility mode with legacy control-driven behavior
   and in opt-in mode with data-driven behavior for selected node types.
 - In opt-in mode, a side-effecting adapter is not considered safe merely because
@@ -717,6 +741,10 @@ Adapter acceptance criteria:
   a control-only legacy tick.
 - Tests cover at least one pure transform, one join/stateful node, and one
   `leafelement` adapter through the legacy-object adapter.
+- Tests prove a bottle remains a bottle through `datalogic.pre`, `leaflogic`,
+  and `datalogic.post`, including `isBottle()` and `_bname` branching.
+- Tests prove no runtime envelope object leaks into compatibility-mode
+  `_stream` or `_control._stream` emissions.
 - Tests for side-effecting adapters include a legacy-shaped adapter with an
   internal `_control._stream.pipe(withLatestFrom(...))` path and prove
   control-only ticks cannot re-dispatch the side effect after opt-in.
@@ -1564,8 +1592,12 @@ contract, one review surface, and the tests needed to prove that contract.
    - Add no-op and in-memory test sinks for browser-safe observability.
 3. Runtime event envelope patch:
    - Add runtime event envelope helpers.
+   - Define envelope unwrap semantics for compatibility-mode `datalogic.pre`,
+     `leaflogic`, and `datalogic.post`.
    - Ensure envelope trace and log output passes through the shared redaction
      utility before it reaches any sink.
+   - Add tests proving legacy handlers see raw payloads or bottles, not runtime
+     envelopes.
 4. Node classification and trigger policy patch:
    - Add node classification and trigger policy schema.
    - Add helpers and tests for classification and trigger policy resolution.
