@@ -255,6 +255,11 @@ The concrete inventory for this repository is derived from:
     objects.
   - This dispatch map is authoritative for runnable runtime node types, even
     when a type is absent from `_leafstdlib_dataflow_api()`.
+  - Implementation must extract this local dispatch object into an exported
+    frozen registry, for example `LEAF_NODE_CORE_LOGIC_REGISTRY`, and have
+    `getLEAFNodeCoreLogic()` read from that registry. Inventory tests must
+    import the registry or a small `listRunnableLeafNodeTypes()` helper; tests
+    must not parse `breezyforest.js` source text to discover runtime keys.
 - `src/api/parser/nodelogic/`
   - core node processing logic.
 - `src/api/parser/nodelogic/elements/leafelement.js`
@@ -355,8 +360,9 @@ registry:
 Inventory acceptance gates:
 
 1. Runtime classification tests must enumerate `Object.keys(_leafstdlib_dataflow_api())`.
-2. Runtime classification tests must enumerate the concrete dispatch keys in
-   `getLEAFNodeCoreLogic()`, not only metadata-derived node types.
+2. Runtime classification tests must enumerate the exported runtime dispatch
+   registry used by `getLEAFNodeCoreLogic()`, not only metadata-derived node
+   types.
 3. The only unclassified core node types allowed by tests are explicitly obsolete,
    metadata-only, blocked, or legacy-dispatch entries listed above.
 4. `leafradioRX` and `leafradioTX` must be rejected for new graphs.
@@ -367,6 +373,8 @@ Inventory acceptance gates:
 8. Allowed element names without wired adapters must fail fast with an unsupported-adapter error, not silently fall back.
 9. Wired adapter files that are not allowed names must remain unreachable until explicitly added to metadata.
 10. P0 adapters must not opt into data-triggered execution until idempotency, retry, replay, and redaction metadata are present.
+11. Dispatch inventory tests must fail if the exported dispatch registry and
+    `getLEAFNodeCoreLogic()` diverge.
 
 ## Trigger Policies
 
@@ -511,7 +519,7 @@ Resolver inputs:
 
 - `inflowCtrlObj._stream` emissions
 - `metaCtrl$` emissions
-- observed `_config` version/hash changes
+- observed `_config` version/fingerprint changes
 - scheduler, poller, lifecycle, retry, and replay metadata supplied by the host
 
 Resolver algorithm:
@@ -522,7 +530,7 @@ Resolver algorithm:
    `targetAttemptId` is present.
 3. If the input has explicit replay metadata, resolve `replay` only when
    `targetEventId` is present.
-4. If the input is an observed `_config` version/hash change, resolve
+4. If the input is an observed `_config` version/fingerprint change, resolve
    `refresh_config`.
 5. If host metadata identifies a scheduler or polling source, resolve `poll`.
 6. If host metadata identifies lifecycle open/start or close/stop, resolve
@@ -780,7 +788,7 @@ Adapter acceptance criteria:
 - Runtime context is available as a separate read-only object; it must not be
   merged into bottle content or legacy payload objects.
 - The adapter can run in compatibility mode with legacy control-driven behavior
-  and in opt-in mode with data-driven behavior for selected node types.
+  and in opt-in mode with data-driven behavior for selected runtime target keys.
 - In opt-in mode, a side-effecting adapter is not considered safe merely because
   it is hosted behind the bridge; its internal control subscriptions must be
   audited and either made data-driven, restricted to typed non-write control
@@ -1037,9 +1045,54 @@ Optional declared modes:
 Config update traces should include:
 
 - config version
+- config fingerprint prefix for non-sensitive correlation only
 - node ID
 - whether recompute/reopen occurred
 - whether prior data was replayed
+
+### Config Version and Fingerprint Semantics
+
+Config change detection must be deterministic and must not leak secret-bearing
+configuration through traces, metrics, logs, or test snapshots.
+
+Preferred source:
+
+- Hosts should provide a monotonic `configVersion` when they own configuration
+  persistence or deployment state.
+- A `configVersion` is scoped by `graphInstanceId`, `nodeId`, and runtime target
+  key. It increments only when the resolved effective config for that target
+  changes.
+- If a host provides `configVersion`, the runtime uses it for change detection
+  and treats the fingerprint as diagnostic only.
+
+Fallback fingerprint:
+
+- If no `configVersion` is supplied, the runtime may derive an internal
+  `configFingerprint` from canonical JSON.
+- Canonical JSON sorts object keys recursively, preserves array order, rejects
+  functions, symbols, cyclic objects, and non-JSON runtime objects, and encodes
+  `undefined` only when the existing config contract already permits it.
+- Secret-bearing fields must not be included in any logged or emitted
+  fingerprint material.
+- For internal change detection, secret-bearing field values may be included only
+  as keyed digests using a host-provided non-exported `configFingerprintKey`.
+  Without that key, configs containing sensitive fields require an explicit
+  `configVersion`; P0 adapters must fail validation rather than use a
+  non-sensitive fingerprint that would miss secret rotation.
+- Trace and metric events may include only `configVersion`, a boolean
+  `configChanged`, and a short prefix of the non-sensitive fingerprint. They must
+  never include raw config, raw hashes of secrets, keyed secret digests, or full
+  signed URLs.
+
+Resolver behavior:
+
+- `_config` changes resolve to `refresh_config` only when the scoped
+  `configVersion` changes or the internal `configFingerprint` changes.
+- A config change does not imply replay. It affects future data by default.
+- Config fingerprint tests must prove deterministic key ordering, stable
+  fingerprints for equivalent objects, different fingerprints for changed
+  non-sensitive fields, fail-fast behavior for secret-bearing config without
+  `configVersion` or `configFingerprintKey`, and redacted trace output.
 
 ## Empty Data and Sentinel Semantics
 
@@ -1069,8 +1122,8 @@ Rules:
 
 Redaction is a prerequisite for runtime envelopes, richer traces, dual trace,
 idempotency diagnostics, replay diagnostics, and side-effect adapter migration.
-The first broad runtime patch must add shared redaction and safe logging before
-new trace fields or envelope payloads are emitted broadly.
+The first foundation patch must add shared redaction and safe logging before new
+trace fields or envelope payloads are emitted broadly.
 
 Required redaction behavior:
 
@@ -1088,6 +1141,13 @@ Required redaction behavior:
 
 Required logging behavior:
 
+- The first redaction patch is scoped to shared redaction utilities, shared safe
+  logging utilities, and raw logging cleanup in `src/api/parser/eta.js`,
+  `src/api/parser/leaf.js`, and P0 `leafelement` adapters (`http`, `href`,
+  `directus`, `hermes`, `cortex`, and any intentionally enabled `rancher`
+  adapter). Broader `leafio` and general utility logging cleanup should be
+  separate follow-up patches unless a line is on the path of a new trace,
+  envelope, idempotency, or side-effect diagnostic.
 - Existing side-effect adapter `console.log`, `console.warn`, and
   `console.error` calls must be removed, feature-gated for local debugging, or
   routed through the safe logging utility before the adapter opts into richer
@@ -1134,6 +1194,33 @@ observability must be passed through runtime configuration and explicit sinks.
 Environment variables and Prometheus exporters are host adapters, not the
 package-level contract.
 
+### Runtime Target Keys
+
+Feature flags, metadata lookup, traces, metrics, idempotency scopes, and
+migration tests must use one canonical runtime target key format.
+
+Canonical keys:
+
+- Core node type: `node:<nodeType>`, for example `node:leaflisp`.
+- `leafelement` adapter: `leafelement:<elementname>`, for example
+  `leafelement:http`.
+- Runtime dispatch-only legacy node: `node:<nodeType>`, marked blocked or
+  legacy-only in classification metadata.
+
+Rules:
+
+- Target key generation is centralized in a helper such as
+  `getRuntimeTargetKey({ type, args })`.
+- `leafelement` must never be targeted only as `node:leafelement` when the policy
+  affects adapter behavior; the element name is required.
+- Bare adapter names such as `http`, `directus`, `hermes`, and `cortex` are
+  invalid in feature flags because they are ambiguous with node types and future
+  adapter names.
+- Unknown, malformed, or unsupported target keys fail validation before runtime
+  execution.
+- Metrics may expose low-cardinality `node_type` and `elementname` labels, but
+  idempotency and policy resolution use the canonical target key.
+
 Repo-facing runtime options:
 
 ```js
@@ -1141,7 +1228,7 @@ Repo-facing runtime options:
   featureFlags: {
     defaultTriggerMode: "legacy" | "policy",
     enableTriggerPolicy: false,
-    dataTriggeredNodeTypes: [],
+    dataTriggeredTargets: [],
     idempotentSideEffects: false,
     dualTraceExecution: false,
   },
@@ -1224,6 +1311,8 @@ Acceptance criteria:
 - Every runnable dispatch key from `getLEAFNodeCoreLogic()` is classified or
   rejected; legacy dispatch-only keys such as `leafgnav` and `leafpopupview`
   must not remain available for new graphs.
+- Runtime dispatch inventory is derived from the exported dispatch registry or
+  helper, not by source-code parsing.
 - Every allowed `leafelement` name is either classified with a wired adapter or
   explicitly blocked as unsupported.
 - `leafradioRX` and `leafradioTX` are rejected for new graphs as obsolete node
@@ -1233,6 +1322,8 @@ Acceptance criteria:
 - Unknown trigger policy fails validation.
 - Runtime option resolution works through `_config` without requiring
   `process.env`.
+- Feature flags use canonical runtime target keys such as `node:leaflisp` and
+  `leafelement:http`; bare adapter names are rejected.
 - Browser/no-op observability mode does not require Prometheus or a Node
   metrics backend.
 - Side-effecting nodes without idempotency metadata are flagged.
@@ -1301,7 +1392,12 @@ Runtime option example:
   featureFlags: {
     defaultTriggerMode: "legacy",
     enableTriggerPolicy: true,
-    dataTriggeredNodeTypes: ["http", "directus", "hermes", "cortex"],
+    dataTriggeredTargets: [
+      "leafelement:http",
+      "leafelement:directus",
+      "leafelement:hermes",
+      "leafelement:cortex"
+    ],
     idempotentSideEffects: true,
     dualTraceExecution: true,
   },
@@ -1399,7 +1495,7 @@ Acceptance criteria:
 - Replay and retry are auditable.
 - Plain `ctrl_accio` resolves to `legacy_tick`, not `start`, `poll`, `retry`,
   `replay`, or data execution.
-- Observed `_config` version/hash change resolves to `refresh_config`.
+- Observed `_config` version/fingerprint change resolves to `refresh_config`.
 - Scheduler or poller metadata resolves to `poll`.
 - Retry without `targetAttemptId` and replay without `targetEventId` fail
   validation for new or migrated nodes.
@@ -1473,6 +1569,12 @@ Test cases:
 3. Pure transform with `recompute-pure` can recompute latest retained input.
 4. Side-effecting node rejects config-driven replay.
 5. Source node with `reopen-source` restarts subscription without duplicating already emitted source events when source IDs exist.
+6. Equivalent configs produce the same canonical fingerprint regardless of object
+   insertion order.
+7. Secret-bearing config without `configVersion` or a host-provided
+   `configFingerprintKey` fails validation for P0 adapters.
+8. Config traces never include raw config values, raw secret hashes, keyed secret
+   digests, or full signed URLs.
 
 ### Unit Tests: Retry and Replay
 
@@ -1569,13 +1671,13 @@ Emit runtime metric events through `metricSink.record(name, labels, value)`.
 These names are package-level event names. A Node/server host may map them to
 Prometheus, OpenTelemetry, logs, or another backend.
 
-- `ghostos_node_execution_total{node_type, trigger, status}`
-- `ghostos_node_execution_suppressed_total{node_type, reason}`
-- `ghostos_side_effect_attempt_total{node_type, status}`
-- `ghostos_side_effect_idempotency_total{node_type, decision}`
-- `ghostos_retry_total{node_type, status}`
-- `ghostos_replay_total{node_type, status}`
-- `ghostos_config_update_total{node_type, behavior}`
+- `ghostos_node_execution_total{target_key, node_type, trigger, status}`
+- `ghostos_node_execution_suppressed_total{target_key, node_type, reason}`
+- `ghostos_side_effect_attempt_total{target_key, node_type, status}`
+- `ghostos_side_effect_idempotency_total{target_key, node_type, decision}`
+- `ghostos_retry_total{target_key, node_type, status}`
+- `ghostos_replay_total{target_key, node_type, status}`
+- `ghostos_config_update_total{target_key, node_type, behavior}`
 - `ghostos_control_event_total{intent}`
 
 Emit trace events through `traceSink.emit(event)`.
@@ -1585,6 +1687,7 @@ Trace fields:
 - graph instance ID
 - node ID
 - node type
+- runtime target key
 - node classification
 - trigger policy
 - trigger source
@@ -1594,6 +1697,7 @@ Trace fields:
 - idempotency decision
 - retry count
 - config version
+- non-sensitive config fingerprint prefix
 
 Emit logs through `logSink`. Direct `console` usage should be local/debug-only
 or wrapped by a host-provided sink. Browser builds must work with no-op sinks.
@@ -1615,7 +1719,7 @@ The migration should be opt-in before defaults change.
 Compatibility strategy:
 
 1. Add metadata and helpers without changing legacy behavior.
-2. Enable new drivers per node type or per graph.
+2. Enable new drivers per canonical runtime target key or per graph.
 3. Run dual trace before switching execution.
 4. Compare legacy would-execute counts against new actual-execute counts.
 5. Migrate side-effecting nodes first.
@@ -1632,7 +1736,7 @@ Legacy behavior should remain available only as a compatibility mode, not as the
 4. Add broad unit tests for triggers, idempotency, retry, replay, and config semantics.
 5. Add generic integration test graphs.
 6. Enable dual trace in staging.
-7. Migrate one low-risk side-effecting node type.
+7. Migrate one low-risk side-effecting runtime target.
 8. Validate duplicate suppression and execution counts.
 9. Migrate remaining side-effecting nodes.
 10. Migrate pure/stateful data nodes.
@@ -1654,8 +1758,12 @@ contract, one review surface, and the tests needed to prove that contract.
 
 1. Redaction-only patch:
    - Add shared redaction and safe logging utilities.
-   - Replace, remove, or feature-gate raw logging in high-risk runtime and
-     adapter paths before richer traces are emitted.
+   - Replace, remove, or feature-gate raw logging only in
+     `src/api/parser/eta.js`, `src/api/parser/leaf.js`, and P0 `leafelement`
+     adapters before richer traces are emitted.
+   - Leave broad `leafio` and general utility logging cleanup to separate patches
+     unless a line is directly on the path of new runtime trace, envelope,
+     idempotency, or side-effect diagnostics.
    - Add tests proving redaction covers control data, headers, cookies, request
      configs, responses, error objects, signed URLs, and sensitive payload
      fields.
@@ -1673,7 +1781,11 @@ contract, one review surface, and the tests needed to prove that contract.
      envelopes.
 4. Node classification and trigger policy patch:
    - Add node classification and trigger policy schema.
+   - Extract the `getLEAFNodeCoreLogic()` dispatch object into an exported frozen
+     registry or `listRunnableLeafNodeTypes()` helper.
    - Add helpers and tests for classification and trigger policy resolution.
+   - Add canonical runtime target key helpers and reject malformed feature-flag
+     targets.
 5. Idempotency store contract patch:
    - Add idempotency storage contract, store interface, and memory test store.
    - Add tests for reservation, success, failure, duplicate decisions, and TTL.
