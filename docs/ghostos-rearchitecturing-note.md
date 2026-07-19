@@ -750,6 +750,93 @@ Generic rules:
 - content hashes are correlation aids, not primary idempotency for user-visible side effects.
 - missing required idempotency keys fail fast in production.
 
+### Idempotency Storage Contract
+
+The generic side-effect wrapper must be storage-pluggable, but production policy
+must not be storage-optional. The wrapper should accept an explicit
+`idempotencyStore`; it must not silently choose an unsafe cache for
+side-effecting production paths.
+
+Storage backend classes:
+
+- `memory`
+  - Allowed for tests, local development, browser best-effort UI actions, and
+    non-authoritative duplicate suppression.
+  - Not sufficient as the final authority for externally visible side effects.
+- `durable`
+  - Required for server and worker side-effecting actions unless the external
+    service provides authoritative idempotency.
+  - Must support atomic create/update or compare-and-set semantics for
+    concurrent duplicate suppression.
+- `server-authoritative`
+  - Required when the external service supports idempotency keys or domain
+    command IDs.
+  - Runtime storage remains defense in depth and observability, not the final
+    source of truth.
+
+Default scopes:
+
+```text
+graphInstanceId:nodeId:producerId:domainKey
+tenantId:integrationInstanceId:producerId:commandId
+```
+
+Use the graph-local scope only as a fallback. Prefer the external-domain scope
+when tenant, integration, producer, and command identity exist. Browser-only
+scope must include `graphInstanceId`, `nodeId`, and a session or runtime
+instance ID, and must be documented as non-authoritative.
+
+Default retention:
+
+- `succeeded`: 24 hours unless node metadata or provider semantics declare a
+  longer retention period.
+- `failed`: retain at least through the retry window; default to 1 hour if no
+  retry metadata declares otherwise.
+- `suppressed`: retain for the same TTL as the terminal entry it references.
+- `in_flight`: do not evict before the attempt timeout. Stale in-flight entries
+  require explicit recovery policy before another attempt can proceed.
+
+Default max size:
+
+- In-memory stores default to 1,024 terminal entries per node instance unless
+  node metadata declares a stricter limit.
+- Durable stores must declare retention and capacity policy, or explicitly rely
+  on provider/store retention.
+- Max-size eviction must prefer old terminal entries and must never evict active
+  `in_flight` entries.
+
+Runtime environment rules:
+
+- Browser runtime may use memory storage only for best-effort suppression.
+  Browser refresh, tab close, or session loss can clear the cache, so external
+  writes still require server/provider idempotency.
+- Server runtime must use durable or server-authoritative idempotency for
+  externally visible side effects.
+- Worker runtime must share the same durable store and scope as the server for
+  the same tenant/integration. Per-worker memory is not sufficient across
+  restarts, parallel workers, or queue redelivery.
+
+Store interface requirements:
+
+- `reserve(key, attempt)` atomically creates or observes an `in_flight` entry.
+- `markSucceeded(key, result)` records terminal success and TTL.
+- `markFailed(key, error)` records retryable/non-retryable failure state.
+- `markSuppressed(key, reason)` records observable suppression.
+- `get(key)` returns current state without extending TTL unless policy says so.
+- `sweep(now)` evicts only eligible terminal entries.
+
+Wrapper acceptance criteria:
+
+- Production side-effecting nodes fail fast if no acceptable
+  `idempotencyStore` is configured.
+- Concurrent duplicate attempts against the same key produce one `in_flight`
+  reservation and suppressed duplicates.
+- Restart tests cover loss of memory cache and preservation of durable cache.
+- Worker tests cover parallel workers sharing one durable store.
+- TTL tests cover `succeeded`, `failed`, `suppressed`, and stale `in_flight`
+  behavior.
+- Durable-store conflict tests prove atomic duplicate suppression.
+
 ## Retry Contract
 
 Retries must be explicit and bounded.
@@ -1343,14 +1430,18 @@ The first patch should not be Hermes-specific. It should establish the reusable 
    paths before richer traces are emitted.
 3. Add tests proving redaction covers control data, headers, cookies, request
    configs, responses, error objects, signed URLs, and sensitive payload fields.
-4. Add node classification and trigger policy schema.
-5. Add runtime event envelope helpers that apply redaction before trace/log
+4. Add idempotency storage contract, store interface, and memory test store.
+5. Add durable-store adapter contract and tests for restart, concurrent
+   reservation, TTL, stale in-flight recovery, and worker sharing behavior.
+6. Add node classification and trigger policy schema.
+7. Add runtime event envelope helpers that apply redaction before trace/log
    output.
-6. Add the legacy flow object adapter and generic data/control execution
+8. Add the legacy flow object adapter and generic data/control execution
    helpers.
-7. Add generic idempotent side-effect wrapper.
-8. Add tests proving control-only ticks do not execute data-driven nodes.
-9. Add a generic side-effect adapter test harness.
+9. Add generic idempotent side-effect wrapper that requires an explicit
+   `idempotencyStore` for production side-effecting nodes.
+10. Add tests proving control-only ticks do not execute data-driven nodes.
+11. Add a generic side-effect adapter test harness.
 
 After that, migrate individual node adapters, including Hermes, onto the shared wrapper and trigger policy.
 
