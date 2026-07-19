@@ -818,6 +818,9 @@ Storage backend classes:
     service provides authoritative idempotency.
   - Must support atomic create/update or compare-and-set semantics for
     concurrent duplicate suppression.
+  - This package defines the durable-store interface and conformance contract;
+    concrete database, queue, cache, or host persistence adapters live at the
+    host/integration boundary.
 - `server-authoritative`
   - Required when the external service supports idempotency keys or domain
     command IDs.
@@ -860,11 +863,14 @@ Runtime environment rules:
 - Browser runtime may use memory storage only for best-effort suppression.
   Browser refresh, tab close, or session loss can clear the cache, so external
   writes still require server/provider idempotency.
-- Server runtime must use durable or server-authoritative idempotency for
-  externally visible side effects.
-- Worker runtime must share the same durable store and scope as the server for
-  the same tenant/integration. Per-worker memory is not sufficient across
-  restarts, parallel workers, or queue redelivery.
+- Server runtime hosts must provide durable or server-authoritative
+  idempotency for externally visible side effects; this package should validate
+  that an acceptable store capability is configured but should not implement a
+  database- or infrastructure-specific durability adapter in the first patch.
+- Worker runtime hosts must share the same durable store and scope as the server
+  for the same tenant/integration. Per-worker memory is not sufficient across
+  restarts, parallel workers, or queue redelivery, but the concrete shared-store
+  implementation is host-owned.
 
 Store interface requirements:
 
@@ -874,6 +880,9 @@ Store interface requirements:
 - `markSuppressed(key, reason)` records observable suppression.
 - `get(key)` returns current state without extending TTL unless policy says so.
 - `sweep(now)` evicts only eligible terminal entries.
+- Store implementations must declare their capability class, such as `memory`,
+  `durable`, or `server-authoritative`, so production policy can fail fast when
+  a side-effecting node is configured with an insufficient store.
 
 Wrapper acceptance criteria:
 
@@ -881,11 +890,16 @@ Wrapper acceptance criteria:
   `idempotencyStore` is configured.
 - Concurrent duplicate attempts against the same key produce one `in_flight`
   reservation and suppressed duplicates.
-- Restart tests cover loss of memory cache and preservation of durable cache.
-- Worker tests cover parallel workers sharing one durable store.
+- Package tests use fake stores to exercise the durable-store contract,
+  including simulated restart, concurrent reservation, stale `in_flight`
+  recovery, and shared-worker views.
+- Host durability tests belong with the host adapter that binds this interface
+  to a concrete database, queue, cache, or provider-authoritative API.
 - TTL tests cover `succeeded`, `failed`, `suppressed`, and stale `in_flight`
   behavior.
-- Durable-store conflict tests prove atomic duplicate suppression.
+- Fake durable-store conflict tests prove the interface requires atomic
+  duplicate suppression; concrete host adapters must run the same conformance
+  suite against their backing store.
 
 ## Retry Contract
 
@@ -1604,10 +1618,12 @@ contract, one review surface, and the tests needed to prove that contract.
 5. Idempotency store contract patch:
    - Add idempotency storage contract, store interface, and memory test store.
    - Add tests for reservation, success, failure, duplicate decisions, and TTL.
-6. Durable-store contract patch:
-   - Add durable-store adapter contract.
-   - Add conformance tests for restart, concurrent reservation, TTL, stale
-     in-flight recovery, and worker sharing behavior.
+6. Durable-store interface boundary patch:
+   - Add durable-store adapter contract and capability metadata.
+   - Add fake-store conformance tests for restart simulation, concurrent
+     reservation, TTL, stale in-flight recovery, and shared-worker views.
+   - Document that concrete database, queue, cache, or provider-authoritative
+     durability adapters belong at the host/integration boundary.
 7. Generic side-effect wrapper patch:
    - Add generic idempotent side-effect wrapper.
    - Require an explicit `idempotencyStore` for production side-effecting nodes.
