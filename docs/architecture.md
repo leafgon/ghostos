@@ -52,6 +52,8 @@ Multi-input workflow integration tests model `source_a + source_b -> join -> tra
 
 `leafmixflow` maps legacy mix modes to declared join policies before policy execution: merge/default use any-input ordering, concat uses the primary lane, and combine/combineLatest use all-input/latest-context join shapes. `leafgateflow` is a data-triggered filter/router in policy mode; rejected data is reported as a no-output trace decision and control/config ticks affect only future data unless a recompute policy is declared.
 
+`leafmemoryio` is a data-driven stateful transform in policy mode. Local memory writes update deterministic in-memory state only from data envelopes, record event IDs and parent event IDs, expose explicit checkpoint/replay validation, and suppress control/config replay by default. Persistent or global memory mode remains blocked for policy execution until durable storage and idempotency metadata are defined.
+
 Runtime invariant property tests use deterministic tables rather than external fuzzing dependencies to vary control/config tick counts, idempotency keys, retry limits, pure transform sequences, and join input ordering. They provide broad regression coverage for the rule that control/config ticks cannot replay data-oriented work or duplicate side effects by default.
 
 Compatibility rollout helpers resolve `GhostRuntimeOptions` for a canonical runtime target key before choosing legacy or policy execution. Legacy mode remains the default for existing graphs, while opted-in targets can emit dual trace fields and divergence metrics that compare legacy would-execute behavior with policy-mode execution.
