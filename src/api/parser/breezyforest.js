@@ -48,43 +48,38 @@ import {
   _leafelement,
 } from "./nodelogic/elements/index.js";
 
-const LEAF_NODE_CORE_LOGIC_TYPES = Object.freeze([
-  /* ********************* LEAF standard library ********************* */
-  // leaf io
-  "leafoutflowport",
-  "leafinflowport",
-  "leafscreenio",
-  "leafmemoryio",
-  // leaf elements
-  "leafdeckspade",
-  "leafdeckheart",
-  "leafdeckdiamond",
-  "leafdeckclub",
-  "leafgnav",
-  "leafpopupview",
-  "leafelement",
-  // leaf abstraction
-  "leafgraph",
-  "leaflambdagraph",
-  "leafanchor",
-  "leafspell",
-  "leafspelldef",
-  "leafloopyspell",
-  // leaf dataflow utils
-  "leafchronosflow",
-  "leafasyncflow",
-  "leafmixflow",
-  "leafgateflow",
-  // leaf arcane wizardry
-  "leaflisp",
-  // leaf data utils
-  "leaflabel",
-  "leafdelabel",
-  "leafbottle",
-  "leafunbottle",
-  "leafcrate",
-  "leafconfig",
-]);
+const LEAF_NODE_CORE_LOGIC_REGISTRY = Object.freeze({
+  leafoutflowport: () => _leafoutflowport,
+  leafinflowport: () => _leafinflowport,
+  leafscreenio: () => _leafscreenio,
+  leafmemoryio: () => _leafmemoryio,
+  leafdeckspade: () => _leafdeckspade,
+  leafdeckheart: () => _leafdeckheart,
+  leafdeckdiamond: () => _leafdeckdiamond,
+  leafdeckclub: () => _leafdeckclub,
+  leafgnav: () => _leafgnav,
+  leafpopupview: () => _leafpopupview,
+  leafelement: () => _leafelement,
+  leafgraph: () => _leafgraph,
+  leaflambdagraph: () => _leaflambdagraph,
+  leafanchor: () => _leafanchor,
+  leafspell: () => _leafspell,
+  leafspelldef: () => _leafspelldef,
+  leafloopyspell: () => _leafloopyspell,
+  leafchronosflow: () => _leafchronosflow,
+  leafasyncflow: () => _leafchronosflow,
+  leafmixflow: () => _leafmixflow,
+  leafgateflow: () => _leafgateflow,
+  leaflisp: () => _leaflisp,
+  leaflabel: () => _leaflabel,
+  leafdelabel: () => _leafdelabel,
+  leafbottle: () => _leafbottle,
+  leafunbottle: () => _leafunbottle,
+  leafcrate: () => _leafcrate,
+  leafconfig: () => _leafconfig,
+});
+
+const LEAF_NODE_CORE_LOGIC_TYPES = Object.freeze(Object.keys(LEAF_NODE_CORE_LOGIC_REGISTRY));
 
 const listRunnableLeafNodeTypes = () => [...LEAF_NODE_CORE_LOGIC_TYPES];
 
@@ -226,42 +221,10 @@ const listRunnableLeafNodeTypes = () => [...LEAF_NODE_CORE_LOGIC_TYPES];
  * the returned function) with access to the data object within itself.
  */
 function getLEAFNodeCoreLogic(type, scope, lambdactrl) {
-  // Keep this registry inside the function so cyclic imports from eta.js resolve before lookup.
-  const leafstd_corelib = {
-    leafoutflowport: _leafoutflowport,
-    leafinflowport: _leafinflowport,
-    leafscreenio: _leafscreenio,
-    leafmemoryio: _leafmemoryio,
-    leafdeckspade: _leafdeckspade,
-    leafdeckheart: _leafdeckheart,
-    leafdeckdiamond: _leafdeckdiamond,
-    leafdeckclub: _leafdeckclub,
-    leafgnav: _leafgnav,
-    leafpopupview: _leafpopupview,
-    leafelement: _leafelement,
-    leafgraph: _leafgraph,
-    leaflambdagraph: _leaflambdagraph,
-    leafanchor: _leafanchor,
-    leafspell: _leafspell,
-    leafspelldef: _leafspelldef,
-    leafloopyspell: _leafloopyspell,
-    leafchronosflow: _leafchronosflow,
-    leafasyncflow: _leafchronosflow,
-    leafmixflow: _leafmixflow,
-    leafgateflow: _leafgateflow,
-    leaflisp: _leaflisp,
-    leaflabel: _leaflabel,
-    leafdelabel: _leafdelabel,
-    leafbottle: _leafbottle,
-    leafunbottle: _leafunbottle,
-    leafcrate: _leafcrate,
-    leafconfig: _leafconfig,
-  };
-
   //const cstr = stringify(lambdactrl, null, 2);
   //console.log('accessing leafnode core logic:', type, scope, cstr);
   //console.log('accessing leafnode core logic:', type, scope, JSON.stringify(lambdactrl));
-  const nodeCoreLogic = leafstd_corelib[type];
+  const nodeCoreLogic = LEAF_NODE_CORE_LOGIC_REGISTRY[type]?.();
   const nodelogic = nodeCoreLogic?.[scope] ? nodeCoreLogic[scope](lambdactrl) : undefined; // curried passing of lambdactrl as argument to the returned func
 
   return nodelogic;
@@ -354,4 +317,9 @@ function getLEAFNodeCoreLogic(type, scope, lambdactrl) {
 //    return nodeFunc;
 //};
 
-export { LEAF_NODE_CORE_LOGIC_TYPES, getLEAFNodeCoreLogic, listRunnableLeafNodeTypes };
+export {
+  LEAF_NODE_CORE_LOGIC_REGISTRY,
+  LEAF_NODE_CORE_LOGIC_TYPES,
+  getLEAFNodeCoreLogic,
+  listRunnableLeafNodeTypes,
+};

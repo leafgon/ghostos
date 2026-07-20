@@ -31,6 +31,15 @@ const TRIGGER_POLICIES = Object.freeze([
 
 const SUPPORTED_STATUSES = new Set(["supported", "blocked", "obsolete", "metadata_only"]);
 const VALID_TRIGGER_POLICIES = new Set(TRIGGER_POLICIES);
+const SUPPORTED_INVENTORY_STATES = new Set([
+  "obsolete",
+  "blocked",
+  "metadata-only",
+  "declaration-only",
+  "legacy-only",
+  "explicitly-wired",
+]);
+const SUPPORTED_RUNTIME_EXECUTION = new Set(["modeled", "none"]);
 
 class NodeClassificationError extends Error {
   constructor(message, details = {}) {
@@ -48,6 +57,19 @@ const sideEffectGate = Object.freeze({
   replay: Object.freeze({ required: true }),
   redaction: Object.freeze({ required: true }),
 });
+
+const inventory = ({
+  state,
+  runtimeExecution = state === "explicitly-wired" ? "modeled" : "none",
+  replacement,
+  reason,
+}) =>
+  Object.freeze({
+    state,
+    runtimeExecution,
+    replacement,
+    reason,
+  });
 
 const chronosTimingJoin = Object.freeze({
   mode: "latest-context",
@@ -214,6 +236,7 @@ const metadata = ({
   ui,
   config,
   p3,
+  inventory: inventoryState,
   idempotency = { required: false },
   rejectForNewGraphs = false,
   migrationGate,
@@ -236,6 +259,7 @@ const metadata = ({
     ui,
     config,
     p3,
+    inventory: inventoryState,
     idempotency: Object.freeze(idempotency),
     rejectForNewGraphs,
     migrationGate,
@@ -257,6 +281,9 @@ const elementMetadata = ({
   ui,
   config,
   p3,
+  inventory: inventoryState = wired
+    ? inventory({ state: "explicitly-wired", runtimeExecution: "modeled" })
+    : undefined,
   notes,
 }) =>
   Object.freeze({
@@ -275,6 +302,7 @@ const elementMetadata = ({
     ui,
     config,
     p3,
+    inventory: inventoryState,
     notes,
   });
 
@@ -286,6 +314,10 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     priority: "P4",
     status: "obsolete",
     rejectForNewGraphs: true,
+    inventory: inventory({
+      state: "obsolete",
+      reason: "Legacy radio node requires graph migration before new runtime use.",
+    }),
   }),
   leafradioTX: metadata({
     nodeType: "leafradioTX",
@@ -294,6 +326,10 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     priority: "P4",
     status: "obsolete",
     rejectForNewGraphs: true,
+    inventory: inventory({
+      state: "obsolete",
+      reason: "Legacy radio node requires graph migration before new runtime use.",
+    }),
   }),
   leafoutflowport: metadata({
     nodeType: "leafoutflowport",
@@ -388,6 +424,11 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     priority: "P4",
     status: "blocked",
     rejectForNewGraphs: true,
+    inventory: inventory({
+      state: "legacy-only",
+      replacement: "leafelement:gnav",
+      reason: "Legacy dispatch key is retained only for compatibility.",
+    }),
     notes: "Use leafelement:gnav.",
   }),
   leafpopupview: metadata({
@@ -397,6 +438,11 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     priority: "P4",
     status: "blocked",
     rejectForNewGraphs: true,
+    inventory: inventory({
+      state: "legacy-only",
+      replacement: "leafelement:popup",
+      reason: "Legacy dispatch key is retained only for compatibility.",
+    }),
     notes: "Use leafelement:popup.",
   }),
   leafelement: metadata({
@@ -424,12 +470,20 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     runtimeClass: RUNTIME_CLASSES.METADATA,
     trigger: "none",
     priority: "P4",
+    inventory: inventory({
+      state: "metadata-only",
+      reason: "Structural anchor metadata is consumed by graph analysis, not node execution.",
+    }),
   }),
   leafspelldef: metadata({
     nodeType: "leafspelldef",
     runtimeClass: RUNTIME_CLASSES.METADATA,
     trigger: "none",
     priority: "P4",
+    inventory: inventory({
+      state: "declaration-only",
+      reason: "Spell definitions declare reusable graph bodies and are not runtime nodes.",
+    }),
   }),
   leafspell: metadata({
     nodeType: "leafspell",
@@ -451,6 +505,10 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "none",
     priority: "P4",
     status: "metadata_only",
+    inventory: inventory({
+      state: "metadata-only",
+      reason: "Placeholder for sync-flow semantics; no runtime helper is wired.",
+    }),
   }),
   leafchronosflow: metadata({
     nodeType: "leafchronosflow",
@@ -719,6 +777,10 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     wired: false,
     status: "blocked",
     rejectForNewGraphs: true,
+    inventory: inventory({
+      state: "blocked",
+      reason: "Token adapter requires security and credential handling contracts.",
+    }),
   }),
   rancher: elementMetadata({
     elementname: "rancher",
@@ -728,6 +790,10 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     wired: false,
     status: "blocked",
     rejectForNewGraphs: true,
+    inventory: inventory({
+      state: "blocked",
+      reason: "Rancher adapter remains unreachable until side-effect policy migration.",
+    }),
     migrationGate: sideEffectGate,
     config: sideEffectConfigPolicy,
   }),
@@ -759,6 +825,10 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     wired: false,
     status: "blocked",
     rejectForNewGraphs: true,
+    inventory: inventory({
+      state: "blocked",
+      reason: "Hippocampus adapter requires persistence and security contracts.",
+    }),
   }),
 });
 
@@ -783,6 +853,26 @@ const validateClassification = (classification) => {
     );
   }
   validateTriggerPolicy(classification.trigger);
+  if (classification.inventory) {
+    if (!SUPPORTED_INVENTORY_STATES.has(classification.inventory.state)) {
+      throw new NodeClassificationError(
+        `Unsupported inventory state: ${classification.inventory.state}.`,
+        {
+          field: "inventory.state",
+          value: classification.inventory.state,
+        },
+      );
+    }
+    if (!SUPPORTED_RUNTIME_EXECUTION.has(classification.inventory.runtimeExecution)) {
+      throw new NodeClassificationError(
+        `Unsupported runtime execution state: ${classification.inventory.runtimeExecution}.`,
+        {
+          field: "inventory.runtimeExecution",
+          value: classification.inventory.runtimeExecution,
+        },
+      );
+    }
+  }
   if (classification.runtimeTargetKey !== "node:leafelement") {
     validateRuntimeTargetKey(classification.runtimeTargetKey);
   }
@@ -821,10 +911,30 @@ const assertNodeAllowedForNewGraphs = ({ type, args = {} } = {}) => {
   const classification = resolveNodeRuntimeClassification({ type, args });
   if (
     classification.rejectForNewGraphs ||
-    ["blocked", "obsolete"].includes(classification.status)
+    ["blocked", "obsolete"].includes(classification.status) ||
+    ["blocked", "obsolete", "legacy-only"].includes(classification.inventory?.state)
   ) {
     throw new NodeClassificationError(
       `${classification.runtimeTargetKey} is not allowed in new graphs.`,
+      {
+        field: "runtimeTargetKey",
+        value: classification.runtimeTargetKey,
+      },
+    );
+  }
+  return classification;
+};
+
+const assertRuntimeExecutionModeled = ({ type, args = {} } = {}) => {
+  const classification = resolveNodeRuntimeClassification({ type, args });
+  if (
+    classification.runtimeTargetKey === "node:leafelement" ||
+    classification.trigger === "none" ||
+    classification.inventory?.runtimeExecution === "none" ||
+    ["blocked", "obsolete", "metadata_only"].includes(classification.status)
+  ) {
+    throw new NodeClassificationError(
+      `${classification.runtimeTargetKey} does not have modeled runtime execution.`,
       {
         field: "runtimeTargetKey",
         value: classification.runtimeTargetKey,
@@ -863,6 +973,7 @@ export {
   TRIGGER_POLICIES,
   assertLeafElementAdapterSupported,
   assertNodeAllowedForNewGraphs,
+  assertRuntimeExecutionModeled,
   getRuntimeTargetKey,
   listClassifiedLeafElementNames,
   listClassifiedNodeTypes,
