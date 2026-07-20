@@ -155,6 +155,31 @@ const uiBridgePolicy = ({
     configUpdates: "future-behavior-only",
   });
 
+const configSemanticsPolicy = Object.freeze({
+  defaultBehavior: "future-only",
+  modes: Object.freeze([
+    "future-only",
+    "recompute-pure",
+    "reopen-source",
+    "reconfigure-side-effect",
+  ]),
+  scopedVersion: Object.freeze(["graphInstanceId", "nodeId", "runtimeTargetKey"]),
+  fallbackFingerprint: "canonical-json",
+  traceFields: Object.freeze([
+    "configVersion",
+    "configChanged",
+    "behavior",
+    "configFingerprintPrefix",
+  ]),
+});
+
+const sideEffectConfigPolicy = Object.freeze({
+  defaultBehavior: "reconfigure-side-effect",
+  configReplay: "blocked-without-safe-replay-policy",
+  secretChangeDetection: "configVersion-or-configFingerprintKey-required",
+  traceFields: configSemanticsPolicy.traceFields,
+});
+
 const metadata = ({
   nodeType,
   runtimeClass,
@@ -168,6 +193,7 @@ const metadata = ({
   composite,
   dynamic,
   ui,
+  config,
   idempotency = { required: false },
   rejectForNewGraphs = false,
   migrationGate,
@@ -188,6 +214,7 @@ const metadata = ({
     composite,
     dynamic,
     ui,
+    config,
     idempotency: Object.freeze(idempotency),
     rejectForNewGraphs,
     migrationGate,
@@ -207,6 +234,7 @@ const elementMetadata = ({
   migrationGate,
   device,
   ui,
+  config,
   notes,
 }) =>
   Object.freeze({
@@ -223,6 +251,7 @@ const elementMetadata = ({
     migrationGate,
     device,
     ui,
+    config,
     notes,
   });
 
@@ -465,6 +494,7 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     runtimeClass: RUNTIME_CLASSES.STATEFUL_TRANSFORM,
     trigger: "data",
     priority: "P2",
+    config: configSemanticsPolicy,
   }),
   leaflisp: metadata({
     nodeType: "leaflisp",
@@ -537,6 +567,7 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     wired: true,
     idempotency: { required: true },
     migrationGate: sideEffectGate,
+    config: sideEffectConfigPolicy,
   }),
   href: elementMetadata({
     elementname: "href",
@@ -546,6 +577,7 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     wired: true,
     idempotency: { required: true },
     migrationGate: sideEffectGate,
+    config: sideEffectConfigPolicy,
   }),
   mediaplayer: elementMetadata({
     elementname: "mediaplayer",
@@ -646,6 +678,7 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     wired: true,
     idempotency: { required: true },
     migrationGate: sideEffectGate,
+    config: sideEffectConfigPolicy,
   }),
   token: elementMetadata({
     elementname: "token",
@@ -665,6 +698,7 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     status: "blocked",
     rejectForNewGraphs: true,
     migrationGate: sideEffectGate,
+    config: sideEffectConfigPolicy,
   }),
   hermes: elementMetadata({
     elementname: "hermes",
@@ -674,6 +708,7 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     wired: true,
     idempotency: { required: true },
     migrationGate: sideEffectGate,
+    config: sideEffectConfigPolicy,
   }),
   cortex: elementMetadata({
     elementname: "cortex",
@@ -683,6 +718,7 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     wired: true,
     idempotency: { required: true },
     migrationGate: sideEffectGate,
+    config: sideEffectConfigPolicy,
   }),
   hippocampus: elementMetadata({
     elementname: "hippocampus",
