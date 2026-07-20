@@ -49,6 +49,21 @@ const sideEffectGate = Object.freeze({
   redaction: Object.freeze({ required: true }),
 });
 
+const chronosTimingJoin = Object.freeze({
+  mode: "latest-context",
+  triggerSource: "timer",
+  allowSamplingLatestData: true,
+  timer: Object.freeze({
+    eventIdRequired: true,
+    sequenceRequired: true,
+  }),
+  checkpoint: Object.freeze({
+    retainedState: "latest-data-by-lane",
+    replayRequiresCheckpoint: true,
+  }),
+  ordering: "timer-sequence-then-lane-index",
+});
+
 const metadata = ({
   nodeType,
   runtimeClass,
@@ -59,6 +74,7 @@ const metadata = ({
   idempotency = { required: false },
   rejectForNewGraphs = false,
   migrationGate,
+  aliasOf,
   notes,
 }) =>
   Object.freeze({
@@ -72,6 +88,7 @@ const metadata = ({
     idempotency: Object.freeze(idempotency),
     rejectForNewGraphs,
     migrationGate,
+    aliasOf,
     notes,
   });
 
@@ -242,14 +259,16 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     runtimeClass: RUNTIME_CLASSES.STATEFUL_TRANSFORM,
     trigger: "timer",
     priority: "P1",
-    join: Object.freeze({ mode: "timer" }),
+    join: chronosTimingJoin,
   }),
   leafasyncflow: metadata({
     nodeType: "leafasyncflow",
     runtimeClass: RUNTIME_CLASSES.STATEFUL_TRANSFORM,
     trigger: "timer",
     priority: "P1",
-    join: Object.freeze({ mode: "timer" }),
+    join: chronosTimingJoin,
+    aliasOf: "leafchronosflow",
+    notes: "Chronos runtime policy variant using the same dataflow implementation.",
   }),
   leafmixflow: metadata({
     nodeType: "leafmixflow",

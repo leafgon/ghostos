@@ -157,9 +157,40 @@ const selectJoinedInputs = ({ event, policy, laneIndex, latestData, windows }) =
     return latestData.map((entry, index) => (index === laneIndex ? payload : entry.value));
   }
   if (joinMode === "windowed") {
-    return windows.map((window) => [...window]);
+    return windows.map((window) => window.map((entry) => entry.value));
   }
   return [payload];
+};
+
+const selectJoinedInputEvents = ({ event, policy, latestData, windows }) => {
+  const normalized = normalizePolicy(policy);
+  const joinMode = normalized.join.mode;
+  if (joinMode === "primary-input") {
+    return [event];
+  }
+  if (joinMode === "all-inputs" || joinMode === "latest-context") {
+    return latestData.map((entry) => entry.event).filter(Boolean);
+  }
+  if (joinMode === "windowed") {
+    return windows.flatMap((window) => window.map((entry) => entry.event).filter(Boolean));
+  }
+  return [event];
+};
+
+const collectParentEventIds = (events = []) => {
+  const parentEventIds = [];
+  const addParentEventId = (eventId) => {
+    if (typeof eventId === "string" && eventId.length > 0 && !parentEventIds.includes(eventId)) {
+      parentEventIds.push(eventId);
+    }
+  };
+
+  events.filter(isRuntimeEnvelope).forEach((event) => {
+    addParentEventId(event.eventId);
+    (event.trace?.parentEventIds ?? []).forEach(addParentEventId);
+  });
+
+  return parentEventIds;
 };
 
 const emitTrace = (traceSink, event) => {
@@ -170,7 +201,7 @@ const emitMetric = (metricSink, name, labels = {}, value = 1) => {
   metricSink.record(name, redactValue(labels), value);
 };
 
-const maybeWrapOutput = ({ output, event, context }) => {
+const maybeWrapOutput = ({ output, event, context, parentEvents = [] }) => {
   if (!isRuntimeEnvelope(event)) {
     return output;
   }
@@ -179,7 +210,7 @@ const maybeWrapOutput = ({ output, event, context }) => {
     sourceNodeId: context.nodeId,
     graphInstanceId: event.graphInstanceId,
     sequence: event.sequence,
-    parentEventIds: [event.eventId, ...(event.trace?.parentEventIds ?? [])],
+    parentEventIds: collectParentEventIds([event, ...parentEvents]),
     trace: {
       trigger: event.trace?.trigger,
     },
@@ -225,6 +256,7 @@ const driveNodeByRuntimePolicy = ({
   const latestData = dataInflowObjArr.map(() => ({
     hasValue: false,
     value: undefined,
+    event: undefined,
     fresh: false,
   }));
   const windows = dataInflowObjArr.map(() => []);
@@ -247,7 +279,11 @@ const driveNodeByRuntimePolicy = ({
       legacyWouldExecute: decision.legacyWouldExecute,
       policyWouldExecute,
       actualExecute: policyWouldExecute,
+      eventId: event?.eventId,
       eventKind: getEventKind(event),
+      sequence: event?.sequence,
+      sourceNodeId: event?.sourceNodeId,
+      parentEventIds: event?.trace?.parentEventIds ?? [],
       intent: getControlIntent(event),
       laneIndex,
       metaControl,
@@ -280,6 +316,17 @@ const driveNodeByRuntimePolicy = ({
         : normalizedPolicy.join.allowSamplingLatestData
           ? latestData.filter((entry) => entry.hasValue).map((entry) => entry.value)
           : [];
+    const inputEvents =
+      eventKind === "data"
+        ? selectJoinedInputEvents({
+            event,
+            policy: normalizedPolicy,
+            latestData,
+            windows,
+          })
+        : normalizedPolicy.join.allowSamplingLatestData
+          ? latestData.filter((entry) => entry.hasValue).map((entry) => entry.event)
+          : [];
     const output = executeLegacyHooks({
       inputValues,
       controlValue: unwrapControlForLegacy(controlValue ?? event),
@@ -291,7 +338,7 @@ const driveNodeByRuntimePolicy = ({
         decision,
       },
     });
-    output$.next(maybeWrapOutput({ output, event, context }));
+    output$.next(maybeWrapOutput({ output, event, context, parentEvents: inputEvents }));
     if (normalizedPolicy.trigger === "all-inputs") {
       latestData.forEach((entry) => {
         entry.fresh = false;
@@ -302,8 +349,8 @@ const driveNodeByRuntimePolicy = ({
   dataInflowObjArr.forEach((flowObj, laneIndex) => {
     flowObj._stream.subscribe((event) => {
       const payload = unwrapDataForLegacy(event);
-      latestData[laneIndex] = { hasValue: true, value: payload, fresh: true };
-      windows[laneIndex].push(payload);
+      latestData[laneIndex] = { hasValue: true, value: payload, event, fresh: true };
+      windows[laneIndex].push({ value: payload, event });
       while (windows[laneIndex].length > normalizedPolicy.join.windowSize) {
         windows[laneIndex].shift();
       }

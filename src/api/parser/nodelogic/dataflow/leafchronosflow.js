@@ -8,7 +8,119 @@ import {
 } from "../../../utils/leafdataflow.js";
 import { Subject, merge } from "rxjs";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
+import { isRuntimeEnvelope } from "../../runtime/eventEnvelope.js";
+import { resolveNodeRuntimeClassification } from "../../runtime/nodeClassification.js";
+import { driveNodeByRuntimePolicy } from "../../runtime/policyExecution.js";
 //import { syncDataflows } from '../../../utils/leafdataflow';
+
+class ChronosRuntimePolicyError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "ChronosRuntimePolicyError";
+    this.code = "invalid_chronos_runtime_policy";
+    this.details = details;
+  }
+}
+
+const CHRONOS_POLICY_NODE_TYPES = new Set(["leafchronosflow", "leafasyncflow"]);
+
+const assertChronosNodeType = (nodeType) => {
+  if (!CHRONOS_POLICY_NODE_TYPES.has(nodeType)) {
+    throw new ChronosRuntimePolicyError(`Unsupported Chronos policy node type: ${nodeType}.`, {
+      field: "nodeType",
+      value: nodeType,
+    });
+  }
+  return nodeType;
+};
+
+const resolveChronosRuntimePolicy = ({ nodeType = "leafchronosflow", mode = "policy" } = {}) => {
+  const chronosNodeType = assertChronosNodeType(nodeType);
+  const classification = resolveNodeRuntimeClassification({
+    type: chronosNodeType,
+    args: {},
+  });
+
+  if (classification.trigger !== "timer" || classification.join?.triggerSource !== "timer") {
+    throw new ChronosRuntimePolicyError(`${chronosNodeType} must declare timer trigger metadata.`, {
+      field: "classification",
+      value: classification,
+    });
+  }
+
+  return Object.freeze({
+    mode,
+    trigger: "timer",
+    join: Object.freeze({
+      mode: classification.join.mode,
+      allowSamplingLatestData: classification.join.allowSamplingLatestData === true,
+    }),
+    timer: classification.join.timer,
+    checkpoint: classification.join.checkpoint,
+    ordering: classification.join.ordering,
+    aliasOf: classification.aliasOf,
+  });
+};
+
+const assertChronosTimerEvent = (event) => {
+  if (!isRuntimeEnvelope(event) || event.eventKind !== "timer") {
+    throw new ChronosRuntimePolicyError("Chronos policy execution requires timer envelopes.", {
+      field: "event",
+      value: event,
+    });
+  }
+  if (typeof event.eventId !== "string" || event.eventId.length === 0) {
+    throw new ChronosRuntimePolicyError("Chronos timer envelopes require eventId.", {
+      field: "eventId",
+      value: event.eventId,
+    });
+  }
+  if (!Number.isSafeInteger(event.sequence) || event.sequence < 0) {
+    throw new ChronosRuntimePolicyError("Chronos timer envelopes require a sequence number.", {
+      field: "sequence",
+      value: event.sequence,
+    });
+  }
+  return event;
+};
+
+const driveLeafChronosByRuntimePolicy = ({
+  nodeType = "leafchronosflow",
+  inflowCtrlObj,
+  dataInflowObjArr = [],
+  metaCtrl$,
+  context = {},
+  transformation = {},
+  observability = {},
+} = {}) => {
+  const chronosNodeType = assertChronosNodeType(nodeType);
+  const policy = resolveChronosRuntimePolicy({ nodeType: chronosNodeType });
+  const timerValidatedControl = {
+    ...inflowCtrlObj,
+    _stream: inflowCtrlObj._stream.pipe(
+      map((event) => {
+        if (event?.eventKind === "timer" || event?.intent === "timer_tick") {
+          return assertChronosTimerEvent(event);
+        }
+        return event;
+      }),
+    ),
+  };
+
+  return driveNodeByRuntimePolicy({
+    inflowCtrlObj: timerValidatedControl,
+    dataInflowObjArr,
+    metaCtrl$,
+    context: {
+      nodeId: context.nodeId ?? chronosNodeType,
+      runtimeTargetKey: context.runtimeTargetKey ?? `node:${chronosNodeType}`,
+      ...context,
+    },
+    policy,
+    transformation,
+    observability,
+  });
+};
 
 /*
  * _leafchronosflow() is a runtime function for the LEAF node of logic type 'leafchronosflow'.
@@ -337,4 +449,11 @@ const _leafchronosflow = {
     },
 };
 
-export { _leafchronosflow };
+export {
+  CHRONOS_POLICY_NODE_TYPES,
+  ChronosRuntimePolicyError,
+  _leafchronosflow,
+  assertChronosTimerEvent,
+  driveLeafChronosByRuntimePolicy,
+  resolveChronosRuntimePolicy,
+};
