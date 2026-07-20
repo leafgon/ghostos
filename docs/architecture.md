@@ -62,6 +62,8 @@ The `leafelement:href` migration boundary treats browser navigation as an extern
 
 The `leafelement:directus` migration boundary separates read/source commands from create, update, upsert, and delete mutations. Mutation helpers normalize legacy Directus request bottles into typed commands, require endpoint, collection, credential, and idempotency metadata, execute through a fakeable Directus transport, and rely on the shared side-effect harness for data-triggering, control/config suppression, bounded retry, replay/duplicate suppression, fail-fast validation, and redacted observability. Directus production mutations require a durable, server-authoritative, or provider-authoritative idempotency store supplied by the host; source identity for reads is separate from mutation idempotency.
 
+The `leafelement:hermes` migration boundary separates egress commands from read, poll, and SSE source lifecycle behavior. Egress helpers normalize message commands, require credentials and command identity, execute through a fakeable Hermes transport, and rely on the shared side-effect harness for data-triggering, control/config suppression, bounded retry, replay/duplicate suppression, fail-fast validation, and redacted observability. Hermes source records carry stable source identity, cursor/sequence metadata, and parent event IDs separately from egress idempotency; production egress requires a durable, server-authoritative, or provider-authoritative idempotency store supplied by the host.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
