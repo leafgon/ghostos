@@ -48,6 +48,8 @@ Generic workflow integration tests model `source -> transform -> action -> sink`
 
 Multi-input workflow integration tests model `source_a + source_b -> join -> transform -> action` for all-input, primary-input, and any-input policies. All-input joins execute only after each lane has fresh data for the next set, primary-input joins can declare required context lanes, and traces record the lane that caused execution.
 
+`leafchronosflow` is the explicit timer-driven stateful join surface. In policy mode it retains latest data by lane, suppresses data/control-only redispatch, and samples retained data only when a timer envelope with an event ID and sequence arrives. `leafasyncflow` is documented and classified as the same Chronos policy variant through the legacy shared implementation. Timer outputs preserve the timer event and sampled input event IDs in their parent-event trace, and retained latest-data state requires checkpoint-aware replay before host-level replay is enabled.
+
 Runtime invariant property tests use deterministic tables rather than external fuzzing dependencies to vary control/config tick counts, idempotency keys, retry limits, pure transform sequences, and join input ordering. They provide broad regression coverage for the rule that control/config ticks cannot replay data-oriented work or duplicate side effects by default.
 
 Compatibility rollout helpers resolve `GhostRuntimeOptions` for a canonical runtime target key before choosing legacy or policy execution. Legacy mode remains the default for existing graphs, while opted-in targets can emit dual trace fields and divergence metrics that compare legacy would-execute behavior with policy-mode execution.
