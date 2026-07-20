@@ -82,6 +82,8 @@ UI bridge nodes split rendering sinks from user-action sources. `leafscreenio` a
 
 Configuration changes are future-only by default. `leafconfig` and runtime config helpers resolve a `refresh_config` control event only when a scoped `configVersion` or deterministic canonical fingerprint changes. `recompute-pure` is limited to pure transforms with retained input, `reopen-source` dedupes already emitted source event IDs, and side-effecting nodes do not replay prior effects from config changes unless a safe policy is declared. Secret-bearing P0 config requires a host version or non-exported fingerprint key, and traces expose only version, change state, behavior, and short non-sensitive fingerprint prefixes.
 
+P3 pure transforms and render sinks are data-triggered and deterministic. `leaflabel`, `leafdelabel`, `leafbottle`, `leafunbottle`, and `leafcrate` preserve parent event IDs, suppress control/config replay, and report filtered inputs as no-output decisions where applicable. `leafelement:text`, `image`, and `html` render from data only, expose no hidden network or external side effects, and apply template/config changes to future data unless a pure recompute policy is declared.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
