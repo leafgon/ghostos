@@ -180,6 +180,25 @@ const sideEffectConfigPolicy = Object.freeze({
   traceFields: configSemanticsPolicy.traceFields,
 });
 
+const p3PurePolicy = ({ filterNoOutput = false } = {}) =>
+  Object.freeze({
+    trigger: "data",
+    deterministic: true,
+    preservesParentEventIds: true,
+    suppressControlReplay: true,
+    configUpdates: "future-only",
+    filterNoOutput,
+  });
+
+const p3RenderPolicy = Object.freeze({
+  trigger: "data",
+  deterministic: true,
+  preservesParentEventIds: true,
+  suppressControlReplay: true,
+  configUpdates: "future-only",
+  hiddenExternalSideEffects: false,
+});
+
 const metadata = ({
   nodeType,
   runtimeClass,
@@ -194,6 +213,7 @@ const metadata = ({
   dynamic,
   ui,
   config,
+  p3,
   idempotency = { required: false },
   rejectForNewGraphs = false,
   migrationGate,
@@ -215,6 +235,7 @@ const metadata = ({
     dynamic,
     ui,
     config,
+    p3,
     idempotency: Object.freeze(idempotency),
     rejectForNewGraphs,
     migrationGate,
@@ -235,6 +256,7 @@ const elementMetadata = ({
   device,
   ui,
   config,
+  p3,
   notes,
 }) =>
   Object.freeze({
@@ -252,6 +274,7 @@ const elementMetadata = ({
     device,
     ui,
     config,
+    p3,
     notes,
   });
 
@@ -464,30 +487,35 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     runtimeClass: RUNTIME_CLASSES.PURE_TRANSFORM,
     trigger: "data",
     priority: "P3",
+    p3: p3PurePolicy(),
   }),
   leafdelabel: metadata({
     nodeType: "leafdelabel",
     runtimeClass: RUNTIME_CLASSES.PURE_TRANSFORM,
     trigger: "data",
     priority: "P3",
+    p3: p3PurePolicy(),
   }),
   leafbottle: metadata({
     nodeType: "leafbottle",
     runtimeClass: RUNTIME_CLASSES.PURE_TRANSFORM,
     trigger: "data",
     priority: "P3",
+    p3: p3PurePolicy(),
   }),
   leafunbottle: metadata({
     nodeType: "leafunbottle",
     runtimeClass: RUNTIME_CLASSES.PURE_TRANSFORM,
     trigger: "data",
     priority: "P3",
+    p3: p3PurePolicy({ filterNoOutput: true }),
   }),
   leafcrate: metadata({
     nodeType: "leafcrate",
     runtimeClass: RUNTIME_CLASSES.PURE_TRANSFORM,
     trigger: "data",
     priority: "P3",
+    p3: p3PurePolicy(),
   }),
   leafconfig: metadata({
     nodeType: "leafconfig",
@@ -547,6 +575,7 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "data",
     priority: "P3",
     wired: true,
+    p3: p3RenderPolicy,
   }),
   prompt: elementMetadata({
     elementname: "prompt",
@@ -598,6 +627,7 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "data",
     priority: "P3",
     wired: true,
+    p3: p3RenderPolicy,
   }),
   mediainput: elementMetadata({
     elementname: "mediainput",
@@ -658,6 +688,7 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "data",
     priority: "P3",
     wired: true,
+    p3: p3RenderPolicy,
   }),
   form: elementMetadata({
     elementname: "form",
