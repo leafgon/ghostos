@@ -6,8 +6,86 @@ import { fetchMultiKeyedData } from "../../../utils/fetchnodedata.js";
 import { Subject } from "rxjs";
 //import cloneDeep from 'lodash/cloneDeep';
 import { driveDataflowByCtrlflow } from "../../leaf.js";
+import { driveNodeByRuntimePolicy } from "../../runtime/policyExecution.js";
 
 const apidef = _leafstdlib_dataflow_api("leafgateflow");
+
+const normalizeGateKey = (gatekey) => {
+  if (typeof gatekey !== "string" || gatekey.trim().length === 0) {
+    throw new Error("leafgateflow policy requires a non-empty gatekey.");
+  }
+  return gatekey.trim().toLowerCase();
+};
+
+const evaluateLeafGateflowData = ({ value, gatekey, toggledatakey = false, gateTag } = {}) => {
+  const normalizedGateKey = normalizeGateKey(gatekey);
+  const isNotGate = toggledatakey === true;
+
+  if (isBottle(value)) {
+    const matchesBottle = value._bname?.toLowerCase() === normalizedGateKey;
+    return isNotGate ? (!matchesBottle ? value : undefined) : matchesBottle ? value : undefined;
+  }
+
+  if (normalizedGateKey === "{crate}") {
+    if (!isNotGate && value?._cratelabel) {
+      return gateTag === "uncrate"
+        ? Object.keys(value)
+            .filter((key) => key !== "_cratelabel")
+            .map((key) => value[key])
+            .flat()
+        : value;
+    }
+    return isNotGate && !value?._cratelabel ? value : undefined;
+  }
+
+  const querystrings = value
+    ? Object.entries(value).map(([key, entryValue]) =>
+        `${key}=${typeof entryValue === "object" ? JSON.stringify(entryValue) : entryValue}`.toLowerCase(),
+      )
+    : [];
+  const matchesRaw = querystrings.includes(normalizedGateKey);
+  return isNotGate ? (!matchesRaw ? value : undefined) : matchesRaw ? value : undefined;
+};
+
+const driveLeafGateflowByRuntimePolicy = ({
+  gatekey,
+  toggledatakey = false,
+  gateTag,
+  inflowCtrlObj,
+  dataInflowObjArr = [],
+  metaCtrl$,
+  context = {},
+  observability = {},
+} = {}) => {
+  const normalizedGateKey = normalizeGateKey(gatekey);
+  return driveNodeByRuntimePolicy({
+    inflowCtrlObj,
+    dataInflowObjArr,
+    metaCtrl$,
+    context: {
+      nodeId: context.nodeId ?? "leafgateflow",
+      runtimeTargetKey: context.runtimeTargetKey ?? "node:leafgateflow",
+      ...context,
+    },
+    policy: {
+      mode: "policy",
+      trigger: "data",
+      join: { mode: "any-input" },
+    },
+    transformation: {
+      suppressUndefinedOutput: true,
+      noOutputReason: "leafgateflow_rejected",
+      leaflogic: ([value]) =>
+        evaluateLeafGateflowData({
+          value,
+          gatekey: normalizedGateKey,
+          toggledatakey,
+          gateTag,
+        }),
+    },
+    observability,
+  });
+};
 /*
  * _leafgateflow() is a runtime function for the LEAF node of logic type 'leafgateflow'.
  * it is used to decide the criteria for passing bottles through or not.
@@ -381,4 +459,4 @@ const _leafgateflow = {
 //    };
 //};
 
-export { _leafgateflow };
+export { _leafgateflow, driveLeafGateflowByRuntimePolicy, evaluateLeafGateflowData };

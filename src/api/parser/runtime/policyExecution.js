@@ -338,6 +338,20 @@ const driveNodeByRuntimePolicy = ({
         decision,
       },
     });
+    if (output === undefined && transformation.suppressUndefinedOutput === true) {
+      emitTrace(traceSink, {
+        event: "policy_driver_no_output",
+        runtimeTargetKey: context.runtimeTargetKey,
+        reason: transformation.noOutputReason ?? "no_output",
+        eventId: event?.eventId,
+        eventKind: getEventKind(event),
+        sequence: event?.sequence,
+        sourceNodeId: event?.sourceNodeId,
+        parentEventIds: event?.trace?.parentEventIds ?? [],
+        laneIndex,
+      });
+      return;
+    }
     output$.next(maybeWrapOutput({ output, event, context, parentEvents: inputEvents }));
     if (normalizedPolicy.trigger === "all-inputs") {
       latestData.forEach((entry) => {

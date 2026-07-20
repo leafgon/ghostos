@@ -64,6 +64,34 @@ const chronosTimingJoin = Object.freeze({
   ordering: "timer-sequence-then-lane-index",
 });
 
+const mixflowJoinPolicies = Object.freeze({
+  mode: "any-input",
+  supportedModes: Object.freeze({
+    merge: Object.freeze({ trigger: "any-input", join: Object.freeze({ mode: "any-input" }) }),
+    concat: Object.freeze({
+      trigger: "primary-input",
+      join: Object.freeze({ mode: "primary-input", primaryInputIndex: 0 }),
+    }),
+    combine: Object.freeze({ trigger: "all-inputs", join: Object.freeze({ mode: "all-inputs" }) }),
+    combineLatest: Object.freeze({
+      trigger: "all-inputs",
+      join: Object.freeze({ mode: "latest-context" }),
+    }),
+    substitute: Object.freeze({
+      trigger: "primary-input",
+      join: Object.freeze({ mode: "latest-context", primaryInputIndex: 0 }),
+    }),
+    default: Object.freeze({ trigger: "any-input", join: Object.freeze({ mode: "any-input" }) }),
+  }),
+  ordering: "input-arrival-then-lane-index",
+});
+
+const gateflowPolicy = Object.freeze({
+  mode: "any-input",
+  rejectsWithTrace: true,
+  configUpdates: "future-data-only",
+});
+
 const metadata = ({
   nodeType,
   runtimeClass,
@@ -275,13 +303,14 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     runtimeClass: RUNTIME_CLASSES.STATEFUL_TRANSFORM,
     trigger: "any-input",
     priority: "P1",
-    join: Object.freeze({ mode: "any-input" }),
+    join: mixflowJoinPolicies,
   }),
   leafgateflow: metadata({
     nodeType: "leafgateflow",
     runtimeClass: RUNTIME_CLASSES.PURE_TRANSFORM,
     trigger: "data",
     priority: "P1",
+    join: gateflowPolicy,
   }),
   leaflabel: metadata({
     nodeType: "leaflabel",
