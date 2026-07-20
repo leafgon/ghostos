@@ -113,6 +113,8 @@ const metadata = ({
   status = "supported",
   join,
   state,
+  boundary,
+  deck,
   idempotency = { required: false },
   rejectForNewGraphs = false,
   migrationGate,
@@ -128,6 +130,8 @@ const metadata = ({
     status,
     join,
     state,
+    boundary,
+    deck,
     idempotency: Object.freeze(idempotency),
     rejectForNewGraphs,
     migrationGate,
@@ -187,12 +191,22 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "primary-input",
     priority: "P2",
     join: Object.freeze({ mode: "primary-input" }),
+    boundary: Object.freeze({
+      direction: "out",
+      forwardNewDataOnly: true,
+      preservesParentEventIds: true,
+    }),
   }),
   leafinflowport: metadata({
     nodeType: "leafinflowport",
     runtimeClass: RUNTIME_CLASSES.SOURCE,
     trigger: "data",
     priority: "P2",
+    boundary: Object.freeze({
+      direction: "in",
+      createsDataEnvelope: true,
+      preservesParentEventIds: true,
+    }),
   }),
   leafmemoryio: metadata({
     nodeType: "leafmemoryio",
@@ -213,6 +227,11 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "all-inputs",
     priority: "P2",
     join: Object.freeze({ mode: "all-inputs" }),
+    deck: Object.freeze({
+      role: "spade",
+      aggregation: "all-inputs",
+      preservesParentEventIds: true,
+    }),
   }),
   leafdeckheart: metadata({
     nodeType: "leafdeckheart",
@@ -220,18 +239,33 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "all-inputs",
     priority: "P2",
     join: Object.freeze({ mode: "all-inputs" }),
+    deck: Object.freeze({
+      role: "heart",
+      aggregation: "all-inputs",
+      preservesParentEventIds: true,
+    }),
   }),
   leafdeckdiamond: metadata({
     nodeType: "leafdeckdiamond",
     runtimeClass: RUNTIME_CLASSES.STRUCTURAL,
     trigger: "data",
     priority: "P2",
+    deck: Object.freeze({
+      role: "diamond",
+      aggregation: "data",
+      preservesParentEventIds: true,
+    }),
   }),
   leafdeckclub: metadata({
     nodeType: "leafdeckclub",
     runtimeClass: RUNTIME_CLASSES.STATEFUL_TRANSFORM,
     trigger: "data",
     priority: "P2",
+    deck: Object.freeze({
+      role: "club",
+      initialization: "data-event",
+      preservesParentEventIds: true,
+    }),
   }),
   leafgnav: metadata({
     nodeType: "leafgnav",
