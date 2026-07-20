@@ -20,6 +20,12 @@ const VALID_CONTROL_INTENTS = new Set([
   "drain",
   "checkpoint",
   "legacy_tick",
+  "ui_clear",
+  "ui_close",
+  "ui_refresh",
+  "media_play",
+  "media_pause",
+  "media_stop",
 ]);
 
 class RuntimeEnvelopeError extends Error {
