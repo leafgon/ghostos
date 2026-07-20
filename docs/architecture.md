@@ -76,6 +76,8 @@ The media/device adapter boundary covers `leafelement:mediainput`, `leafelement:
 
 Graph boundary and deck structural nodes are policy-mode migration surfaces. `leafinflowport` converts host graph inputs into data envelopes with parent event IDs, while `leafoutflowport` forwards only newly emitted data and does not replay retained graph output on control/config ticks. `leafdeckspade` and `leafdeckheart` declare all-input aggregation with deterministic lane ordering, `leafdeckdiamond` remains data-triggered, and `leafdeckclub` emits initialization as explicit data distinct from lifecycle control. Legacy compatibility paths unwrap runtime envelopes before consumer callbacks.
 
+Composite and dynamic graph nodes resolve policy before nested execution. `leafgraph` preserves trigger cause, parent event IDs, and runtime target context across nested graph boundaries. `leaflambdagraph` treats data events as recompute triggers while lifecycle and config control affect orchestration or future execution only. `leafspell` inherits or declares the resolved runtime classification before invocation, with side-effecting spells requiring idempotency metadata. `leafloopyspell` replay and looping are bounded and auditable, and `leaflisp` remains a pure data transform unless host helpers declare side effects explicitly.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
