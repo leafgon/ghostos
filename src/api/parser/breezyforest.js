@@ -48,6 +48,46 @@ import {
   _leafelement,
 } from "./nodelogic/elements/index.js";
 
+const LEAF_NODE_CORE_LOGIC_TYPES = Object.freeze([
+  /* ********************* LEAF standard library ********************* */
+  // leaf io
+  "leafoutflowport",
+  "leafinflowport",
+  "leafscreenio",
+  "leafmemoryio",
+  // leaf elements
+  "leafdeckspade",
+  "leafdeckheart",
+  "leafdeckdiamond",
+  "leafdeckclub",
+  "leafgnav",
+  "leafpopupview",
+  "leafelement",
+  // leaf abstraction
+  "leafgraph",
+  "leaflambdagraph",
+  "leafanchor",
+  "leafspell",
+  "leafspelldef",
+  "leafloopyspell",
+  // leaf dataflow utils
+  "leafchronosflow",
+  "leafasyncflow",
+  "leafmixflow",
+  "leafgateflow",
+  // leaf arcane wizardry
+  "leaflisp",
+  // leaf data utils
+  "leaflabel",
+  "leafdelabel",
+  "leafbottle",
+  "leafunbottle",
+  "leafcrate",
+  "leafconfig",
+]);
+
+const listRunnableLeafNodeTypes = () => [...LEAF_NODE_CORE_LOGIC_TYPES];
+
 //({lambdactrl: {gos: {subsDirectory}, user: {nodeconfig={}}}, lambdadata: {lambdaFunc=x=>x, graphContextual}}={}) => {
 //    // here the lambda function connected to the current node is always expected to be null
 //    // as the node-level lambdaFunc is not permitted for this type of node.
@@ -186,62 +226,43 @@ import {
  * the returned function) with access to the data object within itself.
  */
 function getLEAFNodeCoreLogic(type, scope, lambdactrl) {
-  // _corelib is the leaf std core js library for the eta reduction of a leaf graph, accounting for the scope duality (ie. dataflow vs lambda) of interpreting leaf logic
+  // Keep this registry inside the function so cyclic imports from eta.js resolve before lookup.
   const leafstd_corelib = {
-    /* ********************* LEAF standard library ********************* */
-    //'leaftracker': _leaftracker,          // deprecated on 9 Mar 2022, as its function can be supported by leafgraph that allows users to refer to the leafdeckspade of any chosen graph allowable.
-    // leaf io
-    //leafradioRX: _leafradioRX,
-    //leafradioTX: _leafradioTX,
     leafoutflowport: _leafoutflowport,
     leafinflowport: _leafinflowport,
     leafscreenio: _leafscreenio,
     leafmemoryio: _leafmemoryio,
-    // leaf elements
-    // (11 Mar 2022) refactor and migrate and consolidate the management of all elements to leafelement
     leafdeckspade: _leafdeckspade,
     leafdeckheart: _leafdeckheart,
     leafdeckdiamond: _leafdeckdiamond,
     leafdeckclub: _leafdeckclub,
     leafgnav: _leafgnav,
-    leafpopupview: _leafpopupview, // (11 Mar 2022) refactor and migrate this to leafelement
-    leafelement: _leafelement, // shall support a growing list of element types and their UX definitions of leafgnav, leafpopup, leafeditor, leafimage, leafvideo, leafaudio, leaftext, leafd3, leafgraphics etc.
-    // leaf abstraction
-    leafgraph: _leafgraph, // completed 5 feb 2022, changed the name from _leafapp to _leafgraph on 9 Mar 2022
-    leaflambdagraph: _leaflambdagraph, // completed 20 jan 2022
+    leafpopupview: _leafpopupview,
+    leafelement: _leafelement,
+    leafgraph: _leafgraph,
+    leaflambdagraph: _leaflambdagraph,
     leafanchor: _leafanchor,
-    //leafspelldef: _leafspelldef,  // changed the name from _leafoperator to _leafspelldef and _leafspell on 9 Mar 2022
-    //leafspell: undefined,         // parsing this type is taken care of separately in three parsing steps involving leaf standard spells, leaf curated spells and user-defined spells
     leafspell: _leafspell,
     leafspelldef: _leafspelldef,
-    leafloopyspell: _leafloopyspell, // a new concept consolidating the likes of 'map' among reactive operators, but in a themetically more compatible fashion.
-    // leaf dataflow utils
-    leafchronosflow: _leafchronosflow, // to take care of needs as in rx.js merge, zip, combineLatest, concat, race, etc.
-    leafasyncflow: _leafchronosflow, // to take care of needs as in rx.js merge, zip, combineLatest, concat, race, etc.
-    leafmixflow: _leafmixflow, //_leafmixflow,    // to take care of needs as in array zip, concat etc.
-    leafgateflow: _leafgateflow, // bottle filtering based on bottlekey equality or inequality
-    // leaf arcane wizardry
-    leaflisp: _leaflisp, // compbeted 20 jan 2022
-    // leaf data utils
-    leaflabel: _leaflabel, // completed 5 feb 2022
-    leafdelabel: _leafdelabel, // completed 5 feb 2022
-    leafbottle: _leafbottle, // completed 5 feb 2022
-    leafunbottle: _leafunbottle, // completed 5 feb 2022
+    leafloopyspell: _leafloopyspell,
+    leafchronosflow: _leafchronosflow,
+    leafasyncflow: _leafchronosflow,
+    leafmixflow: _leafmixflow,
+    leafgateflow: _leafgateflow,
+    leaflisp: _leaflisp,
+    leaflabel: _leaflabel,
+    leafdelabel: _leafdelabel,
+    leafbottle: _leafbottle,
+    leafunbottle: _leafunbottle,
     leafcrate: _leafcrate,
     leafconfig: _leafconfig,
-    //                                   // use bottle/unbottle to support structuring/destructuring of json objects,
-    //'leafbottle2json': _leafbottle2json, //(spark_dev_note: (11 Mar 2022) use this bottle 2 json converter prior to consumption by leaflisp)
-    //'leafjson2bottle': _leafjson2bottle, //(spark_dev_note: (11 Mar 2022) use this json 2 bottle converter prior to data consumption by any leaf constructs downstream of leaflisp)
-    // spark_dev_note: implement these two converters built into _leaflisp
-    //'leafmap': _leafmap,
   };
 
   //const cstr = stringify(lambdactrl, null, 2);
   //console.log('accessing leafnode core logic:', type, scope, cstr);
   //console.log('accessing leafnode core logic:', type, scope, JSON.stringify(lambdactrl));
-  const nodelogic = leafstd_corelib[type][scope]
-    ? leafstd_corelib[type][scope](lambdactrl)
-    : undefined; // curried passing of lambdactrl as argument to the returned func
+  const nodeCoreLogic = leafstd_corelib[type];
+  const nodelogic = nodeCoreLogic?.[scope] ? nodeCoreLogic[scope](lambdactrl) : undefined; // curried passing of lambdactrl as argument to the returned func
 
   return nodelogic;
 }
@@ -333,4 +354,4 @@ function getLEAFNodeCoreLogic(type, scope, lambdactrl) {
 //    return nodeFunc;
 //};
 
-export { getLEAFNodeCoreLogic };
+export { LEAF_NODE_CORE_LOGIC_TYPES, getLEAFNodeCoreLogic, listRunnableLeafNodeTypes };

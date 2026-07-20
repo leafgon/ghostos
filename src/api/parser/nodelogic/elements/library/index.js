@@ -46,7 +46,7 @@ const formatElementFlowdata = (data, datakey = "defaultio", iselementio = true) 
   return data; // return without bottling
 };
 
-const _std_elements_lut = {
+const LEAFELEMENT_ADAPTER_REGISTRY = Object.freeze({
   mediaplayer: _mediaplayer,
   http: _http,
   gnav: _gnav,
@@ -64,7 +64,11 @@ const _std_elements_lut = {
   directus: _directus,
   hermes: _hermes,
   cortex: _cortex,
-};
+});
+
+const _std_elements_lut = LEAFELEMENT_ADAPTER_REGISTRY;
+
+const listWiredLeafElementNames = () => Object.keys(LEAFELEMENT_ADAPTER_REGISTRY);
 
 const initStdElementProps = (_cache, elementname) => {
   if (Object.keys(_std_elements_lut).includes(elementname) && _std_elements_lut[elementname])
@@ -72,4 +76,10 @@ const initStdElementProps = (_cache, elementname) => {
   else return undefined;
 };
 
-export { initStdElementProps, formatElementFlowdata, ElemCacheKeyLUT };
+export {
+  LEAFELEMENT_ADAPTER_REGISTRY,
+  initStdElementProps,
+  formatElementFlowdata,
+  ElemCacheKeyLUT,
+  listWiredLeafElementNames,
+};

@@ -10,7 +10,7 @@ GhostOS is the LEAF graph parser and runtime used by `leafgon.com`. It compiles 
 - **Runnable node dispatch**: `src/api/parser/breezyforest.js` maps LEAF node type names to concrete runtime logic implementations.
 - **Node implementations**: `src/api/parser/nodelogic/` contains standard node behavior, including graph boundary nodes, data utilities, dataflow joins, abstractions, wizardry nodes, and `leafelement` adapters.
 - **Adapter library**: `src/api/parser/nodelogic/elements/library/` implements browser, external API, UI, media, and side-effecting adapters such as `http`, `href`, `directus`, `hermes`, and `cortex`.
-- **Runtime safety utilities**: `src/api/parser/runtime/` contains shared runtime infrastructure used by the refactor, including safe logging, recursive redaction, runtime option resolution, feature flags, observability sink contracts, and internal runtime event envelopes.
+- **Runtime safety utilities**: `src/api/parser/runtime/` contains shared runtime infrastructure used by the refactor, including safe logging, recursive redaction, runtime option resolution, feature flags, observability sink contracts, internal runtime event envelopes, and node classification metadata.
 
 ## Execution Model
 
@@ -48,6 +48,8 @@ Runtime metadata classifies nodes by behavior:
 - **Orchestrator**: graph lifecycle, routing, scheduling, branching, and cancellation behavior.
 
 `leafelement` is an adapter host and must resolve classification from `args.elementname`; it is not one uniform runtime class.
+
+Runtime classification uses canonical target keys: core nodes use `node:<nodeType>`, and adapters use `leafelement:<elementname>`. The runnable dispatch registry and wired adapter registry are exported for inventory tests so classification coverage is based on runtime metadata rather than source-text parsing. Obsolete or legacy dispatch-only nodes such as `leafradioRX`, `leafradioTX`, `leafgnav`, and `leafpopupview` are blocked for new graphs.
 
 ## Security Boundary
 
