@@ -6,6 +6,7 @@ import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
 import { isBottle } from "../../../predicates.js";
 import { doBottle } from "../../datautils/bottling.js";
+import { createSafeLogger, redactValue as redactSecrets } from "../../../runtime/safeLogging.js";
 
 /*
  * Frozen Hermes integration contract reference:
@@ -40,7 +41,9 @@ const HERMES_SSE_EVENT_DEDUPE_LIMIT = 1024;
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DISCORD_SNOWFLAKE_REGEX = /^\d{17,20}$/;
-const SENSITIVE_KEY_REGEX = /(authorization|token|cookie|secret|password|api[-_]?key)/i;
+const hermesLogger = createSafeLogger({
+  enabled: true,
+});
 
 const isPlainObject = (value) => {
   return (
@@ -70,27 +73,6 @@ class HermesDomainError extends Error {
     this.details = details;
   }
 }
-
-const redactSecrets = (value, seen = new WeakSet()) => {
-  if (Array.isArray(value)) {
-    return value.map((entry) => redactSecrets(entry, seen));
-  }
-  if (isPlainObject(value)) {
-    if (seen.has(value)) {
-      return "[circular]";
-    }
-    seen.add(value);
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => {
-        if (SENSITIVE_KEY_REGEX.test(key)) {
-          return [key, "[redacted]"];
-        }
-        return [key, redactSecrets(entry, seen)];
-      }),
-    );
-  }
-  return value;
-};
 
 const trimString = (value) => {
   return typeof value === "string" ? value.trim() : "";
@@ -146,7 +128,7 @@ const hermesTrace = (eventName, fields = {}) => {
     });
 
   const suffix = fieldTokens.length > 0 ? ` ${fieldTokens.join(" ")}` : "";
-  console.log(
+  hermesLogger.log(
     `${HERMES_TRACE_PREFIX} component=${HERMES_TRACE_COMPONENT} event=${eventName}${suffix}`,
   );
 };
