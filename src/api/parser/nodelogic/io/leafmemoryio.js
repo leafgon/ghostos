@@ -10,7 +10,174 @@ import { etaTreeForest } from "../../etatreeforest.js";
 import { isBottle } from "../../predicates.js";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { doBottle } from "../datautils/bottling.js";
+import { driveNodeByRuntimePolicy } from "../../runtime/policyExecution.js";
+import { redactValue } from "../../runtime/safeLogging.js";
 const leaf_apidef = _leafstdlib_dataflow_api("leafmemoryio");
+
+class MemoryRuntimePolicyError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "MemoryRuntimePolicyError";
+    this.code = "invalid_memory_runtime_policy";
+    this.details = details;
+  }
+}
+
+const LOCAL_MEMORY_MODES = new Set(["local", "memory", "in-memory"]);
+
+const assertLeafMemoryPersistencePolicy = ({ persistenceMode = "local" } = {}) => {
+  if (!LOCAL_MEMORY_MODES.has(persistenceMode)) {
+    throw new MemoryRuntimePolicyError(
+      "Persistent leafmemoryio policy mode is blocked until idempotency metadata and durable storage are defined.",
+      {
+        field: "persistenceMode",
+        value: persistenceMode,
+      },
+    );
+  }
+  return persistenceMode;
+};
+
+const createLeafMemoryPolicyState = () => ({
+  current: new Map(),
+  history: [],
+});
+
+const snapshotLeafMemoryState = (state) => {
+  const current = Object.fromEntries(
+    Array.from(state.current.entries()).map(([key, record]) => [key, { ...record }]),
+  );
+  return Object.freeze({
+    current,
+    history: Object.freeze(state.history.map((record) => Object.freeze({ ...record }))),
+  });
+};
+
+const createLeafMemoryCheckpoint = ({ state, checkpointId = "checkpoint" } = {}) => {
+  if (!state?.current || !state?.history) {
+    throw new MemoryRuntimePolicyError("Memory checkpoint requires policy state.", {
+      field: "state",
+    });
+  }
+  return Object.freeze({
+    checkpointId,
+    stateVersion: state.history.length,
+    snapshot: snapshotLeafMemoryState(state),
+  });
+};
+
+const validateLeafMemoryReplay = ({ state, targetEventId, checkpoint } = {}) => {
+  if (!checkpoint) {
+    throw new MemoryRuntimePolicyError("leafmemoryio replay requires an explicit checkpoint.", {
+      field: "checkpoint",
+    });
+  }
+  const record = state?.history?.find((entry) => entry.eventId === targetEventId);
+  if (!record) {
+    throw new MemoryRuntimePolicyError("leafmemoryio replay target is not present in state.", {
+      field: "targetEventId",
+      value: targetEventId,
+    });
+  }
+  return record;
+};
+
+const writeLeafMemoryPolicyState = ({ state, memoryKey, value, runtime }) => {
+  const serialized = safeStringify(value);
+  const previous = state.current.get(memoryKey);
+  const stateVersion = (previous?.stateVersion ?? 0) + 1;
+  const record = Object.freeze({
+    memoryKey,
+    signature: SHA1(serialized),
+    payload: serialized,
+    raw: value,
+    stateVersion,
+    eventId: runtime.event.eventId,
+    parentEventIds: [runtime.event.eventId, ...(runtime.event.trace?.parentEventIds ?? [])],
+    trigger: runtime.decision.reason,
+  });
+  state.current.set(memoryKey, record);
+  state.history.push(record);
+  return record;
+};
+
+const driveLeafMemoryByRuntimePolicy = ({
+  memoryname,
+  memoryKey = memoryname,
+  persistenceMode = "local",
+  inflowCtrlObj,
+  dataInflowObjArr = [],
+  metaCtrl$,
+  context = {},
+  observability = {},
+} = {}) => {
+  assertLeafMemoryPersistencePolicy({ persistenceMode });
+  if (typeof memoryname !== "string" || memoryname.trim().length === 0) {
+    throw new MemoryRuntimePolicyError("leafmemoryio policy requires memoryname.", {
+      field: "memoryname",
+      value: memoryname,
+    });
+  }
+  const state = createLeafMemoryPolicyState();
+  const runtimeTargetKey = context.runtimeTargetKey ?? "node:leafmemoryio";
+
+  const driver = driveNodeByRuntimePolicy({
+    inflowCtrlObj,
+    dataInflowObjArr,
+    metaCtrl$,
+    context: {
+      nodeId: context.nodeId ?? "leafmemoryio",
+      runtimeTargetKey,
+      ...context,
+    },
+    policy: {
+      mode: "policy",
+      trigger: "data",
+    },
+    transformation: {
+      leaflogic: ([value], _controlValue, runtime) => {
+        const record = writeLeafMemoryPolicyState({
+          state,
+          memoryKey,
+          value,
+          runtime,
+        });
+        observability.traceSink?.emit(
+          redactValue({
+            event: "leafmemoryio_state_decision",
+            runtimeTargetKey,
+            memoryname,
+            memoryKey,
+            decision: "write",
+            stateVersion: record.stateVersion,
+            signature: record.signature,
+            eventId: record.eventId,
+            parentEventIds: record.parentEventIds,
+            trigger: record.trigger,
+          }),
+        );
+        return {
+          memoryname,
+          memoryKey,
+          decision: "write",
+          stateVersion: record.stateVersion,
+          signature: record.signature,
+        };
+      },
+    },
+    observability,
+  });
+
+  return Object.freeze({
+    ...driver,
+    memory: Object.freeze({
+      checkpoint: (checkpointId) => createLeafMemoryCheckpoint({ state, checkpointId }),
+      snapshot: () => snapshotLeafMemoryState(state),
+      validateReplay: ({ targetEventId, checkpoint } = {}) =>
+        validateLeafMemoryReplay({ state, targetEventId, checkpoint }),
+    }),
+  });
+};
 
 const isPersistentMemory = (_name, _uri, _lambdaobj, _spade_lambda) => {
   //const thespadeuuid = _lambdactrl.gos.etaTree.leafgraph.thespade.uuid;
@@ -437,4 +604,12 @@ const _leafmemoryio = {
     },
 };
 
-export { _leafmemoryio };
+export {
+  MemoryRuntimePolicyError,
+  _leafmemoryio,
+  assertLeafMemoryPersistencePolicy,
+  createLeafMemoryCheckpoint,
+  driveLeafMemoryByRuntimePolicy,
+  snapshotLeafMemoryState,
+  validateLeafMemoryReplay,
+};

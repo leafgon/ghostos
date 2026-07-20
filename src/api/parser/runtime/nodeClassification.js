@@ -92,6 +92,19 @@ const gateflowPolicy = Object.freeze({
   configUpdates: "future-data-only",
 });
 
+const memoryStatePolicy = Object.freeze({
+  updateTrigger: "data",
+  ordering: "event-sequence",
+  checkpoint: Object.freeze({
+    mode: "explicit",
+    replayRequiresCheckpoint: true,
+  }),
+  persistence: Object.freeze({
+    local: "stateful-transform",
+    global: "blocked-until-idempotency-policy",
+  }),
+});
+
 const metadata = ({
   nodeType,
   runtimeClass,
@@ -99,6 +112,7 @@ const metadata = ({
   priority,
   status = "supported",
   join,
+  state,
   idempotency = { required: false },
   rejectForNewGraphs = false,
   migrationGate,
@@ -113,6 +127,7 @@ const metadata = ({
     priority,
     status,
     join,
+    state,
     idempotency: Object.freeze(idempotency),
     rejectForNewGraphs,
     migrationGate,
@@ -182,6 +197,7 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     runtimeClass: RUNTIME_CLASSES.STATEFUL_TRANSFORM,
     trigger: "data",
     priority: "P1",
+    state: memoryStatePolicy,
   }),
   leafscreenio: metadata({
     nodeType: "leafscreenio",
