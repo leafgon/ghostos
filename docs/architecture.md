@@ -60,6 +60,8 @@ The `leafelement:http` migration boundary distinguishes safe read methods from e
 
 The `leafelement:href` migration boundary treats browser navigation as an externally visible side effect. Navigation helpers normalize legacy `href-request` bottles into typed commands, require a target URI plus command identity or explicit browser-local fallback metadata, execute through a fakeable location-like target, and rely on the shared side-effect harness for data-triggering, control/config suppression, duplicate suppression, and redacted observability. Browser-local idempotency is best-effort within the current runtime session; hosts that need restart-safe navigation commands must provide a durable or domain-authoritative idempotency store.
 
+The `leafelement:directus` migration boundary separates read/source commands from create, update, upsert, and delete mutations. Mutation helpers normalize legacy Directus request bottles into typed commands, require endpoint, collection, credential, and idempotency metadata, execute through a fakeable Directus transport, and rely on the shared side-effect harness for data-triggering, control/config suppression, bounded retry, replay/duplicate suppression, fail-fast validation, and redacted observability. Directus production mutations require a durable, server-authoritative, or provider-authoritative idempotency store supplied by the host; source identity for reads is separate from mutation idempotency.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
