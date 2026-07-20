@@ -105,6 +105,40 @@ const memoryStatePolicy = Object.freeze({
   }),
 });
 
+const nestedGraphPolicy = Object.freeze({
+  kind: "nested-graph",
+  preservesTriggerCause: true,
+  preservesParentEventIds: true,
+  runtimeTargetContext: true,
+  configUpdates: "future-execution-only",
+});
+
+const lambdaGraphPolicy = Object.freeze({
+  kind: "lambda-graph",
+  dataRecompute: "data-event",
+  lifecycleControl: "control-event",
+  configUpdates: "future-execution-only",
+});
+
+const spellInvocationPolicy = Object.freeze({
+  kind: "spell-invocation",
+  resolvesClassificationBeforeExecution: true,
+  sideEffectMetadataRequired: true,
+});
+
+const loopySpellPolicy = Object.freeze({
+  kind: "looping-spell",
+  replay: "bounded-explicit",
+  maxIterationsRequired: true,
+  audit: true,
+});
+
+const leafLispPolicy = Object.freeze({
+  kind: "leaflisp",
+  pureByDefault: true,
+  hostSideEffectsRequireMetadata: true,
+});
+
 const metadata = ({
   nodeType,
   runtimeClass,
@@ -115,6 +149,8 @@ const metadata = ({
   state,
   boundary,
   deck,
+  composite,
+  dynamic,
   idempotency = { required: false },
   rejectForNewGraphs = false,
   migrationGate,
@@ -132,6 +168,8 @@ const metadata = ({
     state,
     boundary,
     deck,
+    composite,
+    dynamic,
     idempotency: Object.freeze(idempotency),
     rejectForNewGraphs,
     migrationGate,
@@ -296,12 +334,14 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     runtimeClass: RUNTIME_CLASSES.ORCHESTRATOR,
     trigger: "control-or-data",
     priority: "P2",
+    composite: nestedGraphPolicy,
   }),
   leaflambdagraph: metadata({
     nodeType: "leaflambdagraph",
     runtimeClass: RUNTIME_CLASSES.ORCHESTRATOR,
     trigger: "control-or-data",
     priority: "P2",
+    composite: lambdaGraphPolicy,
   }),
   leafanchor: metadata({
     nodeType: "leafanchor",
@@ -320,12 +360,14 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     runtimeClass: RUNTIME_CLASSES.ORCHESTRATOR,
     trigger: "data",
     priority: "P2",
+    dynamic: spellInvocationPolicy,
   }),
   leafloopyspell: metadata({
     nodeType: "leafloopyspell",
     runtimeClass: RUNTIME_CLASSES.STATEFUL_TRANSFORM,
     trigger: "data",
     priority: "P2",
+    dynamic: loopySpellPolicy,
   }),
   leafsyncflow: metadata({
     nodeType: "leafsyncflow",
@@ -405,6 +447,7 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     runtimeClass: RUNTIME_CLASSES.PURE_TRANSFORM,
     trigger: "data",
     priority: "P2",
+    dynamic: leafLispPolicy,
   }),
 });
 
