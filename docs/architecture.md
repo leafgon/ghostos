@@ -44,6 +44,8 @@ Policy execution helpers provide an opt-in adapter from legacy composite flow ob
 
 Side-effect migration tests use a shared runtime harness that composes policy execution, runtime envelopes, in-memory observability sinks, and the idempotent side-effect wrapper around fake adapter calls. Future P0 adapter migrations should adapt concrete adapters into that harness shape so data-triggering, control/config suppression, retry, replay, duplicate keys, and redaction are proven consistently. Hermes is one later adapter migration and is not special-cased by the foundation harness.
 
+Generic workflow integration tests model `source -> transform -> action -> sink` with runtime envelopes, deterministic config versions and fingerprint prefixes, fake side effects, and redacted in-memory observability. These tests are the end-to-end regression target for the data-oriented contract before concrete adapters opt in.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
