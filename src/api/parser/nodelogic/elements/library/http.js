@@ -9,6 +9,9 @@ import { createSafeLogger } from "../../../runtime/safeLogging.js";
 import _ from "lodash";
 
 const runtimeLogger = createSafeLogger({ component: "leafelement.http" });
+const HTTP_SAFE_READ_METHODS = Object.freeze(["get", "head", "options"]);
+const HTTP_WRITE_METHODS = Object.freeze(["post", "put", "patch", "delete"]);
+const RETRYABLE_HTTP_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 
 const cachekeys = {
   URI: "_http_uri",
@@ -19,6 +22,144 @@ const cachekeys = {
 const GENERIC_URI_NAME = "{*}";
 const HTTP_REQUEST_BNAME = "http-request";
 const URI_FALLBACK_DEFAULT = "https://www.leafgon.com";
+
+class HttpRuntimeError extends Error {
+  constructor(code, message, { statusCode, retryable = false, details = {} } = {}) {
+    super(message);
+    this.name = "HttpRuntimeError";
+    this.code = code;
+    this.statusCode = statusCode;
+    this.retryable = retryable;
+    this.details = details;
+  }
+}
+
+const normalizeHttpMethod = (method = "get") => {
+  if (typeof method !== "string" || method.trim().length === 0) {
+    throw new HttpRuntimeError("invalid_http_method", "HTTP method is required.", {
+      details: { method },
+    });
+  }
+  return method.trim().toLowerCase();
+};
+
+const isHttpWriteMethod = (method) => HTTP_WRITE_METHODS.includes(normalizeHttpMethod(method));
+
+const isHttpSafeReadMethod = (method) =>
+  HTTP_SAFE_READ_METHODS.includes(normalizeHttpMethod(method));
+
+const normalizeHttpRequestCommand = (input = {}) => {
+  const content = isBottle(input) && input._bname === HTTP_REQUEST_BNAME ? input._content : input;
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    throw new HttpRuntimeError("invalid_http_command", "HTTP request command must be an object.", {
+      details: { input },
+    });
+  }
+  const method = normalizeHttpMethod(content.method ?? content.mode);
+  return {
+    method,
+    uri: content.uri ?? content.url ?? content.endpoint,
+    headers: content.headers ?? content.header ?? {},
+    body: content.body ?? content.data,
+    idempotency: content.idempotency,
+    domainCommandId: content.domainCommandId,
+    tenantId: content.tenantId,
+    integrationInstanceId: content.integrationInstanceId,
+    producerId: content.producerId,
+  };
+};
+
+const assertHttpWriteCommand = (command) => {
+  if (!isHttpWriteMethod(command.method)) {
+    throw new HttpRuntimeError("not_http_write", "HTTP write helper requires a write method.", {
+      details: { method: command.method },
+    });
+  }
+  if (typeof command.uri !== "string" || command.uri.trim().length === 0) {
+    throw new HttpRuntimeError("missing_http_endpoint", "HTTP write command requires a URI.", {
+      details: { uri: command.uri },
+    });
+  }
+  const idempotency = command.idempotency ?? {};
+  if (!idempotency.key && !idempotency.domainCommandId && !command.domainCommandId) {
+    throw new HttpRuntimeError(
+      "missing_http_idempotency",
+      "HTTP write command requires idempotency metadata.",
+      { details: { method: command.method, uri: command.uri } },
+    );
+  }
+  return command;
+};
+
+const resolveHttpWriteIdempotency = (command) => {
+  assertHttpWriteCommand(command);
+  const idempotency = command.idempotency ?? {};
+  return {
+    required: true,
+    key: idempotency.key,
+    scope: idempotency.scope,
+    domainCommandId: idempotency.domainCommandId ?? command.domainCommandId,
+    tenantId: idempotency.tenantId ?? command.tenantId,
+    integrationInstanceId: idempotency.integrationInstanceId ?? command.integrationInstanceId,
+    producerId: idempotency.producerId ?? command.producerId,
+  };
+};
+
+const parseHttpResponseBody = async (response) => {
+  if (typeof response?.json === "function") {
+    return response.json();
+  }
+  if (typeof response?.text === "function") {
+    return response.text();
+  }
+  return response;
+};
+
+const executeHttpFetchCommand = async ({ command, fetchImpl = globalThis.fetch } = {}) => {
+  const normalized = assertHttpWriteCommand(normalizeHttpRequestCommand(command));
+  if (typeof fetchImpl !== "function") {
+    throw new HttpRuntimeError("missing_fetch_impl", "HTTP write execution requires fetch.", {
+      details: { uri: normalized.uri, method: normalized.method },
+    });
+  }
+  const response = await fetchImpl(normalized.uri, {
+    method: normalized.method.toUpperCase(),
+    mode: "cors",
+    headers: normalized.headers,
+    credentials: "include",
+    body:
+      normalized.method === "delete" && normalized.body === undefined
+        ? undefined
+        : JSON.stringify(normalized.body ?? {}),
+  });
+  const body = await parseHttpResponseBody(response);
+  if (response?.ok === false) {
+    const statusCode = response.status;
+    throw new HttpRuntimeError(
+      `http_${statusCode}`,
+      `HTTP write failed with status ${statusCode}.`,
+      {
+        statusCode,
+        retryable: RETRYABLE_HTTP_STATUSES.has(statusCode),
+        details: {
+          uri: normalized.uri,
+          method: normalized.method,
+          response: {
+            status: statusCode,
+            statusText: response.statusText,
+            body,
+          },
+        },
+      },
+    );
+  }
+  return {
+    status: response?.status,
+    method: normalized.method,
+    uri: normalized.uri,
+    data: body,
+  };
+};
 
 /*
 example http request bottle looks like so:
@@ -443,4 +584,16 @@ const initElementInterface = (_stream_cache) => {
 
 const props = initElementInterface;
 
-export { props, cachekeys };
+export {
+  HTTP_SAFE_READ_METHODS,
+  HTTP_WRITE_METHODS,
+  HttpRuntimeError,
+  assertHttpWriteCommand,
+  cachekeys,
+  executeHttpFetchCommand,
+  isHttpSafeReadMethod,
+  isHttpWriteMethod,
+  normalizeHttpRequestCommand,
+  props,
+  resolveHttpWriteIdempotency,
+};
