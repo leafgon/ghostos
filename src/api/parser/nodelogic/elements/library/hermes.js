@@ -65,11 +65,12 @@ class HermesConfigError extends Error {
 }
 
 class HermesDomainError extends Error {
-  constructor(code, message, { status = 400, details = {} } = {}) {
+  constructor(code, message, { status = 400, retryable = false, details = {} } = {}) {
     super(message);
     this.name = "HermesDomainError";
     this.code = code;
     this.status = status;
+    this.retryable = retryable;
     this.details = details;
   }
 }
@@ -626,6 +627,10 @@ const mapStatusToErrorCode = (statusCode) => {
   if (statusCode === 429) return "rate_limited";
   if (statusCode >= 500) return "upstream_unavailable";
   return "execution_failed";
+};
+
+const isRetryableHermesStatus = (statusCode) => {
+  return [408, 429, 500, 502, 503, 504].includes(statusCode);
 };
 
 const mapApiError = ({ statusCode, payload, fallbackMessage }) => {
@@ -2243,6 +2248,153 @@ const executeWriteFlow = async ({ config, _stream_cache, data_in }) => {
   ];
 };
 
+const hasCredentialHeader = (headers = {}) => {
+  return Object.keys(headers).some((key) => {
+    return ["authorization", "cookie", "x-api-key"].includes(`${key}`.trim().toLowerCase());
+  });
+};
+
+const assertHermesEgressConfig = (config = {}) => {
+  const writePath = trimString(config.writePath ?? HERMES_DEFAULT_WRITE_PATH);
+  if (!writePath) {
+    throw new HermesConfigError("Hermes egress writePath must be configured.", {
+      field: "writePath",
+    });
+  }
+  const credentials = resolveCredentialsMode(config);
+  const requestHeaders = resolveHeaders(config.requestHeaders ?? config.headers);
+  if (credentials === "omit" && !hasCredentialHeader(requestHeaders)) {
+    throw new HermesConfigError("Hermes egress requires credentials or auth headers.", {
+      field: "credentials",
+    });
+  }
+  return {
+    ...config,
+    baseUrl: trimString(config.baseUrl ?? config.apiBaseUrl ?? config.hermesBaseUrl ?? ""),
+    writePath,
+    requestHeaders,
+    credentials,
+    timeoutMs: normalizePositiveInteger({
+      value: config.timeoutMs,
+      field: "timeoutMs",
+      fallback: HERMES_DEFAULT_TIMEOUT_MS,
+      min: 1,
+      max: 120000,
+    }),
+    fetchImpl: typeof config.fetchImpl === "function" ? config.fetchImpl : config.fetch,
+  };
+};
+
+const normalizeHermesEgressCommand = (input, { config = {} } = {}) => {
+  const resolvedConfig = {
+    instanceId: config.instanceId,
+    guildId: config.guildId,
+    channelId: config.channelId,
+  };
+  return normalizeWriteCommandEnvelope({
+    payload: normalizeWritePayload(input),
+    config: resolvedConfig,
+  });
+};
+
+const resolveHermesEgressIdempotency = (command, { scope } = {}) => {
+  const normalized = normalizeHermesEgressCommand(command);
+  return {
+    required: true,
+    scope: scope ?? `hermes:${normalized.instanceId}:${normalized.channelId}`,
+    domainCommandId: normalized.commandId,
+    producerId: normalized.producerId,
+    integrationInstanceId: normalized.instanceId,
+  };
+};
+
+const defaultHermesEgressTransport = async (request, config) => {
+  if (typeof config.fetchImpl !== "function") {
+    throw new HermesConfigError("Hermes egress execution requires a fetch implementation.", {
+      field: "fetch",
+    });
+  }
+  return fetchWithTimeout(config.fetchImpl, request.url, request.init, config.timeoutMs);
+};
+
+const executeHermesEgressCommand = async ({ command, config = {}, transport } = {}) => {
+  const resolvedConfig = assertHermesEgressConfig(config);
+  const normalizedCommand = normalizeHermesEgressCommand(command, { config: resolvedConfig });
+  const writeUrl = resolveApiUrl({
+    path: resolvedConfig.writePath,
+    baseUrl: resolvedConfig.baseUrl,
+  });
+  const request = {
+    url: writeUrl,
+    init: {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...resolvedConfig.requestHeaders,
+      },
+      credentials: resolvedConfig.credentials,
+      body: JSON.stringify(normalizedCommand),
+    },
+  };
+  const executeTransport = transport ?? defaultHermesEgressTransport;
+  if (typeof executeTransport !== "function") {
+    throw new HermesConfigError("Hermes egress execution requires a transport.", {
+      field: "transport",
+    });
+  }
+  const response = await executeTransport(request, resolvedConfig, normalizedCommand);
+  const responsePayload = await parseJsonResponse(response);
+  if (!response?.ok) {
+    const mappedError = mapApiError({
+      statusCode: response?.status,
+      payload: responsePayload,
+      fallbackMessage: `Hermes write request failed with status ${response?.status}.`,
+    });
+    throw new HermesDomainError(mappedError.code, mappedError.message, {
+      status: mappedError.status,
+      retryable: isRetryableHermesStatus(mappedError.status),
+      details: {
+        ...mappedError.details,
+        request: {
+          url: request.url,
+          init: {
+            ...request.init,
+            body: normalizedCommand,
+          },
+        },
+        response: responsePayload,
+      },
+    });
+  }
+  return {
+    status: response.status,
+    commandId: normalizedCommand.commandId,
+    instanceId: normalizedCommand.instanceId,
+    requestId:
+      typeof responsePayload?.requestId === "string" ? responsePayload.requestId : undefined,
+    response: responsePayload,
+  };
+};
+
+const resolveHermesSourceRecordIdentity = (
+  record = {},
+  { instanceId, parentEventIds = [] } = {},
+) => {
+  const eventId =
+    maybeTrimString(record.eventId) ??
+    maybeTrimString(record.id) ??
+    maybeTrimString(record.messageId) ??
+    maybeTrimString(record.message_id);
+  return {
+    sourceId: eventId ? `hermes:${instanceId ?? "unknown"}:${eventId}` : undefined,
+    eventId,
+    cursor: maybeOpaqueString(record.cursor),
+    sequence: Number.isSafeInteger(record.sequence) ? record.sequence : undefined,
+    parentEventIds: Array.isArray(parentEventIds) ? [...parentEventIds] : [],
+  };
+};
+
 const executeReadFlowPoll = async ({ config, _stream_cache }) => {
   const now = Date.now();
   const lastReadAt = Number(_stream_cache[cachekeys.LAST_READ_AT] ?? 0);
@@ -2671,4 +2823,13 @@ const initElementInterface = (_stream_cache) => {
 
 const props = initElementInterface;
 
-export { props, cachekeys };
+export {
+  HermesConfigError,
+  HermesDomainError,
+  cachekeys,
+  executeHermesEgressCommand,
+  normalizeHermesEgressCommand,
+  props,
+  resolveHermesEgressIdempotency,
+  resolveHermesSourceRecordIdentity,
+};
