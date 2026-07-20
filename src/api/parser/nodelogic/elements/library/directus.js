@@ -5,7 +5,10 @@ import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 
 import axios from "axios";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
+import { createSafeLogger } from "../../../runtime/safeLogging.js";
 import _ from "lodash";
+
+const runtimeLogger = createSafeLogger({ component: "leafelement.directus" });
 const cachekeys = {
   //URI: "_directus_uri",
   //HEADER: "_directus_header",
@@ -42,47 +45,47 @@ const initElementInterface = (_stream_cache) => {
         if (_header?.X_CSRF_Token)
           axios.defaults.headers.post["X-CSRF-Token"] = _header.X_CSRF_Token; // https://github.com/axios/axios/issues/2024
         try {
-          console.log(_flowdatain);
+          runtimeLogger.debug(_flowdatain);
           const resprom = validLambdaKeyList.includes("put")
             ? axios.put(uri, _flowdatain)
             : axios.post(uri, _flowdatain);
           const res = await resprom;
-          console.log(res);
+          runtimeLogger.debug(res);
           //return _metadata.push(res.data);
           //node_output = formatFlowdata(processAxiosObj(res.data), "elementio");
           return res;
         } catch (err) {
-          console.log(err);
+          runtimeLogger.debug(err);
           if (err.response) {
             // The request was made and the server responded with a status code
             // that falls out of the range of 2xx
-            console.log(err.response.data);
-            console.log(err.response.status);
-            console.log(err.response.headers);
+            runtimeLogger.debug(err.response.data);
+            runtimeLogger.debug(err.response.status);
+            runtimeLogger.debug(err.response.headers);
             //node_output = formatFlowdata(processAxiosObj(err.response.data), "elementio");
           } else if (err.request) {
             // The request was made but no response was received
             // `error.request` is an instance of XMLHttpRequest in the browser and an instance of
             // http.ClientRequest in node.js
-            console.log(err.request);
+            runtimeLogger.debug(err.request);
             //node_output = formatFlowdata(processAxiosObj(err.request), "elementio");
           } else {
             // Something happened in setting up the request that triggered an Error
-            console.log("Error", err.message);
+            runtimeLogger.debug("Error", err.message);
             //node_output = formatFlowdata(processAxiosObj(err.request), "elementio");
           }
-          console.log(err.config);
+          runtimeLogger.debug(err.config);
           return err.response;
         }
       } else {
         // get
         try {
-          console.log("executing http get");
+          runtimeLogger.debug("executing http get");
           const resprom = uri
             ? axios.get(uri)
             : of([{ data: "LEAF element error: http get request submitted with undefined URI" }]);
           const res = await resprom;
-          console.log(res);
+          runtimeLogger.debug(res);
           //return _metadata.push(res.data);
 
           //node_output = formatFlowdata(processAxiosObj(res.data), "elementio");
@@ -91,22 +94,22 @@ const initElementInterface = (_stream_cache) => {
           if (err.response) {
             // The request was made and the server responded with a status code
             // that falls out of the range of 2xx
-            console.error(err.response.data);
-            console.log(err.response.status);
-            console.log(err.response.headers);
+            runtimeLogger.error(err.response.data);
+            runtimeLogger.debug(err.response.status);
+            runtimeLogger.debug(err.response.headers);
             //node_output = formatFlowdata(processAxiosObj(err.response.data), "elementio");
           } else if (err.request) {
             // The request was made but no response was received
             // `error.request` is an instance of XMLHttpRequest in the browser and an instance of
             // http.ClientRequest in node.js
-            console.log(err);
+            runtimeLogger.debug(err);
             //node_output = formatFlowdata(processAxiosObj(err.message), "elementio");
           } else {
             // Something happened in setting up the request that triggered an Error
-            console.log("Error", err.message);
+            runtimeLogger.debug("Error", err.message);
             //node_output = formatFlowdata(processAxiosObj(err.request), "elementio");
           }
-          console.log(err.config);
+          runtimeLogger.debug(err.config);
           return err;
         }
       }
@@ -171,7 +174,7 @@ const initElementInterface = (_stream_cache) => {
       //}),
       withLatestFrom(merged_data_in$),
       map((_aux_data_in) => {
-        console.log(_aux_data_in);
+        runtimeLogger.debug(_aux_data_in);
 
         //return _stream_cache[ElemCacheKeyLUT.CTRLIN];
         return _aux_data_in[0];
@@ -197,7 +200,7 @@ const initElementInterface = (_stream_cache) => {
         return _elementlogic(_combined_in.slice(1)); // returns a Promise that gets interpreted the same way a stream would
       }),
       map((_data_in) => {
-        console.log("testing element _leaflogic: ", _data_in);
+        runtimeLogger.debug("testing element _leaflogic: ", _data_in);
         // perform any output data (write) operations specific to the element here
         // like sending messages to rx subjects, etc
         //_elementlogic()
@@ -217,7 +220,7 @@ const initElementInterface = (_stream_cache) => {
         //filter(_data_out=>isBottle(_data_out)&&_data_out._bname !== error),
         filter((_data_out) => traffic_semaphore),
         map((_data_out) => {
-          console.log(_data_out);
+          runtimeLogger.debug(_data_out);
           return _data_out;
         }),
         share(),
@@ -225,7 +228,7 @@ const initElementInterface = (_stream_cache) => {
       _control: {
         _stream: _ctrl_out$.pipe(
           map((_ctrl_out) => {
-            console.log(_ctrl_out);
+            runtimeLogger.debug(_ctrl_out);
             return _ctrl_out;
           }),
           share(),

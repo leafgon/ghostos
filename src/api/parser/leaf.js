@@ -28,6 +28,7 @@ import { Buffer } from "buffer";
 import { firstValueFrom } from "rxjs";
 //import { TIMEOUTBEHAVIOR_BESTEFFORT, combineDataflows, chronosDataflow, CHRONOSTYPE_SYNC } from '../utils/leafdataflow';
 import { _leafgraph } from "./nodelogic/abstraction/index.js";
+import { runtimeLogger } from "./runtime/safeLogging.js";
 import { doBottle } from "./nodelogic/datautils/bottling.js";
 
 const _version = LEAFIOmetamodel.breezyforest._version;
@@ -228,14 +229,14 @@ const reconstructLEAFGraph = (nodes, masterSubsDirectory) => {
           datasources.add(an_edge.source.uuid);
           datatargets.add(an_edge.target.uuid);
         } else {
-          console.error(
+          runtimeLogger.error(
             `duplicate edge data detected linking ${an_edge.source.uuid} and ${an_edge.target.uuid}`,
           );
         }
       } else if (edge_data.logic.type === "leaflambdaedge") {
         if (an_edge.source.uuid.slice(0, 4) === "9935") {
           const teststr = JSON.parse(Buffer.from(an_edge.data, "base64").toString("utf-8"));
-          console.log("start debugging", teststr);
+          runtimeLogger.debug("start debugging", teststr);
           return;
         }
         lambdagraph.addEdgeWithKey(
@@ -289,7 +290,7 @@ const reconstructLEAFGraph = (nodes, masterSubsDirectory) => {
  * a LEAF component is an anchored LEAF component if any of its nodes is part of anchortargets.
  */
 const analyzeLEAFGraph = (leafgraph) => {
-  console.time("analyzeLEAFGraph");
+  runtimeLogger.debug("analyzeLEAFGraph start");
   // component lists
   const runtimeList = [];
   const lambdaList = [];
@@ -346,7 +347,7 @@ const analyzeLEAFGraph = (leafgraph) => {
         } else if (isLambdaPlaneScoped(component, leafgraph)) {
           component_scope = "lambda"; // to mean lambda-plane-scoped
         } else {
-          console.error(
+          runtimeLogger.error(
             `LEAF Error: analyzeLEAFGraph(): the lambda dataflow component (idx: ${component_idx}) is NOT defined with the scope of either the dataflow plane or the lambda plane.`,
           );
         }
@@ -380,14 +381,14 @@ const analyzeLEAFGraph = (leafgraph) => {
         );
         //console.log(JSON.stringify(component), ' is a runtime component.');
       } else
-        console.info(
+        runtimeLogger.info(
           "LEAF Error: analyzeLEAFGraph():",
-          JSON.stringify(component),
+          component,
           " is an unknown component.",
         );
     }
   });
-  console.timeEnd("analyzeLEAFGraph");
+  runtimeLogger.debug("analyzeLEAFGraph end");
   return {
     spelldefs: spelldefnodes,
     leafconfig: leafconfignode,
@@ -668,19 +669,19 @@ const subscribeToLEAFLogic = async (leaflogic, input, runtimeconfig, stopper$) =
         .subscribe({
           next: (x) => {
             //outbuffer = outbuffer.concat(x);
-            console.log("inner next: ", x);
+            runtimeLogger.debug("inner next: ", x);
             //reRenderApp();
           },
           error: (err) => {
             // error
-            console.error("Error: " + err);
+            runtimeLogger.error("Error: " + err);
           },
           complete: () => {
-            console.log("subs complete");
+            runtimeLogger.debug("subs complete");
           },
         })
     : undefined;
-  console.log(ret);
+  runtimeLogger.debug(ret);
   //return output;
 };
 
@@ -713,7 +714,7 @@ const executeLEAFLogicInSync = (
                     return _outdata;
                   })()
                 : _;
-              console.log(outdata);
+              runtimeLogger.debug(outdata);
               if (output$inst) output$inst.subject$.next(outdata);
               return outdata;
             }),
@@ -723,10 +724,10 @@ const executeLEAFLogicInSync = (
           )
           .subscribe({
             next: (_) => {
-              console.log("leaf.js output$inst.runtime leaflogic subs: ", _);
+              runtimeLogger.debug("leaf.js output$inst.runtime leaflogic subs: ", _);
             },
             complete: () => {
-              console.log("leaf.js output$inst.runtime leaflogic subs completed.");
+              runtimeLogger.debug("leaf.js output$inst.runtime leaflogic subs completed.");
             },
           });
       };
@@ -774,7 +775,7 @@ const timeoutPromise = (prom, time, codebase, exception, metadata) => {
               codebase,
               metadata,
             });
-            console.error(exception, errorbottle);
+            runtimeLogger.error(exception, errorbottle);
             //rej(errorbottle);
             _resolve(errorbottle);
           },
@@ -787,14 +788,14 @@ const timeoutPromise = (prom, time, codebase, exception, metadata) => {
 const leafTraceFlow = (_prevtraces, _curtrace, consolelog = false) => {
   if (globalThis.TRACEON) {
     if (consolelog) {
-      console.log("leaf.js trace: ", JSON.stringify(_curtrace));
+      runtimeLogger.debug("leaf.js trace: ", _curtrace);
     }
     if (Array.isArray(_prevtraces)) {
       return [..._prevtraces, { timestamp: Date.now(), trace: _curtrace }];
     } else if (_prevtraces === undefined) {
       return [{ timestamp: Date.now(), trace: _curtrace }];
     } else {
-      console.log("start debugging");
+      runtimeLogger.debug("start debugging");
     }
   } else {
     return _prevtraces ? _prevtraces : []; //_prevtraces;
@@ -831,7 +832,7 @@ const driveDataflowByCtrlflow = (
       "98d167d3-c1ed-4d4a-9ab9-25eaccd20a91",
     ].includes(context.refnode)
   )
-    console.log("start debugging");
+    runtimeLogger.debug("start debugging");
 
   //const setupLogicStream = async () => {
   //    const _leaflogicProm = Promise.resolve(transformation.leaflogic); // transformation.leaflogic may be either undefined, a promise of a leaf stream function or a leaf stream function
@@ -854,7 +855,8 @@ const driveDataflowByCtrlflow = (
   //};
 
   const _leaflogic = transformation.leaflogic;
-  if (_leaflogic !== undefined && typeof _leaflogic !== "function") console.log("start debugging");
+  if (_leaflogic !== undefined && typeof _leaflogic !== "function")
+    runtimeLogger.debug("start debugging");
   const leaflogic_out$obj =
     _leaflogic !== undefined
       ? _leaflogic([{ _stream: _data_bridge$ }], {
@@ -907,8 +909,8 @@ const driveDataflowByCtrlflow = (
   const _outflow_ctrl$ = inflow_ctrl_data$.pipe(
     switchMap((_combined_in) => {
       if (["806e0a4b-badf-42a0-85af-5ad306385c58"].includes(context.refnode))
-        console.log("start debugging");
-      if (data_inflow$objArr.length > 1) console.error("start debugging");
+        runtimeLogger.debug("start debugging");
+      if (data_inflow$objArr.length > 1) runtimeLogger.error("start debugging");
       const _ctrl_in = _combined_in[0];
 
       const _data_in =
@@ -953,13 +955,13 @@ const driveDataflowByCtrlflow = (
     //withLatestFrom(leaflogic_out$obj._stream),
     map((_combined_in) => {
       if (context.refnode === "a9a46a08-110a-4c44-ac83-3caaf40623c5")
-        console.log(
+        runtimeLogger.debug(
           "_combined_in to be registered in nodeflowinterface",
           context.refnode,
           _combined_in,
         );
       if (["38567c62-7513-4ec3-9011-2fcf6c51ec7b"].includes(context.refnode))
-        console.log("start debugging");
+        runtimeLogger.debug("start debugging");
       const _next_data =
         transformation.datalogic?.post !== undefined
           ? transformation.datalogic.post(_combined_in[1])
@@ -986,9 +988,13 @@ const driveDataflowByCtrlflow = (
         _outflow_data$.next(_filtered_data); // possibly just []
 
         //_outflow_data_ctrl$.next("timing nudge");
-        console.log("leaf.js driveDataflowByCtrlflow, _data signal emitted", context, _combined_in);
+        runtimeLogger.debug(
+          "leaf.js driveDataflowByCtrlflow, _data signal emitted",
+          context,
+          _combined_in,
+        );
 
-        console.log("leaf.js driveDataflowByCtrlflow, relaying ctrl signal");
+        runtimeLogger.debug("leaf.js driveDataflowByCtrlflow, relaying ctrl signal");
         //setTimeout(() => {
         //    outer_relay_ctrl$.next(_combined_in[0]);
         //}, 1);
@@ -1021,7 +1027,7 @@ const driveDataflowByCtrlflow = (
               "c822ae2e-1be8-46be-b2cb-21a43cef0555",
             ].includes(context.refnode)
           )
-            console.log("start debugging");
+            runtimeLogger.debug("start debugging");
           return _ctrl_in;
         }),
         share(),
@@ -1064,11 +1070,11 @@ const parseAddressableGraph = async (addrstr, _etaTree, _refnode) => {
     });
     const rt_leafgraph = await getLEAFGraph; //.then((response) =>  // async call to get leafgraph
 
-    console.log(rt_leafgraph);
+    runtimeLogger.debug(rt_leafgraph);
 
     return rt_leafgraph;
   } catch (error) {
-    console.error(error);
+    runtimeLogger.error(error);
     return {};
   }
 };

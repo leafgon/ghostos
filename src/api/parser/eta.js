@@ -11,6 +11,7 @@ import axios from "axios";
 import { driveDataflowByCtrlflow, leafTraceFlow } from "./leaf.js";
 import { isBottle } from "./predicates.js";
 import { doBottle } from "./nodelogic/datautils/bottling.js";
+import { runtimeLogger } from "./runtime/safeLogging.js";
 import { v4 as uuid4 } from "uuid";
 
 // locally global constants
@@ -233,7 +234,7 @@ const raceConditionError = doBottle(
                 const consolidated_ctrldata = _ctrldataArr[0]; 
 
                 if (rt_context.nodeuuid === "98d167d3-c1ed-4d4a-9ab9-25eaccd20a91")
-                    console.log("doChronosSynchronize(), midi message to be registered in nodeflowinterface 98d167d3-c1ed-4d4a-9ab9-25eaccd20a91 ", _ctrldataArr);
+                    runtimeLogger.debug("doChronosSynchronize(), midi message to be registered in nodeflowinterface 98d167d3-c1ed-4d4a-9ab9-25eaccd20a91 ", _ctrldataArr);
                 if (_nodeflowinterface.checksync()) { // if all incoming data synchronized
                     _nodeflowinterface.initflowcache();
                     return consolidated_ctrldata;
@@ -247,11 +248,11 @@ const raceConditionError = doBottle(
             map(_combined_in => {
 
                 if (rt_context.nodeuuid === "98d167d3-c1ed-4d4a-9ab9-25eaccd20a91")
-                    console.log("start debugging")
-                console.log("eta.js doChronosSynchronize _composite_in registered", rt_context, _combined_in);
+                    runtimeLogger.debug("start debugging")
+                runtimeLogger.debug("eta.js doChronosSynchronize _composite_in registered", rt_context, _combined_in);
                 //const _ctrl_out = _composite_in.pop(); // last item in the array is the ctrl
                 if (isBottle(_combined_in[1]) && _combined_in[1]._bname === "screenio")
-                    console.log("start debugging")
+                    runtimeLogger.debug("start debugging")
                 let synced_nonempty_data = _combined_in.slice(1).flat(); //.filter(_in=>(!isBottle(_in)||!isEmptyBottle(_in))); 
                 if (synced_nonempty_data.length === 1)
                     _chronos_data_out$.next(synced_nonempty_data[0]);// the remainder is the data
@@ -292,7 +293,7 @@ const doChronosSynchronize = (
 
   //const _chronos_data_out$ = new BehaviorSubject({...raceConditionError, "_label": {context: "doChronosSynchronize chronos_data_out"}});
   const _chronos_data_out$ = new Subject();
-  console.log("invoking doChronosSynchronize, ", rt_context);
+  runtimeLogger.debug("invoking doChronosSynchronize, ", rt_context);
   // first consolidate ctrl streams
 
   const _upstream_ctrlflow$Arr = _stream$objArr.map((_$obj) => _$obj._control._stream);
@@ -326,20 +327,20 @@ const doChronosSynchronize = (
           }),
           filter((_in) => _in !== undefined),
           map((_combined_inArr) => {
-            console.log(
+            runtimeLogger.debug(
               "eta.js doChronosSynchronize _composite_in registered",
               rt_context.nodeuuid,
               _nodeflowinterface.checksync(),
               _combined_inArr,
             );
             if (rt_context.nodeuuid === "806e0a4b-badf-42a0-85af-5ad306385c58")
-              console.log("start debugging");
+              runtimeLogger.debug("start debugging");
             if (_nodeflowinterface.checksync()) {
               // if all incoming data synchronized
               _nodeflowinterface.initflowcache();
 
               if (rt_context.nodeuuid === "98d167d3-c1ed-4d4a-9ab9-25eaccd20a91")
-                console.log("start debugging");
+                runtimeLogger.debug("start debugging");
               //const _ctrl_out = _composite_in.pop(); // last item in the array is the ctrl
               let synced_nonempty_data = _combined_inArr.map((_combined_in) => {
                 const _flattend_dat = _combined_in.slice(1).flat();
@@ -385,7 +386,7 @@ const doChronosSynchronize = (
 
                   const _ctrldata = _combined_in[0];
                   if (_ctrldata.length > 1) {
-                    if (_ctrldata.includes(undefined)) console.log("start debugging");
+                    if (_ctrldata.includes(undefined)) runtimeLogger.debug("start debugging");
 
                     //const cca_idx = binarySearchTraceCCA(_ctrldata);
                     //if (cca_idx > -1) {
@@ -403,15 +404,15 @@ const doChronosSynchronize = (
                   }
 
                   if (rt_context.nodeuuid === "98d167d3-c1ed-4d4a-9ab9-25eaccd20a91")
-                    console.log("start debugging");
-                  console.log(
+                    runtimeLogger.debug("start debugging");
+                  runtimeLogger.debug(
                     "eta.js doChronosSynchronize _composite_in registered",
                     rt_context,
                     _combined_in,
                   );
                   //const _ctrl_out = _composite_in.pop(); // last item in the array is the ctrl
                   if (isBottle(_combined_in[1]) && _combined_in[1]._bname === "screenio")
-                    console.log("start debugging");
+                    runtimeLogger.debug("start debugging");
                   //let synced_nonempty_data = _combined_in.slice(1).flat(); //.filter(_in=>(!isBottle(_in)||!isEmptyBottle(_in)));
                   let synced_nonempty_data = _combined_in.slice(1); //.filter(_in=>(!isBottle(_in)||!isEmptyBottle(_in)));
                   //if (synced_nonempty_data.length === 1)
@@ -444,14 +445,14 @@ const doChronosSynchronize = (
 
               const _ctrldata = _combined_in[0];
 
-              console.log(
+              runtimeLogger.debug(
                 "eta.js doChronosSynchronize _composite_in registered",
                 rt_context,
                 _combined_in,
               );
               //const _ctrl_out = _composite_in.pop(); // last item in the array is the ctrl
               if (isBottle(_combined_in[1]) && _combined_in[1]._bname === "screenio")
-                console.log("start debugging");
+                runtimeLogger.debug("start debugging");
               //let synced_nonempty_data = _combined_in.slice(1).flat(); //.filter(_in=>(!isBottle(_in)||!isEmptyBottle(_in)));
               let synced_nonempty_data = _combined_in[1]; //.filter(_in=>(!isBottle(_in)||!isEmptyBottle(_in)));
               //if (synced_nonempty_data.length === 1)
@@ -849,15 +850,19 @@ const weaveDataflowPlane = (
             ),
             map((_data_in) => {
               if (["c10cbbbb-14d5-4270-b17a-1965afcabc98"].includes(nodeuuid))
-                console.log(
+                runtimeLogger.debug(
                   "_data_in fuse junction, start debugging",
                   nodeuuid,
                   flowinterface[nodeuuid],
                 );
-              console.log("midi message to be registered in nodeflowinterface", nodeuuid, _data_in);
+              runtimeLogger.debug(
+                "midi message to be registered in nodeflowinterface",
+                nodeuuid,
+                _data_in,
+              );
               //flowinterface[nodeuuid].recordflow(_flow_idx); // record the incidence of flow from the inputnode id'ed by its idx in the array
               if (isBottle(_data_in) && _data_in._bname === "error")
-                console.error("start debugging", _data_in);
+                runtimeLogger.error("start debugging", _data_in);
               if (
                 [
                   "c822ae2e-1be8-46be-b2cb-21a43cef0555",
@@ -866,7 +871,11 @@ const weaveDataflowPlane = (
                 isBottle(_data_in) &&
                 _data_in._bname === "_midi_in"
               )
-                console.log("midi_in signal registered in nodeflowinterface", _data_in, nodeuuid);
+                runtimeLogger.debug(
+                  "midi_in signal registered in nodeflowinterface",
+                  _data_in,
+                  nodeuuid,
+                );
               return _data_in;
             }),
           ),
@@ -880,13 +889,13 @@ const weaveDataflowPlane = (
             ),
             map((_ctrl_in) => {
               if (!_ctrl_in)
-                console.log(
+                runtimeLogger.debug(
                   "ctrl message to be registered in nodeflowinterface",
                   nodeuuid,
                   _ctrl_in,
                 );
               if (flowinterface[nodeuuid][_flow_idx]) {
-                console.error("ctrl signal arrived congested", _ctrl_in);
+                runtimeLogger.error("ctrl signal arrived congested", _ctrl_in);
               }
               if (
                 [
@@ -894,7 +903,11 @@ const weaveDataflowPlane = (
                   "e9e6e44b-792b-46d0-b1d3-58ce2f46c45b",
                 ].includes(nodeuuid)
               )
-                console.log("ctrl_in signal registered in nodeflowinterface", _ctrl_in, nodeuuid);
+                runtimeLogger.debug(
+                  "ctrl_in signal registered in nodeflowinterface",
+                  _ctrl_in,
+                  nodeuuid,
+                );
 
               flowinterface[nodeuuid].recordflow(_flow_idx); // record the incidence of ctrl flow from the inputnode id'ed by its idx in the array
               return _ctrl_in;
@@ -968,7 +981,7 @@ const weaveDataflowPlane = (
         // get the current node's eta reduced function
         const etafunc = eta_lut[nodeuuid];
         if (etafunc == undefined) {
-          console.log("start debugging");
+          runtimeLogger.debug("start debugging");
         }
         if (!etafunc || !("_default" in etafunc)) {
           throw (
@@ -993,7 +1006,7 @@ const weaveDataflowPlane = (
               ] // prime input flow for the starting node
             : _weaveDataflowPlane(datainputnodes).filter((x) => x); // weaved input flow (aka the output flow of previous node) for the rest
 
-        if (datainputnodes.length > 1) console.log("start debugging");
+        if (datainputnodes.length > 1) runtimeLogger.debug("start debugging");
         // initialize incoming flow for the current node
         // initialization of outgoing flow can be done after executing the current node's eta function
         initializeFlowInterface(
@@ -1007,7 +1020,8 @@ const weaveDataflowPlane = (
         );
         // initialize flow interface
 
-        if (nodeuuid === "98d167d3-c1ed-4d4a-9ab9-25eaccd20a91") console.log("start debugging");
+        if (nodeuuid === "98d167d3-c1ed-4d4a-9ab9-25eaccd20a91")
+          runtimeLogger.debug("start debugging");
 
         const nodedata = etaTree.leafgraph.graph.dataflow.getNodeAttributes(nodeuuid).leafnode.data; //.leaf.logic;
 
@@ -1038,7 +1052,7 @@ const weaveDataflowPlane = (
           _stream: _chronos_ctrl_out$.pipe(
             map((_ctrl_in) => {
               if (nodeuuid === "fa175f13-a1fc-482c-9c2c-7f5a9d22a136")
-                console.log("start debugging");
+                runtimeLogger.debug("start debugging");
               return _ctrl_in;
             }),
           ),
@@ -1069,7 +1083,7 @@ const weaveDataflowPlane = (
                 _stream: _chronos_data_out$.pipe(
                   map((_data_in) => {
                     if (nodeuuid === "fa175f13-a1fc-482c-9c2c-7f5a9d22a136")
-                      console.log("start debugging");
+                      runtimeLogger.debug("start debugging");
                     return _data_in;
                   }),
                 ),
@@ -1224,7 +1238,7 @@ const weaveDataflowPlane = (
                 map((x) => {
                   //const _cache = {nodeuuid, datainputnodes};
                   if (nodeuuid === "0f35d8bc-36a6-4fe8-b185-f8ed5188b28f")
-                    console.log("start debugging");
+                    runtimeLogger.debug("start debugging");
                   return x;
                 }),
               ),
@@ -1233,7 +1247,7 @@ const weaveDataflowPlane = (
                   map((x) => {
                     //const _cache = {nodeuuid, datainputnodes};
                     if (nodeuuid === "0f35d8bc-36a6-4fe8-b185-f8ed5188b28f")
-                      console.log("start debugging");
+                      runtimeLogger.debug("start debugging");
                     return x;
                   }),
                 ),
@@ -1367,7 +1381,7 @@ const weaveDataflowPlane = (
   // specifying the option for consolidating the data flow array
 
   //const {ctrl: _chronos_ctrl_out$, data: _chronos_data_out$ } = doChronosSynchronize(weavedplane_out$objArr, {time:2000, count:-1}, {...rt_context, at: "eta.js weaveDataflowPlane", endnodes});
-  if (weavedplane_out$objArr.length === 0) console.log("start debugging");
+  if (weavedplane_out$objArr.length === 0) runtimeLogger.debug("start debugging");
   const { ctrl: _chronos_ctrl_out$, data: _chronos_data_out$ } =
     weavedplane_out$objArr.length > 1
       ? doChronosAsynchronize(
@@ -1463,8 +1477,8 @@ const rxTimeoutStream = (prom, time, codebase, exception, metadata) => {
               { type: "timeout", message: exception, codebase },
               { ...metadata },
             );
-            console.error(exception);
-            console.error(errorbottle);
+            runtimeLogger.error(exception);
+            runtimeLogger.error(errorbottle);
             //rej(errorbottle);
             _resolve(errorbottle);
           },
@@ -1474,7 +1488,7 @@ const rxTimeoutStream = (prom, time, codebase, exception, metadata) => {
     ),
     prom.pipe(
       map((_resolved) => {
-        console.log("rxTimeoutStream resolved, clearing timer:", metadata.traces);
+        runtimeLogger.debug("rxTimeoutStream resolved, clearing timer:", metadata.traces);
         clearTimeout(timer);
         return _resolved;
       }),
@@ -1489,7 +1503,7 @@ const rxTimeoutStream = (prom, time, codebase, exception, metadata) => {
 // under breezyforest/main
 // severity: high, fix it or perish
 const parseDataflowFunc = (refnode, startnodes, endnodes, eta_lut, etaTree, metadata = {}) => {
-  if (refnode === "editor" || refnode === undefined) console.log("start debugging");
+  if (refnode === "editor" || refnode === undefined) runtimeLogger.debug("start debugging");
   //console.log("parseDataflowFunc called for:", refnode, startnodes, endnodes);
   // initialize flowinterface
   const inline_refnode_LUT = {
@@ -1524,8 +1538,9 @@ const parseDataflowFunc = (refnode, startnodes, endnodes, eta_lut, etaTree, meta
         refnode,
       )
     )
-      console.log("start debugging");
-    if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(refnode)) console.log("start debugging");
+      runtimeLogger.debug("start debugging");
+    if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(refnode))
+      runtimeLogger.debug("start debugging");
     const [_flowfunc_output$obj] = weaveDataflowPlane(
       refnode,
       startnodes,
@@ -1626,14 +1641,14 @@ const parseDataflowFunc = (refnode, startnodes, endnodes, eta_lut, etaTree, meta
         //}),
         switchMap((_combined_in) => {
           if (metadata.refnode === "19ec3d65-7361-4a37-95be-c0f30ecedd3f")
-            console.log("start debugging");
-          console.log(
+            runtimeLogger.debug("start debugging");
+          runtimeLogger.debug(
             "eta.js parseDataflowFunc() _etaflowfunc data_in registered in the flow:",
             _combined_in,
           );
           //const _rt_cache = {parent_traces: controlflow$obj._config?.traces, traces: _controlflow$obj._config?.traces}
           //const _ctrl_in = _ctrl_in_data_in[0];
-          if (_input$objArr.length > 1) console.log("start debugging");
+          if (_input$objArr.length > 1) runtimeLogger.debug("start debugging");
           const _plurality_checked_data_in =
             _input$objArr.length === 1 ? _combined_in[1] : _combined_in.slice(1);
           // now pass data and ctrl data into the eta function
@@ -1678,7 +1693,8 @@ const parseDataflowFunc = (refnode, startnodes, endnodes, eta_lut, etaTree, meta
           //flowinterface.ctrl_in.next(_pipe_cache_ctrl_in);
           //await endof_leaflogic_probe;
           //return _combined_in;
-          if ("e2fd7358-27e5-4819-88f8-d8f25c81c9a0" === refnode) console.log("start debugging");
+          if ("e2fd7358-27e5-4819-88f8-d8f25c81c9a0" === refnode)
+            runtimeLogger.debug("start debugging");
           setTimeout(() => {
             flowinterface.data_in.next(_plurality_checked_data_in);
             flowinterface.ctrl_in.next(_pipe_cache_ctrl_in);
@@ -1694,19 +1710,19 @@ const parseDataflowFunc = (refnode, startnodes, endnodes, eta_lut, etaTree, meta
         map((_combined_in) => {
           //const _rt_cache = {parent_traces: controlflow$obj._config?.traces, traces: _controlflow$obj._config?.traces}
           if (isBottle(_combined_in[1]) && _combined_in[1]._bname === "error") {
-            console.log("start debugging");
-            console.error("rxTimeoutStream resolved with error: ", _combined_in);
-            console.error(
+            runtimeLogger.debug("start debugging");
+            runtimeLogger.error("rxTimeoutStream resolved with error: ", _combined_in);
+            runtimeLogger.error(
               "LEAR Error: an error occurred when rxTimeoutStream was invoked with ctrl_in from the etafunc invocation within parseDataflowFunc: ",
               _pipe_cache_ctrl_in,
             );
           } else {
-            console.log("rxTimeoutStream resolved: ", _combined_in);
+            runtimeLogger.debug("rxTimeoutStream resolved: ", _combined_in);
             const _next_data = _combined_in[1]; //.slice(1).filter(_data=>_data!==undefined);
             if (_next_data !== undefined)
               _outflow_data$.next(_next_data); // publish the next available post-processed data via the data flow subject channel
             else
-              console.log(
+              runtimeLogger.debug(
                 "start debugging, this could potentially be the cause of the race condition error from leafmixflow.js",
               );
           }
@@ -1760,8 +1776,9 @@ const etaReduceDataflowComponent = memoize(
     const eta_lut = {};
     //if (!refnode)
     //    console.log("start debugging");
-    if (["7b1f"].includes(refnode?.slice(0, 4))) console.log("start debugging");
-    if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(refnode)) console.log("start debugging");
+    if (["7b1f"].includes(refnode?.slice(0, 4))) runtimeLogger.debug("start debugging");
+    if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(refnode))
+      runtimeLogger.debug("start debugging");
     //if (component_members.some((a_member) => (a_member).slice(0,4) === 'cafc'))
     //    console.log('start debugging');
     //if (!Array.isArray(contextuallambda))
@@ -1773,7 +1790,7 @@ const etaReduceDataflowComponent = memoize(
       //etaTree.etaReduce.componentgraph(membernode_uuid)(membernode_uuid, membernode_lambda, contextuallambda);
       //const membernode_etaobj = etaReduceLEAFNode({nodeuuid: membernode_uuid, contextuallambda: contextuallambda, leafnode_scope: lambdacomponent_scope});
       if ("5f7d8750-8ebd-46ee-9a21-029d4000f452" === membernode_uuid)
-        console.log("start debugging");
+        runtimeLogger.debug("start debugging");
       const etaReductionPromise = etaTree.etaReduceLEAFNode({
         nodeuuid: membernode_uuid,
         contextuallambda: contextuallambda,
@@ -1784,7 +1801,7 @@ const etaReduceDataflowComponent = memoize(
         //if (["7b1f"].includes(refnode?.slice(0,4)))
         //    console.log("start debugging");
         if (membernode_etafunc == undefined) {
-          console.log("start debugging");
+          runtimeLogger.debug("start debugging");
         }
         eta_lut[membernode_uuid] = membernode_etafunc;
         //const lambda_compiled = etaReduceLambdaGraphs({nodelambda: membernode_lambda, contextuallambda: contextuallambda}); // recursion into lambda upstream
@@ -1797,14 +1814,15 @@ const etaReduceDataflowComponent = memoize(
       });
       return etaReductionPromise;
     });
-    if (["7b1f", "main"].includes(refnode?.slice(0, 4))) console.log("start debugging");
+    if (["7b1f", "main"].includes(refnode?.slice(0, 4))) runtimeLogger.debug("start debugging");
     await Promise.all(promiseArr);
     //if (!refnode)
     //    console.log("start debugging");
     //if (endnodes.length > 0 && endnodes[0].slice(0,4) === 'cafc')
     //    console.log('start debugging');
-    if (["7b1f", "main"].includes(refnode?.slice(0, 4))) console.log("start debugging");
-    if (["2ee89b44-16af-472f-97d4-47ae65f064c8"].includes(refnode)) console.log("start debugging");
+    if (["7b1f", "main"].includes(refnode?.slice(0, 4))) runtimeLogger.debug("start debugging");
+    if (["2ee89b44-16af-472f-97d4-47ae65f064c8"].includes(refnode))
+      runtimeLogger.debug("start debugging");
     //const dataflow_eta = weaveDataflowPlane(refnode, [...endnodes], startnodes, endnodes, eta_lut, etaTree);
     const dataflow_eta = parseDataflowFunc(refnode, startnodes, endnodes, eta_lut, etaTree);
 
@@ -1829,9 +1847,11 @@ const etaReduceLambdaGraphs = async ({
 
   //if (refnode && refnode.slice(0,4) === "9935")
   //    console.log("start debugging");
-  if (["7b1f"].includes(refnode?.slice(0, 4))) console.log("start debugging");
-  if (["530acdcf-067d-4868-ba0c-b7a83e6edfdf"].includes(refnode)) console.log("start debugging");
-  if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(refnode)) console.log("start debugging");
+  if (["7b1f"].includes(refnode?.slice(0, 4))) runtimeLogger.debug("start debugging");
+  if (["530acdcf-067d-4868-ba0c-b7a83e6edfdf"].includes(refnode))
+    runtimeLogger.debug("start debugging");
+  if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(refnode))
+    runtimeLogger.debug("start debugging");
   const lambdaLUT = addnodelut ? { _nodelut: {} } : {};
   //if (!nodelambda)
   //    console.log(nodelambda);
@@ -1839,7 +1859,7 @@ const etaReduceLambdaGraphs = async ({
     (lambdanodeuuid) => !(lambdanodeuuid in etaTree.graphcomponents.components.lut),
   );
   if (missingLambdaNodes.length > 0) {
-    console.warn(
+    runtimeLogger.warn(
       "LEAF Warning: etaReduceLambdaGraphs() skipping unknown lambda nodes",
       missingLambdaNodes,
     );
@@ -1864,15 +1884,15 @@ const etaReduceLambdaGraphs = async ({
           etaTree,
         });
 
-        if (["7b1f"].includes(refnode?.slice(0, 4))) console.log("start debugging");
+        if (["7b1f"].includes(refnode?.slice(0, 4))) runtimeLogger.debug("start debugging");
 
         if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(refnode))
-          console.log("start debugging");
+          runtimeLogger.debug("start debugging");
 
         etaReductionPromise.then((dataflow_eta) => {
-          if (["7b1f"].includes(refnode?.slice(0, 4))) console.log("start debugging");
+          if (["7b1f"].includes(refnode?.slice(0, 4))) runtimeLogger.debug("start debugging");
           if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(refnode))
-            console.log("start debugging");
+            runtimeLogger.debug("start debugging");
           lambdaLUT._default = dataflow_eta; // dataflow scope eta func is assigned to _default by default
           if (addnodelut) lambdaLUT._nodelut["_default"] = lambdanodeuuid;
         });
@@ -1889,10 +1909,11 @@ const etaReduceLambdaGraphs = async ({
           // parsing error condition
           const refnode_logic =
             etaTree.leafgraph.graph.dataflow.getNodeAttributes(refnode).leafnode.data.leaf.logic;
-          console.error(
+          runtimeLogger.error(
             `LEAF error: the logical construct built using the ${refnode_logic.type} node ` +
-              `(${refnode}) called with args (${JSON.stringify(refnode_logic.args)}) has an invalid ` +
-              `lambda construct. LEAF does NOT allow lambda-scoped nodes to have dataflow edges.`,
+              `(${refnode}) has an invalid lambda construct. ` +
+              `LEAF does NOT allow lambda-scoped nodes to have dataflow edges.`,
+            { args: refnode_logic.args },
           );
         } else {
           const etaReductionPromise = etaTree.etaReduceLEAFNode({
@@ -1901,16 +1922,17 @@ const etaReduceLambdaGraphs = async ({
           });
           etaReductionPromise
             .then((lambdanode_etaobj) => {
-              if (!lambdanode_etaobj) console.log("start debugging");
+              if (!lambdanode_etaobj) runtimeLogger.debug("start debugging");
               Object.entries(lambdanode_etaobj).map(([lambda_key, etafunc]) => {
                 if (lambda_key in lambdaLUT) {
                   const refnode_logic =
                     etaTree.leafgraph.graph.dataflow.getNodeAttributes(refnode).leafnode.data.leaf
                       .logic;
-                  console.error(
+                  runtimeLogger.error(
                     `LEAF error: the logical construct built using the ${refnode_logic.type} node ` +
-                      `(${refnode}) called with args (${JSON.stringify(refnode_logic.args)}) has multiple ` +
+                      `(${refnode}) has multiple ` +
                       `lambda definitions for ${lambda_key}. LEAF only allows uniquely labelled lambda constructs.`,
+                    { args: refnode_logic.args },
                   );
                 } else {
                   lambdaLUT[lambda_key] = etafunc;
@@ -1919,7 +1941,7 @@ const etaReduceLambdaGraphs = async ({
               });
             })
             .catch((error) => {
-              console.error(error);
+              runtimeLogger.error(error);
             });
           return etaReductionPromise;
         }
@@ -1930,8 +1952,9 @@ const etaReduceLambdaGraphs = async ({
         const lambdanode_logic =
           etaTree.leafgraph.graph.dataflow.getNodeAttributes(lambdanodeuuid).leafnode.data.leaf
             .logic;
-        console.error(
-          `LEAF error: the lambda construct of type ${lambdanode_logic.type} connected to the ${refnode_logic.type} node (${refnode}) called with args (${JSON.stringify(refnode_logic.args)}) has an invalid scope: ${lambdacomponent_scope}.`,
+        runtimeLogger.error(
+          `LEAF error: the lambda construct of type ${lambdanode_logic.type} connected to the ${refnode_logic.type} node (${refnode}) has an invalid scope: ${lambdacomponent_scope}.`,
+          { args: refnode_logic.args },
         );
       }
     });
@@ -1943,7 +1966,8 @@ const etaReduceLambdaGraphs = async ({
 
   //if (["7b1f"].includes(refnode?.slice(0,4)))
   //    console.log("start debugging");
-  if (["e36a8dd4-c8df-4dfa-b60c-765eeb5b99fd"].includes(refnode)) console.log("start debugging");
+  if (["e36a8dd4-c8df-4dfa-b60c-765eeb5b99fd"].includes(refnode))
+    runtimeLogger.debug("start debugging");
   return lambdaLUT;
 };
 
@@ -2128,7 +2152,7 @@ const runtimeEtaTree = (
     etaReduceLEAFNode: async ({ nodeuuid, contextuallambda } = {}) => {
       return {
         _default: (inputArr$) => {
-          console.error(
+          runtimeLogger.error(
             "LEAF Error: runtimeEtaTree.etaReduceLEAFNode() called without first calling initTree().",
           );
           return undefined;
@@ -2160,13 +2184,14 @@ const runtimeEtaTree = (
         JSON.stringify([nodeuuid, ...contextuallambda]);
       const _etaReduceLEAFNode = async ({ nodeuuid, contextuallambda } = {}) => {
         const _refnode = nodeuuid; //refnodepath[1]; //leafgraph.graph.lambda.outNeighbors(contextuallambda[0])[0];
-        if (_refnode === "undefined" || _refnode === undefined) console.log("start debugging");
+        if (_refnode === "undefined" || _refnode === undefined)
+          runtimeLogger.debug("start debugging");
         if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(_refnode))
-          console.log("start debugging");
+          runtimeLogger.debug("start debugging");
         if (["0f35d8bc-36a6-4fe8-b185-f8ed5188b28f"].includes(_refnode))
-          console.log("start debugging");
+          runtimeLogger.debug("start debugging");
         if (["5f7d8750-8ebd-46ee-9a21-029d4000f452"].includes(_refnode))
-          console.log("start debugging");
+          runtimeLogger.debug("start debugging");
         const _refnode_logic = _refnode
           ? _runtimeEtaTree.leafgraph.graph.dataflow.getNodeAttributes(_refnode).leafnode.data.leaf
               .logic
@@ -2228,15 +2253,16 @@ const runtimeEtaTree = (
               "59fe3646-b338-4ab0-a8a6-d6ad401be4fa",
             ].includes(nodeuuid)
           )
-            console.log("start debugging");
+            runtimeLogger.debug("start debugging");
 
-          if (_refnode_logic.type == "leafasyncflow") console.log("start debugging");
+          if (_refnode_logic.type == "leafasyncflow") runtimeLogger.debug("start debugging");
           const templateLEAFNodeLogic = getLEAFNodeCoreLogic(
             _refnode_logic.type,
             runtime_scope,
             lambdactrl,
           );
-          if (nodeuuid === "undefined" || nodeuuid === undefined) console.log("start debugging");
+          if (nodeuuid === "undefined" || nodeuuid === undefined)
+            runtimeLogger.debug("start debugging");
           const refnodedata =
             _runtimeEtaTree.leafgraph.graph.dataflow.getNodeAttributes(nodeuuid).leafnode.data;
 
@@ -2254,9 +2280,9 @@ const runtimeEtaTree = (
           });
 
           if (["633e5b3e-72b7-4536-8e68-40d0b4902cba"].includes(_refnode))
-            console.log("start debugging");
+            runtimeLogger.debug("start debugging");
           if (["e36a8dd4-c8df-4dfa-b60c-765eeb5b99fd"].includes(_refnode))
-            console.log("start debugging");
+            runtimeLogger.debug("start debugging");
           //if (nodeuuid.slice(0,4) === '270f')
           //    console.log('debug time')
 
@@ -2266,15 +2292,16 @@ const runtimeEtaTree = (
           } else if (runtime_scope === "lambda") {
             return leafnodeEtaFunc; // lut with _default buried in the object struct or {}
           } else {
-            console.error(
+            runtimeLogger.error(
               `LEAF error: the logical construct built using the ${refnodedata.leaf.logic.type} node ` +
-                `(${nodeuuid}) called with args (${JSON.stringify(refnodedata.leaf.logic.args)}) has an undefined scope ${runtime_scope}.`,
+                `(${nodeuuid}) has an undefined scope ${runtime_scope}.`,
+              { args: refnodedata.leaf.logic.args },
             );
             return undefined;
           }
         } catch (err) {
           //const _cache = {nodeuuid, runtime_scope};
-          console.error(
+          runtimeLogger.error(
             `LEAF Error: running _etaReduceLEAFNode() for node type ${_refnode_logic.type} with runtime scope of ${runtime_scope}:`,
             err,
           );

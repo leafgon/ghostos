@@ -5,7 +5,10 @@ import { ElemCacheKeyLUT } from "./index.js";
 
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
 import { isBottle } from "../../../predicates.js";
+import { createSafeLogger } from "../../../runtime/safeLogging.js";
 import _ from "lodash";
+
+const runtimeLogger = createSafeLogger({ component: "leafelement.href" });
 
 const cachekeys = {
   URI: "_href_uri",
@@ -69,12 +72,12 @@ const initElementInterface = (_stream_cache) => {
 
     const _do_uri_request = async ({ uri } = {}) => {
       try {
-        console.log("executing href request");
+        runtimeLogger.debug("executing href request");
         if (typeof window !== "undefined" && window.location.href.slice(-uri.length) !== uri)
           window.location.href = uri; //relative to domain
         return uri;
       } catch (err) {
-        console.log(err);
+        runtimeLogger.debug(err);
         return err;
       }
     };
@@ -136,7 +139,7 @@ const initElementInterface = (_stream_cache) => {
       //}),
       withLatestFrom(merged_data_in$),
       map((_aux_data_in) => {
-        console.log(_aux_data_in);
+        runtimeLogger.debug(_aux_data_in);
 
         //return _stream_cache[ElemCacheKeyLUT.CTRLIN];
         return _aux_data_in[0];
@@ -150,7 +153,7 @@ const initElementInterface = (_stream_cache) => {
         return _elementlogic(_combined_in.slice(1)); // returns a Promise that gets interpreted the same way a stream would
       }),
       map((_data_in) => {
-        console.log("testing element _leaflogic: ", _data_in);
+        runtimeLogger.debug("testing element _leaflogic: ", _data_in);
         // perform any output data (write) operations specific to the element here
         // like sending messages to rx subjects, etc
         //_elementlogic()
@@ -170,7 +173,7 @@ const initElementInterface = (_stream_cache) => {
         //filter(_data_out=>isBottle(_data_out)&&_data_out._bname !== error),
         filter((_data_out) => traffic_semaphore),
         map((_data_out) => {
-          console.log(_data_out);
+          runtimeLogger.debug(_data_out);
           return _data_out;
         }),
         share(),
@@ -178,7 +181,7 @@ const initElementInterface = (_stream_cache) => {
       _control: {
         _stream: _ctrl_out$.pipe(
           map((_ctrl_out) => {
-            console.log(_ctrl_out);
+            runtimeLogger.debug(_ctrl_out);
             return _ctrl_out;
           }),
           share(),
