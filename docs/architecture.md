@@ -42,6 +42,8 @@ The generic side-effect wrapper uses the idempotency store contract to reserve a
 
 Policy execution helpers provide an opt-in adapter from legacy composite flow objects to explicit data, control, timer, join, retry, and replay trigger decisions. The package default remains legacy behavior; policy mode is selected per runtime target and records what legacy would have executed versus what policy actually executes.
 
+Side-effect migration tests use a shared runtime harness that composes policy execution, runtime envelopes, in-memory observability sinks, and the idempotent side-effect wrapper around fake adapter calls. Future P0 adapter migrations should adapt concrete adapters into that harness shape so data-triggering, control/config suppression, retry, replay, duplicate keys, and redaction are proven consistently. Hermes is one later adapter migration and is not special-cased by the foundation harness.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
