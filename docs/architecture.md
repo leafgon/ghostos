@@ -99,6 +99,8 @@ Runtime metadata classifies nodes by behavior:
 
 Runtime classification uses canonical target keys: core nodes use `node:<nodeType>`, and adapters use `leafelement:<elementname>`. The runnable dispatch registry and wired adapter registry are exported for inventory tests so classification coverage is based on runtime metadata rather than source-text parsing. Obsolete or legacy dispatch-only nodes such as `leafradioRX`, `leafradioTX`, `leafgnav`, and `leafpopupview` are blocked for new graphs.
 
+P4 inventory decisions are explicit metadata, not implied by missing source imports. Obsolete radio nodes, legacy-only dispatch keys, metadata-only `leafanchor`/`leafsyncflow`, declaration-only `leafspelldef`, and blocked adapters such as `token`, `hippocampus`, and `rancher` declare whether runtime execution is modeled. New graph and runtime-execution validation fail fast for obsolete, blocked, legacy-only, or metadata-only targets while preserving legacy dispatch definitions for compatibility.
+
 Allowed adapter names can remain blocked when their runtime safety contract is incomplete. `leafelement:rancher` is intentionally allowed only as blocked metadata: its legacy adapter source exists, but it is not present in the wired adapter registry and new graphs must receive a deterministic unsupported-adapter validation error until credential handling, idempotency, retry/replay, and redaction are migrated.
 
 ## Security Boundary

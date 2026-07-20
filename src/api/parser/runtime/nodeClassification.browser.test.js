@@ -2,16 +2,24 @@ import { describe, expect, it } from "vitest";
 
 import { _leafstdlib_dataflow_api } from "../../metamodel.js";
 import {
+  LEAFELEMENT_ADAPTER_REGISTRY,
   initStdElementProps,
   listWiredLeafElementNames,
 } from "../nodelogic/elements/library/index.js";
 import { props as rancherAdapterProps } from "../nodelogic/elements/library/rancher.js";
-import { listRunnableLeafNodeTypes } from "../breezyforest.js";
+import {
+  LEAF_NODE_CORE_LOGIC_REGISTRY,
+  LEAF_NODE_CORE_LOGIC_TYPES,
+  getLEAFNodeCoreLogic,
+  listRunnableLeafNodeTypes,
+} from "../breezyforest.js";
 import {
   NodeClassificationError,
   assertLeafElementAdapterSupported,
   assertNodeAllowedForNewGraphs,
+  assertRuntimeExecutionModeled,
   listClassifiedLeafElementNames,
+  listClassifiedNodeTypes,
   resolveLeafElementRuntimeClassification,
   resolveNodeRuntimeClassification,
   validateRuntimeTargetKey,
@@ -46,6 +54,61 @@ describe("node runtime classification inventory", () => {
       });
       expect(classification.runtimeTargetKey).toMatch(/^(node|leafelement):/);
     });
+  });
+
+  it("keeps exported dispatch keys and getLEAFNodeCoreLogic on the same registry", () => {
+    const registryKeys = Object.keys(LEAF_NODE_CORE_LOGIC_REGISTRY);
+
+    expect(LEAF_NODE_CORE_LOGIC_TYPES).toEqual(registryKeys);
+    expect(listRunnableLeafNodeTypes()).toEqual(registryKeys);
+    registryKeys.forEach((nodeType) => {
+      const definition = LEAF_NODE_CORE_LOGIC_REGISTRY[nodeType]();
+      expect(definition?.dataflow || definition?.lambda).toBeDefined();
+    });
+    expect(typeof getLEAFNodeCoreLogic("leafanchor", "dataflow", {})).toBe("function");
+    expect(typeof getLEAFNodeCoreLogic("leafasyncflow", "dataflow", {})).toBe("function");
+    expect(getLEAFNodeCoreLogic("leafsyncflow", "dataflow", {})).toBeUndefined();
+  });
+
+  it("represents every P4 inventory decision explicitly", () => {
+    const p4Classifications = [
+      ...listClassifiedNodeTypes()
+        .map((type) => resolveNodeRuntimeClassification({ type, args: {} }))
+        .filter((classification) => classification.priority === "P4"),
+      ...listClassifiedLeafElementNames()
+        .map((elementname) => resolveLeafElementRuntimeClassification(elementname))
+        .filter((classification) => classification.priority === "P4"),
+    ];
+    const inventoryStates = p4Classifications.map((classification) => [
+      classification.runtimeTargetKey,
+      classification.inventory?.state,
+    ]);
+
+    expect(p4Classifications.length).toBeGreaterThan(0);
+    p4Classifications.forEach((classification) => {
+      expect(classification.inventory).toBeDefined();
+      expect([
+        "obsolete",
+        "blocked",
+        "metadata-only",
+        "declaration-only",
+        "legacy-only",
+        "explicitly-wired",
+      ]).toContain(classification.inventory.state);
+    });
+    expect(inventoryStates).toEqual(
+      expect.arrayContaining([
+        ["node:leafradioRX", "obsolete"],
+        ["node:leafradioTX", "obsolete"],
+        ["node:leafgnav", "legacy-only"],
+        ["node:leafpopupview", "legacy-only"],
+        ["node:leafanchor", "metadata-only"],
+        ["node:leafspelldef", "declaration-only"],
+        ["node:leafsyncflow", "metadata-only"],
+        ["leafelement:token", "blocked"],
+        ["leafelement:hippocampus", "blocked"],
+      ]),
+    );
   });
 
   it("classifies every allowed leafelement name as wired or explicitly blocked", () => {
@@ -112,6 +175,51 @@ describe("node runtime classification inventory", () => {
     });
   });
 
+  it("fails fast before runtime execution for obsolete, blocked, and metadata-only targets", () => {
+    [
+      { type: "leafradioRX" },
+      { type: "leafradioTX" },
+      { type: "leafgnav" },
+      { type: "leafpopupview" },
+      { type: "leafanchor" },
+      { type: "leafspelldef" },
+      { type: "leafsyncflow" },
+      { type: "leafelement", args: { elementname: "token" } },
+      { type: "leafelement", args: { elementname: "hippocampus" } },
+    ].forEach((target) => {
+      expect(() => assertRuntimeExecutionModeled(target)).toThrow(NodeClassificationError);
+    });
+    expect(() => assertRuntimeExecutionModeled({ type: "leaflabel" })).not.toThrow();
+  });
+
+  it("keeps structural and declaration metadata from accidental runtime execution", () => {
+    const leafanchor = resolveNodeRuntimeClassification({ type: "leafanchor", args: {} });
+    const leafspelldef = resolveNodeRuntimeClassification({ type: "leafspelldef", args: {} });
+
+    expect(leafanchor).toMatchObject({
+      runtimeClass: "metadata",
+      trigger: "none",
+      inventory: { state: "metadata-only", runtimeExecution: "none" },
+    });
+    expect(leafspelldef).toMatchObject({
+      runtimeClass: "metadata",
+      trigger: "none",
+      inventory: { state: "declaration-only", runtimeExecution: "none" },
+    });
+  });
+
+  it("keeps leafsyncflow as an explicit metadata-only placeholder", () => {
+    const leafsyncflow = resolveNodeRuntimeClassification({ type: "leafsyncflow", args: {} });
+
+    expect(listRunnableLeafNodeTypes()).not.toContain("leafsyncflow");
+    expect(leafsyncflow).toMatchObject({
+      runtimeClass: "metadata",
+      trigger: "none",
+      status: "metadata_only",
+      inventory: { state: "metadata-only", runtimeExecution: "none" },
+    });
+  });
+
   it("dispatches leafelement classification by args.elementname", () => {
     const http = resolveNodeRuntimeClassification({
       type: "leafelement",
@@ -133,7 +241,9 @@ describe("node runtime classification inventory", () => {
       const classification = resolveLeafElementRuntimeClassification(elementname);
       expect(classification.rejectForNewGraphs).toBe(true);
       expect(classification.wired).toBe(false);
-      expect(() => assertLeafElementAdapterSupported(elementname)).toThrow(NodeClassificationError);
+      expect(() => assertLeafElementAdapterSupported(elementname)).toThrow(
+        "is not supported by a wired adapter",
+      );
     });
   });
 
@@ -143,12 +253,15 @@ describe("node runtime classification inventory", () => {
       _refnode: "test-node",
     };
 
-    expect(allowedElementNames()).not.toContain("openai");
-    expect(listWiredLeafElementNames()).not.toContain("openai");
-    expect(initStdElementProps(streamCache, "openai")).toBeUndefined();
-    expect(() => resolveLeafElementRuntimeClassification("openai")).toThrow(
-      NodeClassificationError,
-    );
+    ["openai", "wizardryelements"].forEach((elementname) => {
+      expect(allowedElementNames()).not.toContain(elementname);
+      expect(Object.keys(LEAFELEMENT_ADAPTER_REGISTRY)).not.toContain(elementname);
+      expect(listWiredLeafElementNames()).not.toContain(elementname);
+      expect(initStdElementProps(streamCache, elementname)).toBeUndefined();
+      expect(() => resolveLeafElementRuntimeClassification(elementname)).toThrow(
+        NodeClassificationError,
+      );
+    });
   });
 
   it("flags P0 adapters until idempotency, retry, replay, and redaction metadata are present", () => {
