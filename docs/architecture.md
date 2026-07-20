@@ -80,6 +80,8 @@ Composite and dynamic graph nodes resolve policy before nested execution. `leafg
 
 UI bridge nodes split rendering sinks from user-action sources. `leafscreenio` and `leafelement:gnav`, `popup`, `editor`, `prompt`, `mediaplayer`, and `form` render only from data events, emit user actions as source data events with stable event IDs, and handle clear/close/refresh/playback through typed UI or media control intents. Generic control/config ticks do not replay prior render or browser/media actions, and repeatable browser/media commands require command identity where replay safety matters.
 
+Configuration changes are future-only by default. `leafconfig` and runtime config helpers resolve a `refresh_config` control event only when a scoped `configVersion` or deterministic canonical fingerprint changes. `recompute-pure` is limited to pure transforms with retained input, `reopen-source` dedupes already emitted source event IDs, and side-effecting nodes do not replay prior effects from config changes unless a safe policy is declared. Secret-bearing P0 config requires a host version or non-exported fingerprint key, and traces expose only version, change state, behavior, and short non-sensitive fingerprint prefixes.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
