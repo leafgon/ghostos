@@ -10,7 +10,7 @@ GhostOS is the LEAF graph parser and runtime used by `leafgon.com`. It compiles 
 - **Runnable node dispatch**: `src/api/parser/breezyforest.js` maps LEAF node type names to concrete runtime logic implementations.
 - **Node implementations**: `src/api/parser/nodelogic/` contains standard node behavior, including graph boundary nodes, data utilities, dataflow joins, abstractions, wizardry nodes, and `leafelement` adapters.
 - **Adapter library**: `src/api/parser/nodelogic/elements/library/` implements browser, external API, UI, media, and side-effecting adapters such as `http`, `href`, `directus`, `hermes`, and `cortex`.
-- **Runtime safety utilities**: `src/api/parser/runtime/` contains shared runtime infrastructure used by the refactor, including safe logging, recursive redaction, runtime option resolution, feature flags, and observability sink contracts.
+- **Runtime safety utilities**: `src/api/parser/runtime/` contains shared runtime infrastructure used by the refactor, including safe logging, recursive redaction, runtime option resolution, feature flags, observability sink contracts, and internal runtime event envelopes.
 
 ## Execution Model
 
@@ -33,6 +33,8 @@ The runtime refactor is organized around a few invariants:
 - Multi-input nodes declare which lane drives execution.
 
 Runtime rollout is controlled through `GhostRuntimeOptions`-style configuration rather than package code reading host environment variables directly. Feature flags cover default trigger mode, trigger policy enablement, data-triggered targets, idempotent side effects, and dual trace execution. Resolution is layered from package/build defaults through graph and node metadata to per-execution runtime config, with debug-only `globalThis` overrides requiring explicit opt-in.
+
+Runtime event envelopes are internal metadata wrappers for data, control, timer, retry, and replay events. They preserve event identity, source-local sequence, graph instance ID, trigger cause, payload kind, and parent event IDs for policy and trace decisions. Compatibility helpers unwrap envelopes before legacy `datalogic.pre`, `leaflogic`, and `datalogic.post` handlers so existing code continues to receive raw payloads, bottles, and control objects.
 
 ## Node Classification
 
