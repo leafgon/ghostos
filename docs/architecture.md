@@ -58,6 +58,8 @@ Source lifecycle integration tests model subscription open, pause, resume, recon
 
 The `leafelement:http` migration boundary distinguishes safe read methods from externally visible write methods. HTTP write helpers normalize legacy request bottles into commands, require idempotency metadata, execute through fakeable fetch calls in tests, and rely on the shared side-effect harness for data-triggering, retry, replay, duplicate suppression, and redacted observability.
 
+The `leafelement:href` migration boundary treats browser navigation as an externally visible side effect. Navigation helpers normalize legacy `href-request` bottles into typed commands, require a target URI plus command identity or explicit browser-local fallback metadata, execute through a fakeable location-like target, and rely on the shared side-effect harness for data-triggering, control/config suppression, duplicate suppression, and redacted observability. Browser-local idempotency is best-effort within the current runtime session; hosts that need restart-safe navigation commands must provide a durable or domain-authoritative idempotency store.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:

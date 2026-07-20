@@ -18,6 +18,173 @@ const GENERIC_URI_NAME = "{*}";
 const HREF_REQUEST_BNAME = "href-request";
 const URI_FALLBACK_DEFAULT = "https://www.leafgon.com";
 
+class HrefNavigationError extends Error {
+  constructor(code, message, { details = {} } = {}) {
+    super(message);
+    this.name = "HrefNavigationError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
+const maybeTrimString = (value) => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (value instanceof URL) {
+    return value.href;
+  }
+  return undefined;
+};
+
+const normalizeHrefNavigationCommand = (input = {}) => {
+  const content = isBottle(input) && input._bname === HREF_REQUEST_BNAME ? input._content : input;
+  if (typeof content === "string" || content instanceof URL) {
+    return {
+      uri: `${content}`,
+    };
+  }
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    throw new HrefNavigationError(
+      "invalid_href_command",
+      "href navigation command must be an object.",
+      { details: { input } },
+    );
+  }
+  return {
+    uri: content.uri ?? content.url ?? content.href ?? content.target,
+    data: content.data,
+    replace: content.replace === true,
+    currentHref: content.currentHref,
+    idempotency: content.idempotency,
+    domainCommandId: content.domainCommandId ?? content.commandId ?? content.intentId,
+    tenantId: content.tenantId,
+    integrationInstanceId: content.integrationInstanceId,
+    producerId: content.producerId,
+  };
+};
+
+const assertHrefNavigationCommand = (command) => {
+  const uri = maybeTrimString(command?.uri);
+  if (!uri) {
+    throw new HrefNavigationError(
+      "missing_href_target",
+      "href navigation command requires a target URI.",
+      { details: { uri: command?.uri } },
+    );
+  }
+  const idempotency = command.idempotency ?? {};
+  const hasIdempotencyKey = Boolean(
+    idempotency.key ||
+    idempotency.domainCommandId ||
+    command.domainCommandId ||
+    idempotency.allowGraphLocalFallback === true,
+  );
+  if (!hasIdempotencyKey) {
+    throw new HrefNavigationError(
+      "missing_href_idempotency",
+      "href navigation command requires idempotency metadata.",
+      { details: { uri } },
+    );
+  }
+  return {
+    ...command,
+    uri,
+  };
+};
+
+const resolveHrefNavigationIdempotency = (command) => {
+  const normalized = assertHrefNavigationCommand(command);
+  const idempotency = normalized.idempotency ?? {};
+  return {
+    required: true,
+    key: idempotency.key,
+    scope: idempotency.scope,
+    domainCommandId: idempotency.domainCommandId ?? normalized.domainCommandId,
+    tenantId: idempotency.tenantId ?? normalized.tenantId,
+    integrationInstanceId: idempotency.integrationInstanceId ?? normalized.integrationInstanceId,
+    producerId: idempotency.producerId ?? normalized.producerId,
+    allowGraphLocalFallback: idempotency.allowGraphLocalFallback === true,
+  };
+};
+
+const createBrowserNavigationTarget = () => {
+  const location = globalThis.window?.location;
+  if (!location) {
+    return undefined;
+  }
+  return {
+    get href() {
+      return location.href;
+    },
+    assign: (uri) => {
+      location.href = uri;
+    },
+    replace: (uri) => {
+      if (typeof location.replace === "function") {
+        location.replace(uri);
+      } else {
+        location.href = uri;
+      }
+    },
+  };
+};
+
+const hrefMatchesCurrentLocation = (currentHref, targetHref) => {
+  const current = maybeTrimString(currentHref);
+  const target = maybeTrimString(targetHref);
+  if (!current || !target) {
+    return false;
+  }
+  return current === target || current.endsWith(target);
+};
+
+const executeHrefNavigationCommand = async ({ command, navigationTarget } = {}) => {
+  const normalized = assertHrefNavigationCommand(normalizeHrefNavigationCommand(command));
+  const target = navigationTarget ?? createBrowserNavigationTarget();
+  const currentHref = normalized.currentHref ?? target?.href;
+  if (hrefMatchesCurrentLocation(currentHref, normalized.uri)) {
+    return {
+      status: "noop",
+      navigated: false,
+      reason: "already_at_target",
+      uri: normalized.uri,
+      replace: normalized.replace,
+    };
+  }
+  if (!target) {
+    return {
+      status: "noop",
+      navigated: false,
+      reason: "missing_navigation_target",
+      uri: normalized.uri,
+      replace: normalized.replace,
+    };
+  }
+  if (typeof target === "function") {
+    await target(normalized.uri, normalized);
+  } else if (normalized.replace && typeof target.replace === "function") {
+    await target.replace(normalized.uri, normalized);
+  } else if (typeof target.assign === "function") {
+    await target.assign(normalized.uri, normalized);
+  } else if ("href" in target) {
+    target.href = normalized.uri;
+  } else {
+    throw new HrefNavigationError(
+      "invalid_navigation_target",
+      "href navigation target must be a function or location-like object.",
+      { details: { uri: normalized.uri } },
+    );
+  }
+  return {
+    status: "navigated",
+    navigated: true,
+    uri: normalized.uri,
+    replace: normalized.replace,
+  };
+};
+
 /*
 example href request bottle looks like so:
 {
@@ -215,4 +382,12 @@ const initElementInterface = (_stream_cache) => {
 
 const props = initElementInterface;
 
-export { props, cachekeys };
+export {
+  HrefNavigationError,
+  assertHrefNavigationCommand,
+  cachekeys,
+  executeHrefNavigationCommand,
+  normalizeHrefNavigationCommand,
+  props,
+  resolveHrefNavigationIdempotency,
+};
