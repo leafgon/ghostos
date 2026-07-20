@@ -54,6 +54,8 @@ Compatibility rollout helpers resolve `GhostRuntimeOptions` for a canonical runt
 
 The typed control intent resolver normalizes legacy control emissions, host lifecycle metadata, config changes, retry/replay requests, and scheduler/poller metadata into control envelopes. Compatibility mode maps ambiguous legacy ticks to `legacy_tick`, while strict typed-control paths fail fast on unknown intents or retry/replay requests without target identity.
 
+Source lifecycle integration tests model subscription open, pause, resume, reconnect, source-record emission, stable source ID dedupe, and weak missing-ID correlation. Source records become data envelopes with source identity, monotonic sequence, trigger cause, and parent event IDs before downstream data-driven processing.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
