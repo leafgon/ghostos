@@ -72,6 +72,8 @@ The `leafelement:hermes` migration boundary separates egress commands from read,
 
 The `leafelement:cortex` migration boundary separates job submission from poll/result source lifecycle behavior. Submission helpers map the adapter's existing idempotency key semantics onto shared runtime idempotency metadata, require credentials and explicit command identity for migrated policy execution, execute through a fakeable Cortex transport, and rely on the shared side-effect harness for data-triggering, control/config suppression, bounded retry, replay/duplicate suppression, fail-fast validation, and redacted observability. Cortex poll/source records carry job and request identity separately from submission idempotency.
 
+The media/device adapter boundary covers `leafelement:mediainput`, `leafelement:midi`, and `leafelement:sound`. Lifecycle open/start/stop/pause/resume is typed control handled by the host, inbound media and MIDI records become data envelopes with stable or documented best-effort source identity, and outbound MIDI/audio/playback commands are data-triggered with browser-local command identity suppression. Browser-local suppression is best-effort for the active session only; hosts that need durable repeat safety must provide durable idempotency outside this package.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
