@@ -48,6 +48,8 @@ Generic workflow integration tests model `source -> transform -> action -> sink`
 
 Multi-input workflow integration tests model `source_a + source_b -> join -> transform -> action` for all-input, primary-input, and any-input policies. All-input joins execute only after each lane has fresh data for the next set, primary-input joins can declare required context lanes, and traces record the lane that caused execution.
 
+Runtime invariant property tests use deterministic tables rather than external fuzzing dependencies to vary control/config tick counts, idempotency keys, retry limits, pure transform sequences, and join input ordering. They provide broad regression coverage for the rule that control/config ticks cannot replay data-oriented work or duplicate side effects by default.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
