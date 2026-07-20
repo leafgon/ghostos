@@ -64,6 +64,8 @@ The `leafelement:directus` migration boundary separates read/source commands fro
 
 The `leafelement:hermes` migration boundary separates egress commands from read, poll, and SSE source lifecycle behavior. Egress helpers normalize message commands, require credentials and command identity, execute through a fakeable Hermes transport, and rely on the shared side-effect harness for data-triggering, control/config suppression, bounded retry, replay/duplicate suppression, fail-fast validation, and redacted observability. Hermes source records carry stable source identity, cursor/sequence metadata, and parent event IDs separately from egress idempotency; production egress requires a durable, server-authoritative, or provider-authoritative idempotency store supplied by the host.
 
+The `leafelement:cortex` migration boundary separates job submission from poll/result source lifecycle behavior. Submission helpers map the adapter's existing idempotency key semantics onto shared runtime idempotency metadata, require credentials and explicit command identity for migrated policy execution, execute through a fakeable Cortex transport, and rely on the shared side-effect harness for data-triggering, control/config suppression, bounded retry, replay/duplicate suppression, fail-fast validation, and redacted observability. Cortex poll/source records carry job and request identity separately from submission idempotency.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:

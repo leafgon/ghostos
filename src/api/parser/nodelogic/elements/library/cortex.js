@@ -273,6 +273,43 @@ const resolveCortexConfig = (rawConfig) => {
   };
 };
 
+const hasCredentialHeader = (headers = {}) => {
+  return Object.keys(headers).some((key) => {
+    return ["authorization", "cookie", "x-api-key"].includes(`${key}`.trim().toLowerCase());
+  });
+};
+
+const assertCortexSubmissionConfig = (config = {}) => {
+  const jobsPath = trimString(config.jobsPath ?? DEFAULT_JOBS_PATH);
+  if (!jobsPath) {
+    throw new CortexConfigError("Cortex jobsPath must be configured.", {
+      field: "jobsPath",
+    });
+  }
+  const credentials = resolveCredentialsMode(config);
+  const requestHeaders = resolveHeaders(config.requestHeaders ?? config.headers);
+  if (credentials === "omit" && !hasCredentialHeader(requestHeaders)) {
+    throw new CortexConfigError("Cortex submission requires credentials or auth headers.", {
+      field: "credentials",
+    });
+  }
+  return {
+    ...config,
+    apiBaseUrl: trimString(config.apiBaseUrl ?? config.baseUrl ?? config.cortexBaseUrl ?? ""),
+    jobsPath,
+    requestHeaders,
+    credentials,
+    requestTimeoutMs: normalizePositiveInteger({
+      value: config.requestTimeoutMs ?? config.timeoutMs,
+      field: "requestTimeoutMs",
+      fallback: DEFAULT_REQUEST_TIMEOUT_MS,
+      min: 1,
+      max: 120000,
+    }),
+    fetchImpl: typeof config.fetchImpl === "function" ? config.fetchImpl : config.fetch,
+  };
+};
+
 const resolveApiUrl = ({ path, baseUrl }) => {
   const normalizedPath = trimString(path);
   if (!normalizedPath) {
@@ -749,6 +786,80 @@ const normalizeIntentBottle = async ({ intentBottle, refnode }) => {
   };
 };
 
+const normalizeCortexSubmissionCommand = ({ intentBottle, refnode }) => {
+  if (!isBottle(intentBottle) || intentBottle._bname !== "intent") {
+    throw new CortexRuntimeError("validation_failed", "Cortex node accepts only intent bottles.", {
+      httpStatus: 400,
+      retryable: false,
+      details: { field: "_bname" },
+    });
+  }
+
+  const intent = {
+    ...intentBottle._content,
+    cortexInstanceId: resolveElementCortexInstanceId(refnode),
+  };
+  const normalizedIntent = normalizeIntentFields(intent);
+  const explicitIdempotencyKey = maybeTrimString(intent.idempotencyKey);
+  if (explicitIdempotencyKey === undefined) {
+    throw new CortexRuntimeError(
+      "missing_cortex_idempotency",
+      "Cortex migrated submission requires an explicit idempotency key.",
+      {
+        httpStatus: 400,
+        retryable: false,
+        details: { field: "idempotencyKey" },
+      },
+    );
+  }
+  if (!IDEMPOTENCY_KEY_REGEX.test(explicitIdempotencyKey)) {
+    throw new CortexRuntimeError(
+      "validation_failed",
+      "idempotencyKey must be 8-256 URL-safe characters.",
+      {
+        httpStatus: 400,
+        retryable: false,
+        details: { field: "idempotencyKey" },
+      },
+    );
+  }
+  const requestBody = {
+    ...normalizedIntent,
+    idempotencyKey: explicitIdempotencyKey,
+  };
+  return {
+    intent,
+    intentBottle,
+    normalizedIntent,
+    requestBody,
+    idempotencyKey: explicitIdempotencyKey,
+    intentId: resolveIntentId(intent, intentBottle),
+    refnode,
+  };
+};
+
+const resolveCortexSubmissionIdempotency = (command) => {
+  if (!command?.idempotencyKey) {
+    throw new CortexRuntimeError(
+      "missing_cortex_idempotency",
+      "Cortex submission requires idempotency metadata.",
+      {
+        httpStatus: 400,
+        retryable: false,
+        details: { field: "idempotencyKey" },
+      },
+    );
+  }
+  return {
+    required: true,
+    key: command.idempotencyKey,
+    scope: `cortex:${command.normalizedIntent?.cortexInstanceId ?? command.refnode}`,
+    domainCommandId: command.idempotencyKey,
+    producerId: command.intentId ?? command.refnode,
+    integrationInstanceId: command.normalizedIntent?.cortexInstanceId ?? command.refnode,
+  };
+};
+
 const extractIntentBottles = (dataIn) => {
   const queue = Array.isArray(dataIn) ? [...dataIn] : [dataIn];
   const intents = [];
@@ -1190,6 +1301,83 @@ const submitCortexJob = async ({ config, normalized, refnode }) => {
   );
 };
 
+const defaultCortexSubmissionTransport = async (request, config) => {
+  if (typeof config.fetchImpl !== "function") {
+    throw new CortexConfigError("Cortex submission execution requires a fetch implementation.", {
+      field: "fetch",
+    });
+  }
+  return fetchWithTimeout(config.fetchImpl, request.url, request.init, config.requestTimeoutMs);
+};
+
+const executeCortexSubmissionCommand = async ({ command, config = {}, transport } = {}) => {
+  const resolvedConfig = assertCortexSubmissionConfig(config);
+  const url = resolveApiUrl({ path: resolvedConfig.jobsPath, baseUrl: resolvedConfig.apiBaseUrl });
+  const request = {
+    url,
+    init: {
+      method: "POST",
+      credentials: resolvedConfig.credentials,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "Idempotency-Key": command.idempotencyKey,
+        ...resolvedConfig.requestHeaders,
+      },
+      body: JSON.stringify(command.requestBody),
+    },
+  };
+  const executeTransport = transport ?? defaultCortexSubmissionTransport;
+  if (typeof executeTransport !== "function") {
+    throw new CortexConfigError("Cortex submission execution requires a transport.", {
+      field: "transport",
+    });
+  }
+  const response = await executeTransport(request, resolvedConfig, command);
+  const payload = await parseJsonResponse(response, { requireValidJson: response?.ok });
+  if (response?.status !== 202) {
+    const error = mapApiError({
+      response,
+      payload,
+      fallbackMessage: `Cortex submit failed with HTTP ${response?.status}.`,
+    });
+    error.details = {
+      ...error.details,
+      request: {
+        url: request.url,
+        init: {
+          ...request.init,
+          body: command.requestBody,
+        },
+      },
+      response: payload,
+    };
+    throw error;
+  }
+  const accepted = validateAcceptedSubmit(payload);
+  return {
+    status: "accepted",
+    idempotencyKey: command.idempotencyKey,
+    requestId: accepted.requestId,
+    jobId: accepted.jobId,
+    statusUrl: accepted.statusUrl,
+    eventsUrl: accepted.eventsUrl,
+    resultUrl: accepted.resultUrl,
+  };
+};
+
+const resolveCortexPollSourceIdentity = (outcome = {}, { parentEventIds = [] } = {}) => {
+  const jobId = maybeTrimString(outcome.jobId);
+  const requestId = maybeTrimString(outcome.requestId);
+  return {
+    sourceId: jobId ? `cortex:${jobId}` : undefined,
+    jobId,
+    requestId,
+    status: maybeTrimString(outcome.status),
+    parentEventIds: Array.isArray(parentEventIds) ? [...parentEventIds] : [],
+  };
+};
+
 const pollCortexResultOnce = async ({ config, entry }) => {
   let response = undefined;
   try {
@@ -1610,4 +1798,13 @@ const initElementInterface = (_stream_cache) => {
 
 const props = initElementInterface;
 
-export { props, cachekeys };
+export {
+  CortexConfigError,
+  CortexRuntimeError,
+  cachekeys,
+  executeCortexSubmissionCommand,
+  normalizeCortexSubmissionCommand,
+  props,
+  resolveCortexPollSourceIdentity,
+  resolveCortexSubmissionIdempotency,
+};
