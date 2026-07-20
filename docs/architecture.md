@@ -56,6 +56,8 @@ The typed control intent resolver normalizes legacy control emissions, host life
 
 Source lifecycle integration tests model subscription open, pause, resume, reconnect, source-record emission, stable source ID dedupe, and weak missing-ID correlation. Source records become data envelopes with source identity, monotonic sequence, trigger cause, and parent event IDs before downstream data-driven processing.
 
+The `leafelement:http` migration boundary distinguishes safe read methods from externally visible write methods. HTTP write helpers normalize legacy request bottles into commands, require idempotency metadata, execute through fakeable fetch calls in tests, and rely on the shared side-effect harness for data-triggering, retry, replay, duplicate suppression, and redacted observability.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
