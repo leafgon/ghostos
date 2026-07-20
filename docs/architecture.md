@@ -36,6 +36,8 @@ Runtime rollout is controlled through `GhostRuntimeOptions`-style configuration 
 
 Runtime event envelopes are internal metadata wrappers for data, control, timer, retry, and replay events. They preserve event identity, source-local sequence, graph instance ID, trigger cause, payload kind, and parent event IDs for policy and trace decisions. Compatibility helpers unwrap envelopes before legacy `datalogic.pre`, `leaflogic`, and `datalogic.post` handlers so existing code continues to receive raw payloads, bottles, and control objects.
 
+Idempotency storage is a package-level contract for side-effecting actions. The runtime defines reservation, success, failure, suppression, lookup, and sweep transitions plus a bounded memory implementation for tests, local development, and browser best-effort duplicate suppression. The memory store is not authoritative for externally visible side effects; server, worker, and integration hosts must provide durable or provider-authoritative idempotency where retries, restarts, parallel workers, or external writes are involved.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
