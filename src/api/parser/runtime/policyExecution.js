@@ -47,6 +47,7 @@ const normalizePolicy = (policy = {}) => {
     join: Object.freeze({
       mode: policy.join?.mode ?? policy.trigger ?? "any-input",
       primaryInputIndex: policy.join?.primaryInputIndex ?? 0,
+      requiredInputIndexes: Object.freeze(policy.join?.requiredInputIndexes ?? []),
       windowSize: policy.join?.windowSize ?? 1,
       allowSamplingLatestData: policy.join?.allowSamplingLatestData === true,
     }),
@@ -103,14 +104,24 @@ const shouldExecuteByRuntimePolicy = ({ event, policy, laneIndex = 0, latestData
     execute = eventKind === "timer" || intent === "timer_tick";
     reason = execute ? "timer" : "not_timer";
   } else if (normalized.trigger === "primary-input") {
+    const requiredContextReady = normalized.join.requiredInputIndexes.every(
+      (index) => latestData[index]?.hasValue === true,
+    );
     execute =
       eventKind === "data" &&
       laneIndex === normalized.join.primaryInputIndex &&
-      isMeaningfulDataEvent(event);
-    reason = execute ? "primary-input" : "not_primary_input";
+      isMeaningfulDataEvent(event) &&
+      requiredContextReady;
+    reason = execute
+      ? "primary-input"
+      : laneIndex === normalized.join.primaryInputIndex && !requiredContextReady
+        ? "waiting_for_required_inputs"
+        : "not_primary_input";
   } else if (normalized.trigger === "all-inputs") {
     execute =
-      eventKind === "data" && latestData.length > 0 && latestData.every((entry) => entry.hasValue);
+      eventKind === "data" &&
+      latestData.length > 0 &&
+      latestData.every((entry) => entry.hasValue && entry.fresh !== false);
     reason = execute ? "all-inputs" : "waiting_for_all_inputs";
   } else if (normalized.trigger === "any-input") {
     execute = eventKind === "data" && isMeaningfulDataEvent(event);
@@ -202,7 +213,11 @@ const driveNodeByRuntimePolicy = ({
   const traceSink = observability.traceSink ?? createNoopTraceSink();
   const output$ = new Subject();
   const control$ = new Subject();
-  const latestData = dataInflowObjArr.map(() => ({ hasValue: false, value: undefined }));
+  const latestData = dataInflowObjArr.map(() => ({
+    hasValue: false,
+    value: undefined,
+    fresh: false,
+  }));
   const windows = dataInflowObjArr.map(() => []);
 
   const runIfAllowed = ({ event, laneIndex = 0, controlValue, metaControl = false }) => {
@@ -258,12 +273,17 @@ const driveNodeByRuntimePolicy = ({
       },
     });
     output$.next(maybeWrapOutput({ output, event, context }));
+    if (normalizedPolicy.trigger === "all-inputs") {
+      latestData.forEach((entry) => {
+        entry.fresh = false;
+      });
+    }
   };
 
   dataInflowObjArr.forEach((flowObj, laneIndex) => {
     flowObj._stream.subscribe((event) => {
       const payload = unwrapDataForLegacy(event);
-      latestData[laneIndex] = { hasValue: true, value: payload };
+      latestData[laneIndex] = { hasValue: true, value: payload, fresh: true };
       windows[laneIndex].push(payload);
       while (windows[laneIndex].length > normalizedPolicy.join.windowSize) {
         windows[laneIndex].shift();

@@ -46,6 +46,8 @@ Side-effect migration tests use a shared runtime harness that composes policy ex
 
 Generic workflow integration tests model `source -> transform -> action -> sink` with runtime envelopes, deterministic config versions and fingerprint prefixes, fake side effects, and redacted in-memory observability. These tests are the end-to-end regression target for the data-oriented contract before concrete adapters opt in.
 
+Multi-input workflow integration tests model `source_a + source_b -> join -> transform -> action` for all-input, primary-input, and any-input policies. All-input joins execute only after each lane has fresh data for the next set, primary-input joins can declare required context lanes, and traces record the lane that caused execution.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
