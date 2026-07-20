@@ -78,6 +78,8 @@ Graph boundary and deck structural nodes are policy-mode migration surfaces. `le
 
 Composite and dynamic graph nodes resolve policy before nested execution. `leafgraph` preserves trigger cause, parent event IDs, and runtime target context across nested graph boundaries. `leaflambdagraph` treats data events as recompute triggers while lifecycle and config control affect orchestration or future execution only. `leafspell` inherits or declares the resolved runtime classification before invocation, with side-effecting spells requiring idempotency metadata. `leafloopyspell` replay and looping are bounded and auditable, and `leaflisp` remains a pure data transform unless host helpers declare side effects explicitly.
 
+UI bridge nodes split rendering sinks from user-action sources. `leafscreenio` and `leafelement:gnav`, `popup`, `editor`, `prompt`, `mediaplayer`, and `form` render only from data events, emit user actions as source data events with stable event IDs, and handle clear/close/refresh/playback through typed UI or media control intents. Generic control/config ticks do not replay prior render or browser/media actions, and repeatable browser/media commands require command identity where replay safety matters.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:

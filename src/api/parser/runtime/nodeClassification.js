@@ -139,6 +139,22 @@ const leafLispPolicy = Object.freeze({
   hostSideEffectsRequireMetadata: true,
 });
 
+const uiBridgePolicy = ({
+  role,
+  sourceEvents = true,
+  typedControl = [],
+  commandIdentityRequired = false,
+}) =>
+  Object.freeze({
+    role,
+    renderTrigger: "data",
+    suppressControlReplay: true,
+    sourceEvents,
+    typedControl: Object.freeze(typedControl),
+    commandIdentityRequired,
+    configUpdates: "future-behavior-only",
+  });
+
 const metadata = ({
   nodeType,
   runtimeClass,
@@ -151,6 +167,7 @@ const metadata = ({
   deck,
   composite,
   dynamic,
+  ui,
   idempotency = { required: false },
   rejectForNewGraphs = false,
   migrationGate,
@@ -170,6 +187,7 @@ const metadata = ({
     deck,
     composite,
     dynamic,
+    ui,
     idempotency: Object.freeze(idempotency),
     rejectForNewGraphs,
     migrationGate,
@@ -188,6 +206,7 @@ const elementMetadata = ({
   rejectForNewGraphs = false,
   migrationGate,
   device,
+  ui,
   notes,
 }) =>
   Object.freeze({
@@ -203,6 +222,7 @@ const elementMetadata = ({
     rejectForNewGraphs,
     migrationGate,
     device,
+    ui,
     notes,
   });
 
@@ -258,6 +278,10 @@ const NODE_RUNTIME_CLASSIFICATIONS = Object.freeze({
     runtimeClass: RUNTIME_CLASSES.UI_BRIDGE,
     trigger: "data",
     priority: "P2",
+    ui: uiBridgePolicy({
+      role: "screen",
+      typedControl: ["ui_clear", "ui_refresh", "ui_close"],
+    }),
   }),
   leafdeckspade: metadata({
     nodeType: "leafdeckspade",
@@ -458,6 +482,11 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "data",
     priority: "P2",
     wired: true,
+    ui: uiBridgePolicy({
+      role: "navigation",
+      typedControl: ["ui_refresh"],
+      commandIdentityRequired: true,
+    }),
   }),
   popup: elementMetadata({
     elementname: "popup",
@@ -465,6 +494,11 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "data",
     priority: "P2",
     wired: true,
+    ui: uiBridgePolicy({
+      role: "popup",
+      typedControl: ["ui_close", "ui_refresh"],
+      commandIdentityRequired: true,
+    }),
   }),
   editor: elementMetadata({
     elementname: "editor",
@@ -472,6 +506,10 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "data",
     priority: "P2",
     wired: true,
+    ui: uiBridgePolicy({
+      role: "editor",
+      typedControl: ["ui_refresh"],
+    }),
   }),
   text: elementMetadata({
     elementname: "text",
@@ -486,6 +524,10 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "data",
     priority: "P2",
     wired: true,
+    ui: uiBridgePolicy({
+      role: "prompt",
+      typedControl: ["ui_clear", "ui_refresh"],
+    }),
   }),
   http: elementMetadata({
     elementname: "http",
@@ -511,6 +553,12 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "data",
     priority: "P2",
     wired: true,
+    ui: uiBridgePolicy({
+      role: "media",
+      sourceEvents: false,
+      typedControl: ["media_play", "media_pause", "media_stop"],
+      commandIdentityRequired: true,
+    }),
   }),
   image: elementMetadata({
     elementname: "image",
@@ -585,6 +633,10 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "data",
     priority: "P2",
     wired: true,
+    ui: uiBridgePolicy({
+      role: "form",
+      typedControl: ["ui_clear", "ui_refresh"],
+    }),
   }),
   directus: elementMetadata({
     elementname: "directus",
