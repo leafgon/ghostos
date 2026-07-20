@@ -32,7 +32,7 @@ The runtime refactor is organized around a few invariants:
 - Config changes affect future work by default unless a node declares recompute behavior.
 - Multi-input nodes declare which lane drives execution.
 
-Runtime rollout is controlled through `GhostRuntimeOptions`-style configuration rather than package code reading host environment variables directly. Feature flags cover default trigger mode, trigger policy enablement, data-triggered targets, idempotent side effects, and dual trace execution. Resolution is layered from package/build defaults through graph and node metadata to per-execution runtime config, with debug-only `globalThis` overrides requiring explicit opt-in.
+Runtime rollout is controlled through `GhostRuntimeOptions`-style configuration rather than package code reading host environment variables directly. Feature flags cover default trigger mode, trigger policy enablement, data-triggered targets, idempotent side effects, and dual trace execution. Package defaults use policy execution for data-oriented targets after the migration gates pass, while graph, node, runtime, or build config can explicitly select legacy compatibility. Resolution is layered from package/build defaults through graph and node metadata to per-execution runtime config, with debug-only `globalThis` overrides requiring explicit opt-in.
 
 Runtime event envelopes are internal metadata wrappers for data, control, timer, retry, and replay events. They preserve event identity, source-local sequence, graph instance ID, trigger cause, payload kind, and parent event IDs for policy and trace decisions. Compatibility helpers unwrap envelopes before legacy `datalogic.pre`, `leaflogic`, and `datalogic.post` handlers so existing code continues to receive raw payloads, bottles, and control objects.
 
@@ -40,7 +40,7 @@ Idempotency storage is a package-level contract for side-effecting actions. The 
 
 The generic side-effect wrapper uses the idempotency store contract to reserve attempts, suppress duplicates and replayed successes, apply bounded retry policy, emit redacted trace and metric decisions, and fail fast when production side-effecting paths lack acceptable idempotency storage. It is an opt-in runtime utility until individual P0 adapters migrate to it.
 
-Policy execution helpers provide an opt-in adapter from legacy composite flow objects to explicit data, control, timer, join, retry, and replay trigger decisions. The package default remains legacy behavior; policy mode is selected per runtime target and records what legacy would have executed versus what policy actually executes.
+Policy execution helpers adapt legacy composite flow objects to explicit data, control, timer, join, retry, and replay trigger decisions. Policy mode is the package default for data-oriented targets, records what legacy would have executed versus what policy actually executes, and suppresses control/config replays unless the target declares a safe policy. Legacy compatibility remains available by setting `enableTriggerPolicy: false` or by using `defaultTriggerMode: "legacy"` with target-key allow lists during rollback or partial rollout.
 
 Side-effect migration tests use a shared runtime harness that composes policy execution, runtime envelopes, in-memory observability sinks, and the idempotent side-effect wrapper around fake adapter calls. Future P0 adapter migrations should adapt concrete adapters into that harness shape so data-triggering, control/config suppression, retry, replay, duplicate keys, and redaction are proven consistently. Hermes is one later adapter migration and is not special-cased by the foundation harness.
 
@@ -56,7 +56,7 @@ Multi-input workflow integration tests model `source_a + source_b -> join -> tra
 
 Runtime invariant property tests use deterministic tables rather than external fuzzing dependencies to vary control/config tick counts, idempotency keys, retry limits, pure transform sequences, and join input ordering. They provide broad regression coverage for the rule that control/config ticks cannot replay data-oriented work or duplicate side effects by default.
 
-Compatibility rollout helpers resolve `GhostRuntimeOptions` for a canonical runtime target key before choosing legacy or policy execution. Legacy mode remains the default for existing graphs, while opted-in targets can emit dual trace fields and divergence metrics that compare legacy would-execute behavior with policy-mode execution.
+Compatibility rollout helpers resolve `GhostRuntimeOptions` for a canonical runtime target key before choosing legacy or policy execution. Policy execution is the default after the runtime migration gates, while explicitly legacy targets can still run compatibility behavior. Targets can emit dual trace fields and divergence metrics that compare legacy would-execute behavior with policy-mode execution before, during, and after rollout.
 
 The typed control intent resolver normalizes legacy control emissions, host lifecycle metadata, config changes, retry/replay requests, and scheduler/poller metadata into control envelopes. Compatibility mode maps ambiguous legacy ticks to `legacy_tick`, while strict typed-control paths fail fast on unknown intents or retry/replay requests without target identity.
 

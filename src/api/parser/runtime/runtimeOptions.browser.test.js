@@ -22,12 +22,12 @@ const assertNoSecretLeak = (value) => {
 };
 
 describe("runtime options", () => {
-  it("resolves legacy-safe defaults with no-op sinks", () => {
+  it("resolves policy defaults with no-op sinks", () => {
     const options = resolveGhostRuntimeOptions();
 
     expect(options.featureFlags).toEqual({
-      defaultTriggerMode: "legacy",
-      enableTriggerPolicy: false,
+      defaultTriggerMode: "policy",
+      enableTriggerPolicy: true,
       dataTriggeredTargets: [],
       idempotentSideEffects: false,
       dualTraceExecution: false,
@@ -88,14 +88,14 @@ describe("runtime options", () => {
   it("requires explicit opt-in for debug global overrides", () => {
     globalThis.GHOSTOS_RUNTIME_OPTIONS = {
       featureFlags: {
-        enableTriggerPolicy: true,
+        dualTraceExecution: true,
       },
     };
     try {
-      expect(resolveGhostRuntimeOptions().featureFlags.enableTriggerPolicy).toBe(false);
+      expect(resolveGhostRuntimeOptions().featureFlags.dualTraceExecution).toBe(false);
       expect(
         resolveGhostRuntimeOptions({ allowGlobalDebugOverrides: true }).featureFlags
-          .enableTriggerPolicy,
+          .dualTraceExecution,
       ).toBe(true);
     } finally {
       delete globalThis.GHOSTOS_RUNTIME_OPTIONS;
