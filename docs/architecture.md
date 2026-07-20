@@ -81,6 +81,8 @@ Runtime metadata classifies nodes by behavior:
 
 Runtime classification uses canonical target keys: core nodes use `node:<nodeType>`, and adapters use `leafelement:<elementname>`. The runnable dispatch registry and wired adapter registry are exported for inventory tests so classification coverage is based on runtime metadata rather than source-text parsing. Obsolete or legacy dispatch-only nodes such as `leafradioRX`, `leafradioTX`, `leafgnav`, and `leafpopupview` are blocked for new graphs.
 
+Allowed adapter names can remain blocked when their runtime safety contract is incomplete. `leafelement:rancher` is intentionally allowed only as blocked metadata: its legacy adapter source exists, but it is not present in the wired adapter registry and new graphs must receive a deterministic unsupported-adapter validation error until credential handling, idempotency, retry/replay, and redaction are migrated.
+
 ## Security Boundary
 
 Runtime traces and diagnostics must pass through shared redaction before emission. Sensitive keys, headers, payload fields, error objects, request configs, response headers, cookies, bearer tokens, private keys, credential query parameters, and signed URLs are redacted before logs or trace sinks see them. Browser logging is disabled by default unless explicitly enabled for local debugging.
