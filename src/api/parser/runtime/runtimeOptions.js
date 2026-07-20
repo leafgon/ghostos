@@ -1,8 +1,8 @@
 import { createSafeLogger, redactValue } from "./safeLogging.js";
 
 const DEFAULT_FEATURE_FLAGS = Object.freeze({
-  defaultTriggerMode: "legacy",
-  enableTriggerPolicy: false,
+  defaultTriggerMode: "policy",
+  enableTriggerPolicy: true,
   dataTriggeredTargets: Object.freeze([]),
   idempotentSideEffects: false,
   dualTraceExecution: false,

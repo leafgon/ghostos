@@ -90,8 +90,33 @@ const createCompatibilityDriver = ({
 };
 
 describe("runtime compatibility rollout", () => {
-  it("keeps existing graphs in legacy execution mode by default", () => {
+  it("runs data-oriented targets in policy execution mode by default", () => {
     const driver = createCompatibilityDriver();
+
+    driver.sendData("hello", "data-1");
+    driver.sendControl("control-1");
+
+    expect(driver.outputs).toMatchObject([
+      {
+        mode: "policy",
+        reason: "data",
+      },
+    ]);
+    expect(driver.decisions.map((event) => [event.decision, event.reason])).toEqual([
+      ["execute", "data"],
+      ["skip", "not_meaningful_data"],
+    ]);
+    expect(driver.runtimeSinks.snapshot().metrics).toEqual([]);
+  });
+
+  it("keeps explicit legacy compatibility mode available", () => {
+    const driver = createCompatibilityDriver({
+      runtimeConfig: {
+        featureFlags: {
+          enableTriggerPolicy: false,
+        },
+      },
+    });
 
     driver.sendData("hello", "data-1");
     driver.sendControl("control-1");
@@ -107,13 +132,13 @@ describe("runtime compatibility rollout", () => {
       },
     ]);
     expect(driver.decisions.map((event) => event.decision)).toEqual(["execute", "execute"]);
-    expect(driver.runtimeSinks.snapshot().metrics).toEqual([]);
   });
 
-  it("opts selected runtime targets into policy execution while non-opted targets stay legacy", () => {
+  it("uses target-key allow lists for partial rollout and rollback", () => {
     const runtimeConfig = {
       featureFlags: {
         enableTriggerPolicy: true,
+        defaultTriggerMode: "legacy",
         dataTriggeredTargets: ["leafelement:http"],
         dualTraceExecution: true,
       },
@@ -252,7 +277,7 @@ describe("runtime compatibility rollout", () => {
       }),
       expect.objectContaining({
         context: expect.objectContaining({
-          runtimeExecutionMode: "legacy",
+          runtimeExecutionMode: "policy",
         }),
       }),
     );
