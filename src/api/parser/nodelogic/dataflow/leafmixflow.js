@@ -10,6 +10,84 @@ import { of, Subject } from "rxjs";
 import { isBottle, isEmptyBottle } from "../../predicates.js";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { doBottle, doUnbottle } from "../datautils/bottling.js";
+import { resolveNodeRuntimeClassification } from "../../runtime/nodeClassification.js";
+import { driveNodeByRuntimePolicy } from "../../runtime/policyExecution.js";
+
+class MixflowRuntimePolicyError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "MixflowRuntimePolicyError";
+    this.code = "invalid_mixflow_runtime_policy";
+    this.details = details;
+  }
+}
+
+const MIXFLOW_MODE_ALIASES = Object.freeze({
+  combineLatest: "combineLatest",
+  latest: "combineLatest",
+  combine: "combine",
+  concat: "concat",
+  merge: "merge",
+  substitute: "substitute",
+  default: "default",
+});
+
+const normalizeMixflowMode = (mode) => {
+  const normalizedMode = mode ?? "default";
+  const canonicalMode = MIXFLOW_MODE_ALIASES[normalizedMode];
+  if (!canonicalMode) {
+    throw new MixflowRuntimePolicyError(`Unsupported leafmixflow mode: ${mode}.`, {
+      field: "mode",
+      value: mode,
+    });
+  }
+  return canonicalMode;
+};
+
+const resolveLeafMixflowJoinPolicy = ({ mode = "default" } = {}) => {
+  const classification = resolveNodeRuntimeClassification({ type: "leafmixflow", args: {} });
+  const canonicalMode = normalizeMixflowMode(mode);
+  const supportedMode = classification.join?.supportedModes?.[canonicalMode];
+  if (!supportedMode) {
+    throw new MixflowRuntimePolicyError(`leafmixflow mode has no declared policy: ${mode}.`, {
+      field: "mode",
+      value: mode,
+    });
+  }
+
+  return Object.freeze({
+    mode: "policy",
+    mixMode: canonicalMode,
+    trigger: supportedMode.trigger,
+    join: Object.freeze(supportedMode.join),
+    ordering: classification.join.ordering,
+  });
+};
+
+const driveLeafMixflowByRuntimePolicy = ({
+  mode = "default",
+  inflowCtrlObj,
+  dataInflowObjArr = [],
+  metaCtrl$,
+  context = {},
+  transformation = {},
+  observability = {},
+} = {}) => {
+  const policy = resolveLeafMixflowJoinPolicy({ mode });
+  return driveNodeByRuntimePolicy({
+    inflowCtrlObj,
+    dataInflowObjArr,
+    metaCtrl$,
+    context: {
+      nodeId: context.nodeId ?? "leafmixflow",
+      runtimeTargetKey: context.runtimeTargetKey ?? "node:leafmixflow",
+      ...context,
+    },
+    policy,
+    transformation,
+    observability,
+  });
+};
 /*
  * _leafmixflow() is a runtime function for the LEAF node of logic type 'leafmixflow'.
  * it is used to define rules on how to mix the data contents of multiple dataflows wired into the node's input.
@@ -425,4 +503,10 @@ const _leafmixflow = {
 //    };
 //};
 
-export { _leafmixflow };
+export {
+  MIXFLOW_MODE_ALIASES,
+  MixflowRuntimePolicyError,
+  _leafmixflow,
+  driveLeafMixflowByRuntimePolicy,
+  resolveLeafMixflowJoinPolicy,
+};
