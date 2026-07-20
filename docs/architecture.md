@@ -38,6 +38,8 @@ Runtime event envelopes are internal metadata wrappers for data, control, timer,
 
 Idempotency storage is a package-level contract for side-effecting actions. The runtime defines reservation, success, failure, suppression, lookup, sweep, capability validation, and explicit stale in-flight recovery transitions plus a bounded memory implementation for tests, local development, and browser best-effort duplicate suppression. The memory store is not authoritative for externally visible side effects; server, worker, and integration hosts must provide durable or provider-authoritative idempotency where retries, restarts, parallel workers, or external writes are involved. Package conformance tests use fake durable stores to prove the interface contract, while real database, queue, cache, or provider durability tests belong with the host adapter that binds this package API to infrastructure.
 
+The generic side-effect wrapper uses the idempotency store contract to reserve attempts, suppress duplicates and replayed successes, apply bounded retry policy, emit redacted trace and metric decisions, and fail fast when production side-effecting paths lack acceptable idempotency storage. It is an opt-in runtime utility until individual P0 adapters migrate to it.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
