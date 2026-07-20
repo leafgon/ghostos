@@ -8,6 +8,7 @@ import {
   unwrapControlForLegacy,
   unwrapDataForLegacy,
 } from "./eventEnvelope.js";
+import { resolveGhostRuntimeOptions, validateRuntimeTargetKey } from "./runtimeOptions.js";
 import { redactValue } from "./safeLogging.js";
 
 const POLICY_EXECUTION_MODES = Object.freeze({
@@ -30,6 +31,7 @@ class PolicyExecutionError extends Error {
 }
 
 const createNoopTraceSink = () => ({ emit: () => {} });
+const createNoopMetricSink = () => ({ record: () => {} });
 
 const assertStreamObject = (value, field) => {
   if (!value || typeof value._stream?.subscribe !== "function") {
@@ -164,6 +166,10 @@ const emitTrace = (traceSink, event) => {
   traceSink.emit(redactValue(event));
 };
 
+const emitMetric = (metricSink, name, labels = {}, value = 1) => {
+  metricSink.record(name, redactValue(labels), value);
+};
+
 const maybeWrapOutput = ({ output, event, context }) => {
   if (!isRuntimeEnvelope(event)) {
     return output;
@@ -211,6 +217,9 @@ const driveNodeByRuntimePolicy = ({
   );
   const normalizedPolicy = normalizePolicy(policy);
   const traceSink = observability.traceSink ?? createNoopTraceSink();
+  const metricSink = observability.metricSink ?? createNoopMetricSink();
+  const dualTraceExecution =
+    observability.dualTraceExecution === true || context.dualTraceExecution === true;
   const output$ = new Subject();
   const control$ = new Subject();
   const latestData = dataInflowObjArr.map(() => ({
@@ -227,19 +236,29 @@ const driveNodeByRuntimePolicy = ({
       laneIndex,
       latestData,
     });
+    const policyWouldExecute = decision.decision === POLICY_EXECUTION_DECISIONS.EXECUTE;
     emitTrace(traceSink, {
       event: "policy_driver_decision",
       runtimeTargetKey: context.runtimeTargetKey,
+      compatibilityMode: normalizedPolicy.mode,
       trigger: normalizedPolicy.trigger,
       decision: decision.decision,
       reason: decision.reason,
       legacyWouldExecute: decision.legacyWouldExecute,
-      actualExecute: decision.decision === POLICY_EXECUTION_DECISIONS.EXECUTE,
+      policyWouldExecute,
+      actualExecute: policyWouldExecute,
       eventKind: getEventKind(event),
       intent: getControlIntent(event),
       laneIndex,
       metaControl,
     });
+    if (dualTraceExecution && decision.legacyWouldExecute !== policyWouldExecute) {
+      emitMetric(metricSink, "ghostos_runtime_policy_divergence_total", {
+        compatibilityMode: normalizedPolicy.mode,
+        trigger: normalizedPolicy.trigger,
+        reason: decision.reason,
+      });
+    }
     control$.next({
       decision: decision.decision,
       reason: decision.reason,
@@ -311,12 +330,111 @@ const driveNodeByRuntimePolicy = ({
   });
 };
 
+const resolveRuntimeExecutionPolicy = ({
+  runtimeTargetKey,
+  runtimeOptions,
+  runtimeConfig,
+  graphMetadata,
+  nodeMetadata,
+  packageDefaults,
+  buildDefaults,
+  globalOverrides,
+  allowGlobalDebugOverrides,
+  targetPolicy = { trigger: "data" },
+  legacyPolicy = {},
+} = {}) => {
+  const targetKey = validateRuntimeTargetKey(runtimeTargetKey);
+  const resolvedOptions =
+    runtimeOptions ??
+    resolveGhostRuntimeOptions({
+      runtimeConfig,
+      graphMetadata,
+      nodeMetadata,
+      packageDefaults,
+      buildDefaults,
+      globalOverrides,
+      allowGlobalDebugOverrides,
+    });
+  const featureFlags = resolvedOptions.featureFlags ?? {};
+  const dataTriggeredTargets = (featureFlags.dataTriggeredTargets ?? []).map((target) =>
+    validateRuntimeTargetKey(target),
+  );
+  const targetOptedIn =
+    featureFlags.enableTriggerPolicy === true &&
+    (featureFlags.defaultTriggerMode === POLICY_EXECUTION_MODES.POLICY ||
+      dataTriggeredTargets.includes(targetKey));
+  const mode = targetOptedIn ? POLICY_EXECUTION_MODES.POLICY : POLICY_EXECUTION_MODES.LEGACY;
+  const policy = normalizePolicy({
+    ...(targetOptedIn ? targetPolicy : legacyPolicy),
+    mode,
+  });
+
+  return Object.freeze({
+    runtimeTargetKey: targetKey,
+    mode,
+    optedIn: targetOptedIn,
+    policy,
+    runtimeOptions: resolvedOptions,
+    dualTraceExecution: featureFlags.dualTraceExecution === true,
+  });
+};
+
+const driveNodeWithRuntimeOptions = ({
+  runtimeTargetKey,
+  runtimeOptions,
+  runtimeConfig,
+  graphMetadata,
+  nodeMetadata,
+  packageDefaults,
+  buildDefaults,
+  globalOverrides,
+  allowGlobalDebugOverrides,
+  targetPolicy,
+  legacyPolicy,
+  context = {},
+  observability = {},
+  ...driverOptions
+} = {}) => {
+  const resolvedExecution = resolveRuntimeExecutionPolicy({
+    runtimeTargetKey,
+    runtimeOptions,
+    runtimeConfig,
+    graphMetadata,
+    nodeMetadata,
+    packageDefaults,
+    buildDefaults,
+    globalOverrides,
+    allowGlobalDebugOverrides,
+    targetPolicy,
+    legacyPolicy,
+  });
+  const resolvedObservability = {
+    ...resolvedExecution.runtimeOptions.observability,
+    ...observability,
+    dualTraceExecution: resolvedExecution.dualTraceExecution,
+  };
+
+  return driveNodeByRuntimePolicy({
+    ...driverOptions,
+    context: {
+      ...context,
+      runtimeTargetKey: resolvedExecution.runtimeTargetKey,
+      runtimeExecutionMode: resolvedExecution.mode,
+      dualTraceExecution: resolvedExecution.dualTraceExecution,
+    },
+    policy: resolvedExecution.policy,
+    observability: resolvedObservability,
+  });
+};
+
 export {
   POLICY_EXECUTION_DECISIONS,
   POLICY_EXECUTION_MODES,
   PolicyExecutionError,
   driveNodeByRuntimePolicy,
+  driveNodeWithRuntimeOptions,
   normalizePolicy,
+  resolveRuntimeExecutionPolicy,
   selectJoinedInputs,
   shouldExecuteByRuntimePolicy,
 };
