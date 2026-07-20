@@ -52,6 +52,8 @@ Runtime invariant property tests use deterministic tables rather than external f
 
 Compatibility rollout helpers resolve `GhostRuntimeOptions` for a canonical runtime target key before choosing legacy or policy execution. Legacy mode remains the default for existing graphs, while opted-in targets can emit dual trace fields and divergence metrics that compare legacy would-execute behavior with policy-mode execution.
 
+The typed control intent resolver normalizes legacy control emissions, host lifecycle metadata, config changes, retry/replay requests, and scheduler/poller metadata into control envelopes. Compatibility mode maps ambiguous legacy ticks to `legacy_tick`, while strict typed-control paths fail fast on unknown intents or retry/replay requests without target identity.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
