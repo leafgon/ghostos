@@ -50,6 +50,8 @@ Multi-input workflow integration tests model `source_a + source_b -> join -> tra
 
 Runtime invariant property tests use deterministic tables rather than external fuzzing dependencies to vary control/config tick counts, idempotency keys, retry limits, pure transform sequences, and join input ordering. They provide broad regression coverage for the rule that control/config ticks cannot replay data-oriented work or duplicate side effects by default.
 
+Compatibility rollout helpers resolve `GhostRuntimeOptions` for a canonical runtime target key before choosing legacy or policy execution. Legacy mode remains the default for existing graphs, while opted-in targets can emit dual trace fields and divergence metrics that compare legacy would-execute behavior with policy-mode execution.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
