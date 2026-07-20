@@ -145,6 +145,7 @@ const elementMetadata = ({
   idempotency = { required: false },
   rejectForNewGraphs = false,
   migrationGate,
+  device,
   notes,
 }) =>
   Object.freeze({
@@ -159,6 +160,7 @@ const elementMetadata = ({
     idempotency: Object.freeze(idempotency),
     rejectForNewGraphs,
     migrationGate,
+    device,
     notes,
   });
 
@@ -446,6 +448,15 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "control",
     priority: "P1",
     wired: true,
+    device: Object.freeze({
+      lifecycleTrigger: "control",
+      lifecycleIntents: Object.freeze(["start", "stop", "pause", "resume"]),
+      sourceRecords: Object.freeze({
+        emitsDataEvents: true,
+        identity: "browser-best-effort",
+      }),
+      permissions: "host-provided",
+    }),
   }),
   midi: elementMetadata({
     elementname: "midi",
@@ -453,6 +464,19 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "control",
     priority: "P1",
     wired: true,
+    device: Object.freeze({
+      lifecycleTrigger: "control",
+      lifecycleIntents: Object.freeze(["start", "stop", "pause", "resume"]),
+      sourceRecords: Object.freeze({
+        emitsDataEvents: true,
+        identity: "device-message-id-or-sequence",
+      }),
+      outboundCommands: Object.freeze({
+        trigger: "data",
+        commandIdentityRequired: true,
+        duplicateSuppression: "browser-local",
+      }),
+    }),
   }),
   sound: elementMetadata({
     elementname: "sound",
@@ -460,6 +484,16 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     trigger: "data",
     priority: "P1",
     wired: true,
+    device: Object.freeze({
+      lifecycleTrigger: "control",
+      lifecycleIntents: Object.freeze(["start", "stop", "pause", "resume"]),
+      outboundCommands: Object.freeze({
+        trigger: "data",
+        commandIdentityRequired: true,
+        duplicateSuppression: "browser-local",
+      }),
+      browserLocalIdempotency: "best-effort-session",
+    }),
   }),
   html: elementMetadata({
     elementname: "html",
