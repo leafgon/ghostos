@@ -35,6 +35,13 @@ const DEFAULT_SUPPRESSED_TTL_MS = 60 * 60 * 1000;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_TERMINAL_ENTRIES = 1024;
 
+const RETENTION_POLICY_MODES = Object.freeze({
+  DECLARED: "declared",
+  PROVIDER: "provider",
+});
+
+const PRODUCTION_RUNTIME_ENVIRONMENTS = new Set(["server", "worker"]);
+
 class IdempotencyStoreError extends Error {
   constructor(message, details = {}) {
     super(message);
@@ -99,6 +106,83 @@ const validateIdempotencyScope = (scope) => assertNonEmptyString(scope, "scope")
 
 const createScopedIdempotencyKey = ({ scope, domainKey } = {}) => {
   return `${validateIdempotencyScope(scope)}:${assertNonEmptyString(domainKey, "domainKey")}`;
+};
+
+const validateRetentionPolicy = (retention = {}) => {
+  if (!retention || typeof retention !== "object" || Array.isArray(retention)) {
+    throw new IdempotencyStoreError("retention policy must be an object.", {
+      field: "retention",
+      value: retention,
+    });
+  }
+  const mode = retention.mode ?? RETENTION_POLICY_MODES.DECLARED;
+  if (!Object.values(RETENTION_POLICY_MODES).includes(mode)) {
+    throw new IdempotencyStoreError(`Unsupported retention policy mode: ${mode}.`, {
+      field: "retention.mode",
+      value: mode,
+    });
+  }
+  if (mode === RETENTION_POLICY_MODES.PROVIDER) {
+    return Object.freeze({
+      mode,
+      delegatedTo: assertNonEmptyString(retention.delegatedTo, "retention.delegatedTo"),
+    });
+  }
+  return Object.freeze({
+    mode,
+    succeededTtlMs: validateTtlMs(retention.succeededTtlMs, "retention.succeededTtlMs"),
+    failedTtlMs: validateTtlMs(retention.failedTtlMs, "retention.failedTtlMs"),
+    suppressedTtlMs: validateTtlMs(retention.suppressedTtlMs, "retention.suppressedTtlMs"),
+    maxEntries: validatePositiveInt(retention.maxEntries, "retention.maxEntries"),
+  });
+};
+
+const createDeclaredRetentionPolicy = ({
+  succeededTtlMs,
+  failedTtlMs,
+  suppressedTtlMs,
+  maxEntries,
+}) =>
+  validateRetentionPolicy({
+    mode: RETENTION_POLICY_MODES.DECLARED,
+    succeededTtlMs,
+    failedTtlMs,
+    suppressedTtlMs,
+    maxEntries,
+  });
+
+const createIdempotencyStoreCapabilities = ({
+  class: capabilityClass,
+  atomicReserve,
+  retention,
+  survivesRestart,
+  sharedAcrossWorkers,
+  authoritativeForExternalSideEffects,
+  staleInFlightRecovery,
+  maxEntries,
+}) => {
+  if (!Object.values(IDEMPOTENCY_STORE_CAPABILITIES).includes(capabilityClass)) {
+    throw new IdempotencyStoreError(
+      `Unsupported idempotency store capability: ${capabilityClass}.`,
+      {
+        field: "capabilities.class",
+        value: capabilityClass,
+      },
+    );
+  }
+  return Object.freeze({
+    class: capabilityClass,
+    atomicReserve: assertNonEmptyString(atomicReserve, "capabilities.atomicReserve"),
+    retention: validateRetentionPolicy(retention),
+    survivesRestart: survivesRestart === true,
+    sharedAcrossWorkers: sharedAcrossWorkers === true,
+    authoritativeForExternalSideEffects: authoritativeForExternalSideEffects === true,
+    staleInFlightRecovery: assertNonEmptyString(
+      staleInFlightRecovery,
+      "capabilities.staleInFlightRecovery",
+    ),
+    maxEntries,
+  });
 };
 
 const validateRetryPolicy = (retry = {}) => {
@@ -194,13 +278,37 @@ const createMemoryIdempotencyStore = ({
   suppressedTtlMs = DEFAULT_SUPPRESSED_TTL_MS,
   traceSink,
   logSink,
+  backingRecords,
+  capabilityOverrides = {},
 } = {}) => {
   validatePositiveInt(maxEntries, "maxEntries");
   validateTtlMs(succeededTtlMs, "succeededTtlMs");
   validateTtlMs(failedTtlMs, "failedTtlMs");
   validateTtlMs(suppressedTtlMs, "suppressedTtlMs");
 
-  const records = new Map();
+  const records = backingRecords ?? new Map();
+  if (!(records instanceof Map)) {
+    throw new IdempotencyStoreError("backingRecords must be a Map.", {
+      field: "backingRecords",
+      value: backingRecords,
+    });
+  }
+  const capabilities = createIdempotencyStoreCapabilities({
+    class: IDEMPOTENCY_STORE_CAPABILITIES.MEMORY,
+    atomicReserve: "single-js-agent",
+    retention: createDeclaredRetentionPolicy({
+      succeededTtlMs,
+      failedTtlMs,
+      suppressedTtlMs,
+      maxEntries,
+    }),
+    survivesRestart: false,
+    sharedAcrossWorkers: false,
+    authoritativeForExternalSideEffects: false,
+    staleInFlightRecovery: "explicit",
+    maxEntries,
+    ...capabilityOverrides,
+  });
 
   const now = () => {
     const value = clock();
@@ -500,6 +608,51 @@ const createMemoryIdempotencyStore = ({
     });
   };
 
+  const recoverStaleInFlight = (key, options = {}) => {
+    const currentTime = now();
+    const existing = getExistingOrThrow(key);
+    if (existing.status !== IDEMPOTENCY_STATUSES.IN_FLIGHT) {
+      throw new IdempotencyStoreError("stale recovery requires an in-flight record.", {
+        field: "status",
+        value: existing.status,
+      });
+    }
+    if (existing.attemptExpiresAt > currentTime) {
+      throw new IdempotencyStoreError("in-flight attempt has not reached its timeout.", {
+        field: "attemptExpiresAt",
+        value: existing.attemptExpiresAt,
+      });
+    }
+    const ttlMs = options.ttlMs === undefined ? failedTtlMs : validateTtlMs(options.ttlMs, "ttlMs");
+    const recovery = Object.freeze({
+      recoveredByAttemptId: assertNonEmptyString(
+        options.recoveredByAttemptId,
+        "recoveredByAttemptId",
+      ),
+      reason: assertNonEmptyString(options.reason ?? "stale_in_flight", "reason"),
+    });
+    const record = {
+      ...existing,
+      status: IDEMPOTENCY_STATUSES.FAILED,
+      updatedAt: currentTime,
+      ttlMs,
+      expiresAt: currentTime + ttlMs,
+      lastErrorCode: "stale_in_flight",
+      retryable: true,
+      retryAfterAt: currentTime,
+      recovery,
+    };
+    records.set(existing.key, record);
+    evictForCapacity();
+    emitStoreDiagnostic({
+      action: "recover_stale_in_flight",
+      decision: IDEMPOTENCY_STATUSES.FAILED,
+      record,
+      details: recovery,
+    });
+    return cloneRecord(record);
+  };
+
   const get = (rawKey) => {
     const key = validateIdempotencyKey(rawKey);
     const currentTime = now();
@@ -511,19 +664,165 @@ const createMemoryIdempotencyStore = ({
   };
 
   return Object.freeze({
-    capabilities: Object.freeze({
-      class: IDEMPOTENCY_STORE_CAPABILITIES.MEMORY,
-      atomicReserve: "single-js-agent",
-      authoritativeForExternalSideEffects: false,
-      maxEntries,
-    }),
+    capabilities,
     reserve,
     markSucceeded,
     markFailed,
     markSuppressed,
+    recoverStaleInFlight,
     get,
     sweep,
     size: () => records.size,
+  });
+};
+
+const createFakeDurableBackingStore = () => {
+  return Object.freeze({
+    records: new Map(),
+  });
+};
+
+const createFakeDurableIdempotencyStore = ({
+  backingStore = createFakeDurableBackingStore(),
+  clock = defaultClock,
+  maxEntries = DEFAULT_MAX_TERMINAL_ENTRIES,
+  succeededTtlMs = DEFAULT_SUCCEEDED_TTL_MS,
+  failedTtlMs = DEFAULT_FAILED_TTL_MS,
+  suppressedTtlMs = DEFAULT_SUPPRESSED_TTL_MS,
+  traceSink,
+  logSink,
+} = {}) => {
+  return createMemoryIdempotencyStore({
+    clock,
+    maxEntries,
+    succeededTtlMs,
+    failedTtlMs,
+    suppressedTtlMs,
+    traceSink,
+    logSink,
+    backingRecords: backingStore.records,
+    capabilityOverrides: {
+      class: IDEMPOTENCY_STORE_CAPABILITIES.DURABLE,
+      atomicReserve: "compare-and-set",
+      survivesRestart: true,
+      sharedAcrossWorkers: true,
+      authoritativeForExternalSideEffects: true,
+      staleInFlightRecovery: "explicit",
+    },
+  });
+};
+
+const createFakeServerAuthoritativeIdempotencyStore = ({
+  backingStore = createFakeDurableBackingStore(),
+  clock = defaultClock,
+  traceSink,
+  logSink,
+} = {}) => {
+  return createMemoryIdempotencyStore({
+    clock,
+    traceSink,
+    logSink,
+    backingRecords: backingStore.records,
+    capabilityOverrides: {
+      class: IDEMPOTENCY_STORE_CAPABILITIES.SERVER_AUTHORITATIVE,
+      atomicReserve: "provider-authoritative",
+      retention: validateRetentionPolicy({
+        mode: RETENTION_POLICY_MODES.PROVIDER,
+        delegatedTo: "provider",
+      }),
+      survivesRestart: true,
+      sharedAcrossWorkers: true,
+      authoritativeForExternalSideEffects: true,
+      staleInFlightRecovery: "provider-explicit",
+      maxEntries: undefined,
+    },
+  });
+};
+
+const validateIdempotencyStoreShape = (store) => {
+  const requiredMethods = [
+    "reserve",
+    "markSucceeded",
+    "markFailed",
+    "markSuppressed",
+    "recoverStaleInFlight",
+    "get",
+    "sweep",
+  ];
+  if (!store || typeof store !== "object") {
+    throw new IdempotencyStoreError("idempotencyStore must be an object.", {
+      field: "idempotencyStore",
+    });
+  }
+  for (const method of requiredMethods) {
+    if (typeof store[method] !== "function") {
+      throw new IdempotencyStoreError(`idempotencyStore.${method} must be a function.`, {
+        field: `idempotencyStore.${method}`,
+      });
+    }
+  }
+  return store;
+};
+
+const validateIdempotencyStoreCapability = (
+  store,
+  { environment = "browser", externallyVisibleSideEffect = false, production = false } = {},
+) => {
+  validateIdempotencyStoreShape(store);
+  const capabilities = store.capabilities;
+  if (!capabilities || typeof capabilities !== "object") {
+    throw new IdempotencyStoreError("idempotencyStore.capabilities is required.", {
+      field: "idempotencyStore.capabilities",
+    });
+  }
+  const normalizedCapabilities = createIdempotencyStoreCapabilities(capabilities);
+  const requiresDurableAuthority =
+    production && externallyVisibleSideEffect && PRODUCTION_RUNTIME_ENVIRONMENTS.has(environment);
+
+  if (requiresDurableAuthority) {
+    if (normalizedCapabilities.class === IDEMPOTENCY_STORE_CAPABILITIES.MEMORY) {
+      throw new IdempotencyStoreError(
+        "memory idempotency stores are insufficient for production server/worker side effects.",
+        {
+          field: "idempotencyStore.capabilities.class",
+          value: normalizedCapabilities.class,
+        },
+      );
+    }
+    if (
+      normalizedCapabilities.class === IDEMPOTENCY_STORE_CAPABILITIES.DURABLE &&
+      (!normalizedCapabilities.survivesRestart ||
+        !normalizedCapabilities.sharedAcrossWorkers ||
+        normalizedCapabilities.staleInFlightRecovery !== "explicit")
+    ) {
+      throw new IdempotencyStoreError(
+        "durable idempotency stores must survive restart, be shared across workers, and use explicit stale recovery.",
+        {
+          field: "idempotencyStore.capabilities",
+          value: normalizedCapabilities,
+        },
+      );
+    }
+    if (
+      normalizedCapabilities.class === IDEMPOTENCY_STORE_CAPABILITIES.SERVER_AUTHORITATIVE &&
+      !normalizedCapabilities.authoritativeForExternalSideEffects
+    ) {
+      throw new IdempotencyStoreError(
+        "server-authoritative idempotency stores must declare external side-effect authority.",
+        {
+          field: "idempotencyStore.capabilities.authoritativeForExternalSideEffects",
+        },
+      );
+    }
+  }
+  return normalizedCapabilities;
+};
+
+const assertProductionIdempotencyStore = (store, options = {}) => {
+  return validateIdempotencyStoreCapability(store, {
+    production: true,
+    externallyVisibleSideEffect: true,
+    ...options,
   });
 };
 
@@ -537,12 +836,20 @@ export {
   IDEMPOTENCY_STATUSES,
   IDEMPOTENCY_STORE_CAPABILITIES,
   IdempotencyStoreError,
+  RETENTION_POLICY_MODES,
+  assertProductionIdempotencyStore,
+  createFakeDurableBackingStore,
+  createFakeDurableIdempotencyStore,
+  createFakeServerAuthoritativeIdempotencyStore,
+  createIdempotencyStoreCapabilities,
   createMemoryIdempotencyStore,
   createScopedIdempotencyKey,
+  validateIdempotencyStoreCapability,
   validateIdempotencyAttempt,
   validateIdempotencyKey,
   validateIdempotencyScope,
   validateIdempotencyStatus,
+  validateRetentionPolicy,
   validateRetryPolicy,
   validateTtlMs,
 };
