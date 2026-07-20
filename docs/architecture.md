@@ -10,7 +10,7 @@ GhostOS is the LEAF graph parser and runtime used by `leafgon.com`. It compiles 
 - **Runnable node dispatch**: `src/api/parser/breezyforest.js` maps LEAF node type names to concrete runtime logic implementations.
 - **Node implementations**: `src/api/parser/nodelogic/` contains standard node behavior, including graph boundary nodes, data utilities, dataflow joins, abstractions, wizardry nodes, and `leafelement` adapters.
 - **Adapter library**: `src/api/parser/nodelogic/elements/library/` implements browser, external API, UI, media, and side-effecting adapters such as `http`, `href`, `directus`, `hermes`, and `cortex`.
-- **Runtime safety utilities**: `src/api/parser/runtime/` contains shared runtime infrastructure used by the refactor. The first utility is safe logging and recursive redaction for traces and diagnostics.
+- **Runtime safety utilities**: `src/api/parser/runtime/` contains shared runtime infrastructure used by the refactor, including safe logging, recursive redaction, runtime option resolution, feature flags, and observability sink contracts.
 
 ## Execution Model
 
@@ -32,6 +32,8 @@ The runtime refactor is organized around a few invariants:
 - Config changes affect future work by default unless a node declares recompute behavior.
 - Multi-input nodes declare which lane drives execution.
 
+Runtime rollout is controlled through `GhostRuntimeOptions`-style configuration rather than package code reading host environment variables directly. Feature flags cover default trigger mode, trigger policy enablement, data-triggered targets, idempotent side effects, and dual trace execution. Resolution is layered from package/build defaults through graph and node metadata to per-execution runtime config, with debug-only `globalThis` overrides requiring explicit opt-in.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
@@ -48,6 +50,8 @@ Runtime metadata classifies nodes by behavior:
 ## Security Boundary
 
 Runtime traces and diagnostics must pass through shared redaction before emission. Sensitive keys, headers, payload fields, error objects, request configs, response headers, cookies, bearer tokens, private keys, credential query parameters, and signed URLs are redacted before logs or trace sinks see them. Browser logging is disabled by default unless explicitly enabled for local debugging.
+
+Observability is transport-neutral at the package boundary. Runtime code emits to `traceSink.emit(event)`, `metricSink.record(name, labels, value)`, and `logSink.debug/info/warn/error(event)`. Default sinks are no-op; browser hosts can use callback or in-memory sinks, and server hosts can adapt the same interfaces to logs, OpenTelemetry, Prometheus, or host APIs outside this package.
 
 ## Compatibility Strategy
 
