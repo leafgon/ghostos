@@ -5,6 +5,7 @@ import {
   initStdElementProps,
   listWiredLeafElementNames,
 } from "../nodelogic/elements/library/index.js";
+import { props as rancherAdapterProps } from "../nodelogic/elements/library/rancher.js";
 import { listRunnableLeafNodeTypes } from "../breezyforest.js";
 import {
   NodeClassificationError,
@@ -70,6 +71,37 @@ describe("node runtime classification inventory", () => {
     expect(wiredNames).not.toContain("rancher");
     expect(wiredNames).not.toContain("token");
     expect(wiredNames).not.toContain("hippocampus");
+  });
+
+  it("keeps the Rancher adapter source present but unreachable until migrated", () => {
+    const streamCache = {
+      _lambda_obj: {},
+      _refnode: "test-node",
+    };
+    const classification = resolveLeafElementRuntimeClassification("rancher");
+
+    expect(allowedElementNames()).toContain("rancher");
+    expect(typeof rancherAdapterProps).toBe("function");
+    expect(listWiredLeafElementNames()).not.toContain("rancher");
+    expect(initStdElementProps(streamCache, "rancher")).toBeUndefined();
+    expect(classification).toMatchObject({
+      runtimeTargetKey: "leafelement:rancher",
+      runtimeClass: "blocked",
+      trigger: "none",
+      priority: "P0",
+      status: "blocked",
+      wired: false,
+      rejectForNewGraphs: true,
+    });
+    expect(() => assertLeafElementAdapterSupported("rancher")).toThrow(
+      "leafelement:rancher is not supported by a wired adapter.",
+    );
+    expect(() =>
+      assertNodeAllowedForNewGraphs({
+        type: "leafelement",
+        args: { elementname: "rancher" },
+      }),
+    ).toThrow("leafelement:rancher is not allowed in new graphs.");
   });
 
   it("rejects obsolete and legacy dispatch-only node types for new graphs", () => {
