@@ -74,6 +74,8 @@ The `leafelement:cortex` migration boundary separates job submission from poll/r
 
 The media/device adapter boundary covers `leafelement:mediainput`, `leafelement:midi`, and `leafelement:sound`. Lifecycle open/start/stop/pause/resume is typed control handled by the host, inbound media and MIDI records become data envelopes with stable or documented best-effort source identity, and outbound MIDI/audio/playback commands are data-triggered with browser-local command identity suppression. Browser-local suppression is best-effort for the active session only; hosts that need durable repeat safety must provide durable idempotency outside this package.
 
+Graph boundary and deck structural nodes are policy-mode migration surfaces. `leafinflowport` converts host graph inputs into data envelopes with parent event IDs, while `leafoutflowport` forwards only newly emitted data and does not replay retained graph output on control/config ticks. `leafdeckspade` and `leafdeckheart` declare all-input aggregation with deterministic lane ordering, `leafdeckdiamond` remains data-triggered, and `leafdeckclub` emits initialization as explicit data distinct from lifecycle control. Legacy compatibility paths unwrap runtime envelopes before consumer callbacks.
+
 ## Node Classification
 
 Runtime metadata classifies nodes by behavior:
