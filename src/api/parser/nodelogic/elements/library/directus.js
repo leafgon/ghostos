@@ -5,13 +5,318 @@ import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 
 import axios from "axios";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
+import { isBottle } from "../../../predicates.js";
 import { createSafeLogger } from "../../../runtime/safeLogging.js";
 import _ from "lodash";
 
 const runtimeLogger = createSafeLogger({ component: "leafelement.directus" });
+const DIRECTUS_READ_OPERATIONS = Object.freeze(["get", "read", "list", "query"]);
+const DIRECTUS_MUTATION_OPERATIONS = Object.freeze([
+  "post",
+  "put",
+  "patch",
+  "delete",
+  "create",
+  "update",
+  "upsert",
+]);
+const DIRECTUS_REQUEST_BNAME = "directus-request";
+const DIRECTUS_MUTATION_BNAME = "directus-mutation";
+const RETRYABLE_DIRECTUS_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 const cachekeys = {
   //URI: "_directus_uri",
   //HEADER: "_directus_header",
+};
+
+class DirectusRuntimeError extends Error {
+  constructor(code, message, { statusCode, retryable = false, details = {} } = {}) {
+    super(message);
+    this.name = "DirectusRuntimeError";
+    this.code = code;
+    this.statusCode = statusCode;
+    this.retryable = retryable;
+    this.details = details;
+  }
+}
+
+const maybeTrimString = (value) => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const normalizeDirectusOperation = (operation = "read") => {
+  const normalized = maybeTrimString(operation)?.toLowerCase();
+  if (!normalized) {
+    throw new DirectusRuntimeError(
+      "invalid_directus_operation",
+      "Directus operation is required.",
+      {
+        details: { operation },
+      },
+    );
+  }
+  if (
+    !DIRECTUS_READ_OPERATIONS.includes(normalized) &&
+    !DIRECTUS_MUTATION_OPERATIONS.includes(normalized)
+  ) {
+    throw new DirectusRuntimeError(
+      "unsupported_directus_operation",
+      `Unsupported Directus operation: ${normalized}.`,
+      { details: { operation } },
+    );
+  }
+  return normalized;
+};
+
+const isDirectusReadOperation = (operation) =>
+  DIRECTUS_READ_OPERATIONS.includes(normalizeDirectusOperation(operation));
+
+const isDirectusMutationOperation = (operation) =>
+  DIRECTUS_MUTATION_OPERATIONS.includes(normalizeDirectusOperation(operation));
+
+const normalizeDirectusRequestCommand = (input = {}) => {
+  const content =
+    isBottle(input) &&
+    (input._bname === DIRECTUS_REQUEST_BNAME || input._bname === DIRECTUS_MUTATION_BNAME)
+      ? input._content
+      : input;
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    throw new DirectusRuntimeError(
+      "invalid_directus_command",
+      "Directus command must be an object.",
+      { details: { input } },
+    );
+  }
+  const credentials = content.credentials ?? {};
+  const headers = content.headers ?? content.header ?? {};
+  return {
+    operation: normalizeDirectusOperation(content.operation ?? content.action ?? content.method),
+    endpoint:
+      content.endpoint ?? content.baseUrl ?? content.apiBaseUrl ?? content.uri ?? content.url,
+    collection: content.collection,
+    itemId: content.itemId ?? content.id,
+    query: content.query ?? content.params,
+    headers,
+    token:
+      content.token ??
+      content.accessToken ??
+      content.authToken ??
+      credentials.token ??
+      credentials.accessToken,
+    authorization: content.authorization ?? headers.authorization ?? headers.Authorization,
+    body: content.body ?? content.data ?? content.payload,
+    idempotency: content.idempotency,
+    domainCommandId: content.domainCommandId ?? content.commandId ?? content.intentId,
+    tenantId: content.tenantId,
+    integrationInstanceId: content.integrationInstanceId,
+    producerId: content.producerId,
+    sourceId: content.sourceId ?? content.cursor ?? content.subscriptionId,
+  };
+};
+
+const hasDirectusCredential = (command) =>
+  Boolean(maybeTrimString(command.token) || maybeTrimString(command.authorization));
+
+const assertDirectusMutationCommand = (command) => {
+  if (!isDirectusMutationOperation(command?.operation)) {
+    throw new DirectusRuntimeError(
+      "not_directus_mutation",
+      "Directus mutation helper requires a mutation operation.",
+      { details: { operation: command?.operation } },
+    );
+  }
+  const endpoint = maybeTrimString(command.endpoint);
+  if (!endpoint) {
+    throw new DirectusRuntimeError(
+      "missing_directus_endpoint",
+      "Directus mutation requires an endpoint.",
+      { details: { endpoint: command?.endpoint } },
+    );
+  }
+  const collection = maybeTrimString(command.collection);
+  if (!collection) {
+    throw new DirectusRuntimeError(
+      "missing_directus_collection",
+      "Directus mutation requires a collection.",
+      { details: { collection: command?.collection } },
+    );
+  }
+  if (!hasDirectusCredential(command)) {
+    throw new DirectusRuntimeError(
+      "missing_directus_credential",
+      "Directus mutation requires token or authorization metadata.",
+      { details: { endpoint, collection } },
+    );
+  }
+  const idempotency = command.idempotency ?? {};
+  if (!idempotency.key && !idempotency.domainCommandId && !command.domainCommandId) {
+    throw new DirectusRuntimeError(
+      "missing_directus_idempotency",
+      "Directus mutation requires idempotency metadata.",
+      { details: { endpoint, collection, operation: command.operation } },
+    );
+  }
+  return {
+    ...command,
+    endpoint,
+    collection,
+  };
+};
+
+const resolveDirectusMutationIdempotency = (command) => {
+  const normalized = assertDirectusMutationCommand(command);
+  const idempotency = normalized.idempotency ?? {};
+  return {
+    required: true,
+    key: idempotency.key,
+    scope: idempotency.scope,
+    domainCommandId: idempotency.domainCommandId ?? normalized.domainCommandId,
+    tenantId: idempotency.tenantId ?? normalized.tenantId,
+    integrationInstanceId: idempotency.integrationInstanceId ?? normalized.integrationInstanceId,
+    producerId: idempotency.producerId ?? normalized.producerId,
+  };
+};
+
+const joinDirectusUrl = ({ endpoint, collection, itemId }) => {
+  const base = endpoint.replace(/\/+$/, "");
+  const path = `/items/${encodeURIComponent(collection)}${
+    itemId !== undefined && itemId !== null ? `/${encodeURIComponent(`${itemId}`)}` : ""
+  }`;
+  return `${base}${path}`;
+};
+
+const directusMethodForOperation = (operation) => {
+  const normalized = normalizeDirectusOperation(operation);
+  if (normalized === "create" || normalized === "post") return "POST";
+  if (normalized === "put" || normalized === "upsert") return "PUT";
+  if (normalized === "delete") return "DELETE";
+  return "PATCH";
+};
+
+const resolveDirectusAuthHeaders = (command) => {
+  const authorization = maybeTrimString(command.authorization);
+  if (authorization) {
+    return { Authorization: authorization };
+  }
+  const token = maybeTrimString(command.token);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const buildDirectusMutationRequest = (command) => {
+  const normalized = assertDirectusMutationCommand(command);
+  const method = directusMethodForOperation(normalized.operation);
+  return {
+    method,
+    url: joinDirectusUrl(normalized),
+    headers: {
+      ...normalized.headers,
+      ...resolveDirectusAuthHeaders(normalized),
+      Accept: "application/json",
+      ...(method === "DELETE" ? {} : { "Content-Type": "application/json" }),
+    },
+    body: method === "DELETE" ? undefined : (normalized.body ?? {}),
+    operation: normalized.operation,
+    collection: normalized.collection,
+    itemId: normalized.itemId,
+  };
+};
+
+const parseDirectusResponseBody = async (response) => {
+  if (typeof response?.json === "function") {
+    return response.json();
+  }
+  if (response && typeof response === "object" && "data" in response) {
+    return response.data;
+  }
+  if (typeof response?.text === "function") {
+    return response.text();
+  }
+  return response;
+};
+
+const defaultDirectusTransport = async (request) => {
+  if (typeof fetch !== "function") {
+    throw new DirectusRuntimeError(
+      "missing_directus_transport",
+      "Directus mutation execution requires a transport.",
+      { details: { request } },
+    );
+  }
+  return fetch(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body: request.body === undefined ? undefined : JSON.stringify(request.body),
+  });
+};
+
+const executeDirectusMutationCommand = async ({
+  command,
+  transport = defaultDirectusTransport,
+} = {}) => {
+  const normalized = assertDirectusMutationCommand(normalizeDirectusRequestCommand(command));
+  if (typeof transport !== "function") {
+    throw new DirectusRuntimeError(
+      "missing_directus_transport",
+      "Directus mutation execution requires a transport.",
+      { details: { endpoint: normalized.endpoint, collection: normalized.collection } },
+    );
+  }
+  const request = buildDirectusMutationRequest(normalized);
+  const response = await transport(request, normalized);
+  const body = await parseDirectusResponseBody(response);
+  const statusCode = response?.status;
+  const failed = response?.ok === false || (Number.isInteger(statusCode) && statusCode >= 400);
+  if (failed) {
+    throw new DirectusRuntimeError(
+      `directus_${statusCode ?? "error"}`,
+      `Directus mutation failed with status ${statusCode ?? "unknown"}.`,
+      {
+        statusCode,
+        retryable: RETRYABLE_DIRECTUS_STATUSES.has(statusCode),
+        details: {
+          request,
+          response: {
+            status: statusCode,
+            statusText: response?.statusText,
+            body,
+          },
+        },
+      },
+    );
+  }
+  return {
+    status: statusCode,
+    operation: normalized.operation,
+    collection: normalized.collection,
+    itemId: normalized.itemId,
+    url: request.url,
+    data: body,
+  };
+};
+
+const resolveDirectusReadSourceIdentity = (command) => {
+  const normalized = normalizeDirectusRequestCommand(command);
+  if (!isDirectusReadOperation(normalized.operation)) {
+    throw new DirectusRuntimeError(
+      "not_directus_read",
+      "Directus source identity requires a read operation.",
+      { details: { operation: normalized.operation } },
+    );
+  }
+  const explicitSourceId = maybeTrimString(normalized.sourceId);
+  const endpointIdentity = maybeTrimString(normalized.endpoint)?.split(/[?#]/)[0];
+  return {
+    sourceId:
+      explicitSourceId ??
+      `directus:${endpointIdentity ?? "unknown"}:${
+        maybeTrimString(normalized.collection) ?? "unknown"
+      }:${normalized.operation}`,
+    collection: normalized.collection,
+    operation: normalized.operation,
+  };
 };
 
 const initElementInterface = (_stream_cache) => {
@@ -305,4 +610,19 @@ const initElementInterface = (_stream_cache) => {
 
 const props = initElementInterface;
 
-export { props, cachekeys };
+export {
+  DIRECTUS_MUTATION_OPERATIONS,
+  DIRECTUS_READ_OPERATIONS,
+  DirectusRuntimeError,
+  assertDirectusMutationCommand,
+  buildDirectusMutationRequest,
+  cachekeys,
+  executeDirectusMutationCommand,
+  isDirectusMutationOperation,
+  isDirectusReadOperation,
+  normalizeDirectusOperation,
+  normalizeDirectusRequestCommand,
+  props,
+  resolveDirectusMutationIdempotency,
+  resolveDirectusReadSourceIdentity,
+};
