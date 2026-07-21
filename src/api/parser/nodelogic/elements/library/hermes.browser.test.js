@@ -921,6 +921,15 @@ describe("hermes leafelement", () => {
       ctrlinput$.next({ _bname: "accio" });
       await new Promise((resolve) => setTimeout(resolve, 20));
       instances[0].emit("open", { type: "open" });
+      const attachments = [
+        {
+          id: "att-1",
+          filename: "diagram.png",
+          contentType: "image/png",
+          url: "https://cdn.example.test/diagram.png",
+          size: 1234,
+        },
+      ];
       instances[0].emit("hermes.event", {
         data: JSON.stringify({
           schemaVersion: "v1",
@@ -940,6 +949,7 @@ describe("hermes leafelement", () => {
               },
               content: {
                 text: "wrapped-user-message",
+                attachments,
               },
             },
           },
@@ -951,6 +961,8 @@ describe("hermes leafelement", () => {
       expect(outputs[0]._content.mode).toBe("read");
       expect(outputs[0]._content.ok).toBe(true);
       expect(outputs[0]._content.data.event.eventId).toBe("evt_wrapped_user_message_1");
+      expect(outputs[0]._content.data.event.content.attachments).toEqual(attachments);
+      expect(outputs[0]._content.data.event.payload.event.content.attachments).toEqual(attachments);
     } finally {
       ctrlSub.unsubscribe();
       outSub.unsubscribe();
@@ -1050,6 +1062,67 @@ describe("hermes leafelement", () => {
       expect(outputs[0]._content.mode).toBe("read");
       expect(outputs[0]._content.ok).toBe(true);
       expect(outputs[0]._content.data.event.eventId).toBe("evt_discord_message_received_1");
+    } finally {
+      ctrlSub.unsubscribe();
+      outSub.unsubscribe();
+    }
+  });
+
+  it("mode=read with readTransport=sse dispatches message events with non-empty attachments and no text", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
+    const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
+    const reducedLambdaObj = {
+      _default: makeConfigLambda({
+        mode: "read",
+        readTransport: "sse",
+        instanceId: TEST_INSTANCE_ID,
+        guildId: "123456789012345678",
+        channelId: "223456789012345678",
+        pollIntervalMs: 0,
+        eventSourceFactory,
+      }),
+    };
+    const { output$obj, ctrlinput$ } = initHermesFlow(reducedLambdaObj);
+
+    const attachments = [
+      {
+        id: "att-only-1",
+        filename: "photo.jpg",
+        contentType: "image/jpeg",
+        url: "https://cdn.example.test/photo.jpg",
+        size: 2048,
+      },
+    ];
+    const outputs = [];
+    const outSub = output$obj._stream.subscribe((output) => outputs.push(output));
+    const ctrlSub = output$obj._control._stream.subscribe(() => {});
+    try {
+      ctrlinput$.next({ _bname: "accio" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      instances[0].emit("open", { type: "open" });
+      instances[0].emit("hermes.event", {
+        data: JSON.stringify(
+          makeSseEnvelopeEvent({
+            eventId: "evt_sse_attachment_only_1",
+            sequence: 28,
+            discordEventType: "MESSAGE_CREATE",
+            text: null,
+            payload: {
+              content: {
+                text: null,
+                attachments,
+              },
+            },
+          }),
+        ),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0]._content.mode).toBe("read");
+      expect(outputs[0]._content.ok).toBe(true);
+      expect(outputs[0]._content.data.event.eventId).toBe("evt_sse_attachment_only_1");
+      expect(outputs[0]._content.data.event.content.attachments).toEqual(attachments);
     } finally {
       ctrlSub.unsubscribe();
       outSub.unsubscribe();
