@@ -618,6 +618,186 @@ const fetchWithTimeout = async (fetchImpl, url, requestInit, timeoutMs) => {
   }
 };
 
+const getResponseHeader = (headers, names) => {
+  if (typeof headers?.get !== "function") {
+    return undefined;
+  }
+  for (const name of names) {
+    const value = maybeTrimString(headers.get(name));
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
+const parseContentDispositionFilename = (value) => {
+  const header = maybeTrimString(value);
+  if (!header) {
+    return undefined;
+  }
+
+  const encodedMatch = /(?:^|;)\s*filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i.exec(header);
+  if (encodedMatch?.[1]) {
+    try {
+      return maybeTrimString(decodeURIComponent(encodedMatch[1].replace(/^"|"$/g, "")));
+    } catch (_error) {
+      return maybeTrimString(encodedMatch[1].replace(/^"|"$/g, ""));
+    }
+  }
+
+  const plainMatch = /(?:^|;)\s*filename\s*=\s*("?)([^";]+)\1/i.exec(header);
+  return maybeTrimString(plainMatch?.[2]);
+};
+
+const resolveFilenameFromUrl = (url) => {
+  const normalizedUrl = maybeTrimString(url);
+  if (!normalizedUrl) {
+    return undefined;
+  }
+  const cleanPath = normalizedUrl.split("?")[0].split("#")[0];
+  const rawFilename = cleanPath.split("/").filter(Boolean).pop();
+  if (rawFilename && !rawFilename.endsWith(":")) {
+    try {
+      return maybeTrimString(decodeURIComponent(rawFilename));
+    } catch (_error) {
+      return maybeTrimString(rawFilename);
+    }
+  }
+  try {
+    const parsedUrl = new globalThis.URL(
+      normalizedUrl,
+      globalThis.location?.href ?? "http://localhost",
+    );
+    const filename = parsedUrl.pathname.split("/").filter(Boolean).pop();
+    return filename ? maybeTrimString(decodeURIComponent(filename)) : undefined;
+  } catch (_error) {
+    return maybeTrimString(cleanPath.split("/").filter(Boolean).pop());
+  }
+};
+
+const resolveAttachmentFilename = ({ attachment, response, url }) => {
+  return (
+    maybeTrimString(attachment.filename) ??
+    parseContentDispositionFilename(
+      getResponseHeader(response?.headers, ["content-disposition", "Content-Disposition"]),
+    ) ??
+    resolveFilenameFromUrl(url) ??
+    (maybeTrimString(attachment.id) ? `attachment-${maybeTrimString(attachment.id)}` : undefined)
+  );
+};
+
+const arrayBufferToBase64 = (arrayBuffer) => {
+  const bytes = new Uint8Array(arrayBuffer);
+  const BufferCtor = globalThis.Buffer;
+  if (typeof BufferCtor?.from === "function") {
+    return BufferCtor.from(bytes).toString("base64");
+  }
+
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let idx = 0; idx < bytes.length; idx += chunkSize) {
+    const chunk = bytes.subarray(idx, idx + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return globalThis.btoa(binary);
+};
+
+const isDownloadableAttachmentUrl = (url) => /^https?:\/\//i.test(maybeTrimString(url) ?? "");
+
+const downloadAttachmentAsDataUrl = async ({ attachment, config }) => {
+  const url = maybeTrimString(attachment.url);
+  if (!url || !isDownloadableAttachmentUrl(url)) {
+    return attachment;
+  }
+
+  try {
+    const response = await fetchWithTimeout(
+      config.fetchImpl,
+      url,
+      {
+        method: "GET",
+        headers: {
+          Accept: maybeTrimString(attachment.contentType)
+            ? `${maybeTrimString(attachment.contentType)}, */*`
+            : "*/*",
+        },
+        credentials: "omit",
+      },
+      config.timeoutMs,
+    );
+
+    if (!response?.ok) {
+      return {
+        ...attachment,
+        downloadError: {
+          code: "attachment_download_failed",
+          message: "Hermes attachment download failed.",
+          status: Number.isInteger(response?.status) ? response.status : undefined,
+        },
+      };
+    }
+    if (typeof response.arrayBuffer !== "function") {
+      return {
+        ...attachment,
+        downloadError: {
+          code: "attachment_download_failed",
+          message: "Hermes attachment response did not expose bytes.",
+          status: Number.isInteger(response?.status) ? response.status : undefined,
+        },
+      };
+    }
+
+    const contentType =
+      maybeTrimString(attachment.contentType) ??
+      getResponseHeader(response.headers, ["content-type", "Content-Type"]) ??
+      "application/octet-stream";
+    const base64 = arrayBufferToBase64(await response.arrayBuffer());
+    return {
+      ...attachment,
+      filename: resolveAttachmentFilename({ attachment, response, url }),
+      contentType,
+      url: `data:${contentType};base64,${base64}`,
+    };
+  } catch (error) {
+    return {
+      ...attachment,
+      downloadError: {
+        code: "attachment_download_failed",
+        message: "Hermes attachment download failed.",
+        reason: error?.name === "AbortError" ? "timeout" : "network_error",
+      },
+    };
+  }
+};
+
+const normalizeHermesAttachmentUrls = async (value, config, parentKey = undefined) => {
+  if (Array.isArray(value)) {
+    if (parentKey === "attachments") {
+      return Promise.all(
+        value.map((entry) =>
+          isPlainObject(entry) ? downloadAttachmentAsDataUrl({ attachment: entry, config }) : entry,
+        ),
+      );
+    }
+    return Promise.all(
+      value.map((entry) => normalizeHermesAttachmentUrls(entry, config, undefined)),
+    );
+  }
+
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const entries = await Promise.all(
+    Object.entries(value).map(async ([key, entry]) => [
+      key,
+      await normalizeHermesAttachmentUrls(entry, config, key),
+    ]),
+  );
+  return Object.fromEntries(entries);
+};
+
 const mapStatusToErrorCode = (statusCode) => {
   if (statusCode === 400) return "validation_failed";
   if (statusCode === 401) return "auth_unauthorized";
@@ -1856,7 +2036,7 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
     readStreamState.retryCount = 0;
   };
 
-  const handleEventLikeMessage = (messageEvent, eventType) => {
+  const handleEventLikeMessage = async (messageEvent, eventType) => {
     markFrameSeen();
     markReadStreamAuthPass(readStreamState, config, "stream_open");
     const payload = parseSsePayloadObject(messageEvent?.data);
@@ -1928,14 +2108,15 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
       _stream_cache[cachekeys.CURSOR] = nextCursor;
     }
 
-    const filterResult = resolveHermesEventFilterResult(payload);
+    const normalizedPayload = await normalizeHermesAttachmentUrls(payload, config);
+    const filterResult = resolveHermesEventFilterResult(normalizedPayload);
     if (!filterResult.allowDispatch) {
       hermesTrace("sse.event.filtered", {
         eventType,
         hasContentText: filterResult.hasContentText,
         hasPayloadError: filterResult.hasPayloadError,
         instanceId: config.instanceId,
-        kind: payload.kind,
+        kind: normalizedPayload.kind,
         messageId,
         reason: filterResult.reason,
         discordEventType: filterResult.discordEventType,
@@ -1944,16 +2125,16 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
     }
 
     hermesTrace("sse.event.dispatched", {
-      eventId: payload.eventId,
+      eventId: normalizedPayload.eventId,
       discordEventType: filterResult.discordEventType,
       hasContentText: filterResult.hasContentText,
       hasPayloadError: filterResult.hasPayloadError,
       instanceId: config.instanceId,
-      kind: payload.kind,
-      sequence: payload.sequence,
+      kind: normalizedPayload.kind,
+      sequence: normalizedPayload.sequence,
     });
 
-    const outputEvent = normalizeHermesEventForOutput(payload);
+    const outputEvent = normalizeHermesEventForOutput(normalizedPayload);
     queueReadStreamOutput(
       readStreamState,
       toElementSuccessOutput({
@@ -2054,14 +2235,20 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
 
   readStreamState.detachFns = [
     attachEventSourceListener(readStreamState.source, "open", handleStreamOpen),
-    attachEventSourceListener(readStreamState.source, "message", (event) =>
-      handleEventLikeMessage(event, "message"),
+    attachEventSourceListener(
+      readStreamState.source,
+      "message",
+      (event) => void handleEventLikeMessage(event, "message"),
     ),
-    attachEventSourceListener(readStreamState.source, "hermes.event", (event) =>
-      handleEventLikeMessage(event, "hermes.event"),
+    attachEventSourceListener(
+      readStreamState.source,
+      "hermes.event",
+      (event) => void handleEventLikeMessage(event, "hermes.event"),
     ),
-    attachEventSourceListener(readStreamState.source, "hermes.heartbeat", (event) =>
-      handleEventLikeMessage(event, "hermes.heartbeat"),
+    attachEventSourceListener(
+      readStreamState.source,
+      "hermes.heartbeat",
+      (event) => void handleEventLikeMessage(event, "hermes.heartbeat"),
     ),
     attachEventSourceListener(readStreamState.source, "error", handleStreamError),
   ];
@@ -2618,7 +2805,11 @@ const executeReadFlowPoll = async ({ config, _stream_cache }) => {
     requestId: responsePayload?.requestId,
   });
 
-  return readRecords.map((event) => {
+  const normalizedReadRecords = await Promise.all(
+    readRecords.map((event) => normalizeHermesAttachmentUrls(event, config)),
+  );
+
+  return normalizedReadRecords.map((event) => {
     return toElementSuccessOutput({
       mode: "read",
       data: {
