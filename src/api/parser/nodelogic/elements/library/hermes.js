@@ -1194,8 +1194,17 @@ const resolveTextFromUnknownContent = (value) => {
   return undefined;
 };
 
-const resolveEnvelopeContentText = (candidate) => {
-  const contentCandidates = [
+const resolveAttachmentsFromUnknownContent = (value) => {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  return Array.isArray(value.attachments) && value.attachments.length > 0
+    ? value.attachments
+    : undefined;
+};
+
+const resolveEnvelopeContentCandidates = (candidate) => {
+  return [
     candidate?.content,
     candidate?.contentText,
     candidate?.text,
@@ -1205,8 +1214,10 @@ const resolveEnvelopeContentText = (candidate) => {
     candidate?.discord?.message?.content,
     candidate?.discord?.message?.text,
   ];
+};
 
-  for (const contentCandidate of contentCandidates) {
+const resolveEnvelopeContentText = (candidate) => {
+  for (const contentCandidate of resolveEnvelopeContentCandidates(candidate)) {
     const resolvedText = resolveTextFromUnknownContent(contentCandidate);
     if (resolvedText) {
       return resolvedText;
@@ -1217,6 +1228,24 @@ const resolveEnvelopeContentText = (candidate) => {
 
 const hasEnvelopeContentText = (candidate) => {
   return resolveEnvelopeContentText(candidate) !== undefined;
+};
+
+const resolveEnvelopeContentAttachments = (candidate) => {
+  for (const contentCandidate of resolveEnvelopeContentCandidates(candidate)) {
+    const resolvedAttachments = resolveAttachmentsFromUnknownContent(contentCandidate);
+    if (resolvedAttachments) {
+      return resolvedAttachments;
+    }
+  }
+  return undefined;
+};
+
+const hasEnvelopeContentAttachments = (candidate) => {
+  return resolveEnvelopeContentAttachments(candidate) !== undefined;
+};
+
+const hasEnvelopeMessageContent = (candidate) => {
+  return hasEnvelopeContentText(candidate) || hasEnvelopeContentAttachments(candidate);
 };
 
 const hasExplicitNonUserActorSignal = (candidate) => {
@@ -1303,13 +1332,17 @@ const resolveHermesUserMessagePayload = (payload, envelopeObjects) => {
     const gatewayEventType = normalizeDiscordEventTypeToken(candidate?.kind);
     const discordEventType = normalizeDiscordEventTypeToken(candidate?.discord?.eventType);
     const contentText = resolveEnvelopeContentText(candidate);
+    const contentAttachments = resolveEnvelopeContentAttachments(candidate);
     return {
       candidate,
       kind,
       gatewayEventType,
       discordEventType,
       contentText,
+      contentAttachments,
       hasContentText: contentText !== undefined,
+      hasContentAttachments: contentAttachments !== undefined,
+      hasMessageContent: contentText !== undefined || contentAttachments !== undefined,
       hasUserMessageKindSignal:
         hasUserMessageKindSignal || (kind !== undefined && HERMES_USER_MESSAGE_KINDS.has(kind)),
       hasMessageCreateSignal:
@@ -1320,7 +1353,7 @@ const resolveHermesUserMessagePayload = (payload, envelopeObjects) => {
 
   const directMatch = descriptors.find((descriptor) => {
     return (
-      descriptor.hasContentText &&
+      descriptor.hasMessageContent &&
       (descriptor.hasUserMessageKindSignal || descriptor.hasMessageCreateSignal)
     );
   });
@@ -1335,8 +1368,8 @@ const resolveHermesUserMessagePayload = (payload, envelopeObjects) => {
     return undefined;
   }
 
-  const textOnlyMatch = descriptors.find((descriptor) => descriptor.hasContentText);
-  return textOnlyMatch;
+  const contentOnlyMatch = descriptors.find((descriptor) => descriptor.hasMessageContent);
+  return contentOnlyMatch;
 };
 
 const resolveHermesEnvelopePayload = (payload, envelopeObjects) => {
@@ -1366,7 +1399,9 @@ const resolveHermesEnvelopePayload = (payload, envelopeObjects) => {
     return discordEventCandidate;
   }
 
-  const contentCandidate = resolvedObjects.find((candidate) => hasEnvelopeContentText(candidate));
+  const contentCandidate = resolvedObjects.find((candidate) =>
+    hasEnvelopeMessageContent(candidate),
+  );
   if (contentCandidate) {
     return contentCandidate;
   }
@@ -1403,6 +1438,12 @@ const resolveHermesEventFilterResult = (payload) => {
     : normalizedPayload
       ? hasEnvelopeContentText(normalizedPayload)
       : false;
+  const hasContentAttachments = userMessagePayload?.hasContentAttachments
+    ? true
+    : normalizedPayload
+      ? hasEnvelopeContentAttachments(normalizedPayload)
+      : false;
+  const hasMessageContent = hasContentText || hasContentAttachments;
   const hasUserMessage = userMessagePayload !== undefined;
 
   if (kind === "runtime.observed" && !hasPayloadError && !hasUserMessage) {
@@ -1411,6 +1452,7 @@ const resolveHermesEventFilterResult = (payload) => {
       reason: "runtime_observed_noise",
       discordEventType,
       hasContentText,
+      hasContentAttachments,
       hasPayloadError,
     };
   }
@@ -1421,6 +1463,7 @@ const resolveHermesEventFilterResult = (payload) => {
       reason: "payload_error",
       discordEventType,
       hasContentText,
+      hasContentAttachments,
       hasPayloadError,
     };
   }
@@ -1431,16 +1474,18 @@ const resolveHermesEventFilterResult = (payload) => {
       reason: "not_user_message",
       discordEventType,
       hasContentText,
+      hasContentAttachments,
       hasPayloadError,
     };
   }
 
-  if (!hasUserMessage || !hasContentText) {
+  if (!hasUserMessage || !hasMessageContent) {
     return {
       allowDispatch: false,
       reason: "not_user_message",
       discordEventType,
       hasContentText,
+      hasContentAttachments,
       hasPayloadError,
     };
   }
@@ -1450,7 +1495,52 @@ const resolveHermesEventFilterResult = (payload) => {
     reason: "user_message",
     discordEventType,
     hasContentText,
+    hasContentAttachments,
     hasPayloadError,
+  };
+};
+
+const mergeHermesContentForOutput = (eventContent, normalizedContent) => {
+  if (normalizedContent === undefined) {
+    return eventContent;
+  }
+  if (eventContent === undefined || eventContent === null) {
+    return normalizedContent;
+  }
+  if (isPlainObject(eventContent) && isPlainObject(normalizedContent)) {
+    return {
+      ...eventContent,
+      ...normalizedContent,
+    };
+  }
+  return normalizedContent;
+};
+
+const cloneHermesJsonValue = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => cloneHermesJsonValue(entry));
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, cloneHermesJsonValue(entry)]),
+    );
+  }
+  return value;
+};
+
+const normalizeHermesEventForOutput = (payload) => {
+  const envelopeObjects = collectHermesEnvelopeObjects(payload);
+  const userMessagePayload = resolveHermesUserMessagePayload(payload, envelopeObjects);
+  const normalizedPayload =
+    userMessagePayload?.candidate ?? resolveHermesEnvelopePayload(payload, envelopeObjects);
+  const normalizedContent = normalizedPayload?.content;
+  if (normalizedContent === undefined || normalizedPayload === payload) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    content: mergeHermesContentForOutput(payload.content, cloneHermesJsonValue(normalizedContent)),
   };
 };
 
@@ -1863,13 +1953,15 @@ const openSseReadStream = async ({ config, _stream_cache, readStreamState, trigg
       sequence: payload.sequence,
     });
 
+    const outputEvent = normalizeHermesEventForOutput(payload);
     queueReadStreamOutput(
       readStreamState,
       toElementSuccessOutput({
         mode: "read",
         data: {
-          schemaVersion: typeof payload.schemaVersion === "string" ? payload.schemaVersion : "v1",
-          event: payload,
+          schemaVersion:
+            typeof outputEvent.schemaVersion === "string" ? outputEvent.schemaVersion : "v1",
+          event: outputEvent,
           cursor: nextCursor,
           hasMore: false,
         },
