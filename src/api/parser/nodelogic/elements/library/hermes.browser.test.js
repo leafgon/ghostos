@@ -144,18 +144,6 @@ const makeJsonResponse = (status, body) => {
   };
 };
 
-const makeBinaryResponse = (status, body, headers = {}) => {
-  const bytes = new globalThis.TextEncoder().encode(body);
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    headers: {
-      get: (key) => headers[key.toLowerCase()] ?? headers[key] ?? null,
-    },
-    arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
-  };
-};
-
 const makeSseEnvelopeEvent = ({
   eventId,
   sequence,
@@ -911,15 +899,7 @@ describe("hermes leafelement", () => {
   });
 
   it("mode=read with readTransport=sse dispatches wrapped user message payloads", async () => {
-    global.fetch = vi.fn().mockImplementation((requestUrl) => {
-      const href = requestHref(requestUrl);
-      if (href.includes("https://cdn.example.test/diagram.png")) {
-        return Promise.resolve(
-          makeBinaryResponse(200, "image-bytes", { "content-type": "image/png" }),
-        );
-      }
-      return Promise.resolve(makeSseProbeResponse(200));
-    });
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
     const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
     const reducedLambdaObj = {
       _default: makeConfigLambda({
@@ -982,7 +962,7 @@ describe("hermes leafelement", () => {
           id: "att-1",
           filename: "diagram.png",
           contentType: "image/png",
-          url: "data:image/png;base64,aW1hZ2UtYnl0ZXM=",
+          url: "https://cdn.example.test/diagram.png",
           size: 1234,
         },
       ];
@@ -993,6 +973,10 @@ describe("hermes leafelement", () => {
       expect(outputs[0]._content.data.event.content.attachments).toEqual(expectedAttachments);
       expect(outputs[0]._content.data.event.payload.event.content.attachments).toEqual(
         expectedAttachments,
+      );
+      expect(global.fetch).not.toHaveBeenCalledWith(
+        "https://cdn.example.test/diagram.png",
+        expect.anything(),
       );
     } finally {
       ctrlSub.unsubscribe();
@@ -1099,16 +1083,8 @@ describe("hermes leafelement", () => {
     }
   });
 
-  it("mode=read with readTransport=sse dispatches message events with non-empty attachments and no text", async () => {
-    global.fetch = vi.fn().mockImplementation((requestUrl) => {
-      const href = requestHref(requestUrl);
-      if (href.includes("/photo.jpg")) {
-        return Promise.resolve(
-          makeBinaryResponse(200, "photo-bytes", { "content-type": "image/jpeg" }),
-        );
-      }
-      return Promise.resolve(makeSseProbeResponse(200));
-    });
+  it("mode=read with readTransport=sse preserves PDF attachment URLs with no text", async () => {
+    global.fetch = vi.fn().mockResolvedValue(makeSseProbeResponse(200));
     const { instances, eventSourceFactory } = makeFakeEventSourceRuntime();
     const reducedLambdaObj = {
       _default: makeConfigLambda({
@@ -1126,8 +1102,8 @@ describe("hermes leafelement", () => {
     const attachments = [
       {
         id: "att-only-1",
-        contentType: "image/jpeg",
-        url: "https://cdn.example.test/attachments/1527498821528195215/1529135833767219370/photo.jpg?ex=6a60d638&is=6a5f84b8&hm=abc",
+        contentType: "application/pdf",
+        url: "https://cdn.example.test/attachments/1527498821528195215/1529135833767219370/by-design_0.pdf?ex=6a60d638&is=6a5f84b8&hm=abc",
         size: 2048,
       },
     ];
@@ -1159,9 +1135,8 @@ describe("hermes leafelement", () => {
       const expectedAttachments = [
         {
           id: "att-only-1",
-          filename: "photo.jpg",
-          contentType: "image/jpeg",
-          url: "data:image/jpeg;base64,cGhvdG8tYnl0ZXM=",
+          contentType: "application/pdf",
+          url: "https://cdn.example.test/attachments/1527498821528195215/1529135833767219370/by-design_0.pdf?ex=6a60d638&is=6a5f84b8&hm=abc",
           size: 2048,
         },
       ];
@@ -1170,6 +1145,9 @@ describe("hermes leafelement", () => {
       expect(outputs[0]._content.ok).toBe(true);
       expect(outputs[0]._content.data.event.eventId).toBe("evt_sse_attachment_only_1");
       expect(outputs[0]._content.data.event.content.attachments).toEqual(expectedAttachments);
+      expect(global.fetch.mock.calls.map(([requestUrl]) => requestHref(requestUrl))).not.toContain(
+        attachments[0].url,
+      );
     } finally {
       ctrlSub.unsubscribe();
       outSub.unsubscribe();

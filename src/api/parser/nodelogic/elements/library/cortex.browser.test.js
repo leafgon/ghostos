@@ -305,6 +305,39 @@ describe("cortex leafelement", () => {
     expect(output._content.status).toBe("succeeded");
   });
 
+  it("preserves file URL payload refs without translating them to data URLs", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(makeJsonResponse(202, acceptedResponse("job-file-url")))
+      .mockResolvedValueOnce(makeJsonResponse(200, completedResponse("job-file-url")));
+
+    const fileUrl = "https://files.example.test/uploads/source.pdf";
+    const { output$obj, datainput$, ctrlinput$ } = initCortexFlow();
+    const [output] = await collectOutputs({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: intentBottle({
+        payloadRef: {
+          uri: fileUrl,
+          mimeType: "application/pdf",
+        },
+        idempotencyKey: "idem-file-url",
+      }),
+    });
+
+    const submittedBody = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(submittedBody.payloadRef).toEqual({
+      uri: fileUrl,
+      mimeType: "application/pdf",
+    });
+    expect(submittedBody.payloadRef.uri).not.toContain("base64,");
+    expect(global.fetch.mock.calls.map(([requestUrl]) => requestHref(requestUrl))).not.toContain(
+      fileUrl,
+    );
+    expect(output._content.status).toBe("succeeded");
+  });
+
   it("submits async mode through the same accepted response and maps uri payloadRef results", async () => {
     global.fetch = vi
       .fn()

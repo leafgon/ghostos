@@ -12,6 +12,7 @@ export default defineConfig([
   {
     ignores: [
       "**/*.d.ts",
+      ".codex-worktrees/**",
       "lib/**",
       "imported/**",
       "node_modules/**",
