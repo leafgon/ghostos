@@ -1,11 +1,12 @@
 import { BehaviorSubject, Subject, firstValueFrom } from "rxjs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { LEAFELEMENT_ADAPTER_REGISTRY } from "./index.js";
 import {
   STORE_SCHEMA_VERSION,
   FETCH_SCHEMA_VERSION,
   createInMemoryBlobStorageAdapter,
+  createLeafServerBlobStorageAdapter,
   executeBlobFetchBottle,
   executeBlobStoreBottle,
   normalizeBlobObjectId,
@@ -48,6 +49,16 @@ const fetchBottle = (objectId = "logo", overrides = {}) => ({
   blobElementId: "blob-node-uuid",
   objectId,
   ...overrides,
+});
+
+const jsonResponse = ({ status = 200, body = {}, headers = {} } = {}) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  headers: {
+    get: (name) => headers[name] ?? headers[name.toLowerCase()] ?? headers[name.toUpperCase()],
+  },
+  json: async () => body,
+  text: async () => JSON.stringify(body),
 });
 
 describe("leafelement:blob contract helpers", () => {
@@ -261,5 +272,172 @@ describe("leafelement:blob contract helpers", () => {
       objectId: "flow-logo",
     });
     expect(context.blobStorageAdapter.getExecutionCounts().putObject).toBe(1);
+  });
+
+  it("maps the host adapter to the first-party leaf-server blob storage API", async () => {
+    const storedMetadata = {
+      schemaVersion: "ghostos.blob_data_file.v1",
+      blobElementId: "blob-node-uuid",
+      objectId: "logo",
+      objectType: "file",
+      contentType: "image/png",
+      contentLength: 12345,
+      contentHash: HASH_A,
+      storage: {
+        accountName: "server-account",
+        containerName: "server-container",
+        blobName: "tenant-a/domain-a/app-a/blob-node-uuid/logo",
+      },
+      etag: "etag-1",
+      assetRevision: 1,
+      lastModifiedAt: "2026-07-26T00:00:00Z",
+    };
+    const fetchImpl = vi.fn(async (url, init) => {
+      if (init.method === "HEAD") {
+        return jsonResponse({
+          status: 404,
+          body: {
+            schemaVersion: "ghostos.blob_failure.v1",
+            code: "missing_object",
+            retryable: false,
+            safeMessage: "Object was not found.",
+            correlationId: "corr-a",
+          },
+        });
+      }
+      if (url.endsWith("/api/v1/blob-storage/runtime-file-refs/runtime-ref-a:resolve")) {
+        return jsonResponse({
+          body: {
+            payloadRef: { kind: "temp-file", ref: "runtime-ref-a" },
+            contentType: "image/png",
+            contentLength: 12345,
+            contentHash: HASH_A,
+          },
+        });
+      }
+      if (init.method === "PUT" || init.method === "GET" || init.method === "DELETE") {
+        return jsonResponse({ body: storedMetadata });
+      }
+      return jsonResponse({
+        status: 500,
+        body: {
+          schemaVersion: "ghostos.blob_failure.v1",
+          code: "storage_unavailable",
+          retryable: true,
+          safeMessage: "Unexpected request.",
+          correlationId: "corr-a",
+        },
+      });
+    });
+    const adapter = createLeafServerBlobStorageAdapter({
+      baseUrl: "https://www.leafgon.com",
+      fetchImpl,
+    });
+    const context = createContext({ blobStorageAdapter: adapter });
+
+    const stored = await executeBlobStoreBottle(
+      storeBottle({
+        payloadRef: {
+          kind: "runtime-file-ref",
+          ref: "runtime-ref-a",
+        },
+      }),
+      context,
+    );
+    await adapter.getObject({
+      tenantId: context.tenantId,
+      graphDomainId: context.graphDomainId,
+      graphAppId: context.graphAppId,
+      blobElementId: stored.blobElementId,
+      objectId: stored.objectId,
+      correlationId: context.correlationId,
+    });
+    await adapter.deleteObject({
+      tenantId: context.tenantId,
+      graphDomainId: context.graphDomainId,
+      graphAppId: context.graphAppId,
+      blobElementId: stored.blobElementId,
+      objectId: stored.objectId,
+      expectedAssetRevision: stored.assetRevision,
+      correlationId: context.correlationId,
+    });
+
+    expect(stored).toEqual(storedMetadata);
+    const urls = fetchImpl.mock.calls.map(([url]) => url);
+    expect(urls).toEqual([
+      "https://www.leafgon.com/api/v1/blob-storage/objects/domain-a/app-a/blob-node-uuid/logo",
+      "https://www.leafgon.com/api/v1/blob-storage/runtime-file-refs/runtime-ref-a:resolve",
+      "https://www.leafgon.com/api/v1/blob-storage/objects/domain-a/app-a/blob-node-uuid/logo",
+      "https://www.leafgon.com/api/v1/blob-storage/objects/domain-a/app-a/blob-node-uuid/logo",
+      "https://www.leafgon.com/api/v1/blob-storage/objects/domain-a/app-a/blob-node-uuid/logo",
+    ]);
+    expect(urls.some((url) => url.includes("/_leafgon/api/v1/page-assets/"))).toBe(false);
+
+    const putBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(putBody).toMatchObject({
+      contentType: "image/png",
+      contentLength: 12345,
+      contentHash: HASH_A,
+      operation: "create",
+      correlationId: "corr-a",
+    });
+    expect(putBody).not.toHaveProperty("tenantId");
+    expect(putBody).not.toHaveProperty("actorRef");
+    expect(putBody).not.toHaveProperty("storage");
+    expect(putBody).not.toHaveProperty("storageAccountName");
+  });
+
+  it("returns metadata for leaf-server HEAD responses and typed failures for denied responses", async () => {
+    const adapter = createLeafServerBlobStorageAdapter({
+      fetchImpl: vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonResponse({
+            status: 200,
+            headers: {
+              "x-blob-content-hash": HASH_A,
+              "x-blob-content-type": "image/png",
+              "x-blob-content-length": "12345",
+              "x-blob-asset-revision": "7",
+              etag: "etag-7",
+              "last-modified": "2026-07-26T00:00:00Z",
+            },
+          }),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({
+            status: 403,
+            body: {
+              schemaVersion: "ghostos.blob_failure.v1",
+              code: "storage_denied",
+              retryable: false,
+              safeMessage: "Page access is denied.",
+              correlationId: "corr-a",
+            },
+          }),
+        ),
+    });
+
+    await expect(
+      adapter.headObject({
+        graphDomainId: "domain-a",
+        graphAppId: "app-a",
+        blobElementId: "blob-node-uuid",
+        objectId: "logo",
+      }),
+    ).resolves.toMatchObject({
+      schemaVersion: "ghostos.blob_data_file.v1",
+      objectId: "logo",
+      contentHash: HASH_A,
+      assetRevision: 7,
+    });
+    await expect(
+      adapter.getObject({
+        graphDomainId: "domain-a",
+        graphAppId: "app-a",
+        blobElementId: "blob-node-uuid",
+        objectId: "logo",
+      }),
+    ).rejects.toMatchObject({ code: "storage_denied" });
   });
 });

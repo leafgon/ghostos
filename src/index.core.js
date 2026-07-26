@@ -46,6 +46,7 @@ import { _leafgraph } from "./api/parser/nodelogic/abstraction/index.js";
 import { _leafelement } from "./api/parser/nodelogic/elements/index.js";
 import {
   createInMemoryBlobStorageAdapter,
+  createLeafServerBlobStorageAdapter,
   executeBlobBottle,
   executeBlobFetchBottle,
   executeBlobStoreBottle,
@@ -98,6 +99,7 @@ export {
   _leafgraph,
   _leafelement,
   createInMemoryBlobStorageAdapter,
+  createLeafServerBlobStorageAdapter,
   executeBlobBottle,
   executeBlobFetchBottle,
   executeBlobStoreBottle,

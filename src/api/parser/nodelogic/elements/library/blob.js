@@ -438,6 +438,193 @@ const executeBlobFetchBottle = async (rawBottle, executionContext) => {
   }
 };
 
+const resolveLeafServerBlobStorageUrl = ({ baseUrl = "", path }) => {
+  const normalizedBase = `${baseUrl ?? ""}`.replace(/\/+$/, "");
+  const normalizedPath = `${path ?? ""}`.replace(/^\/+/, "");
+  if (!normalizedBase) {
+    return `/${normalizedPath}`;
+  }
+  return `${normalizedBase}/${normalizedPath}`;
+};
+
+const encodeLeafServerPathSegment = (value) => encodeURIComponent(`${value ?? ""}`);
+
+const leafServerObjectPath = ({ graphDomainId, graphAppId, blobElementId, objectId }) =>
+  [
+    "api/v1/blob-storage/objects",
+    encodeLeafServerPathSegment(graphDomainId),
+    encodeLeafServerPathSegment(graphAppId),
+    encodeLeafServerPathSegment(blobElementId),
+    encodeLeafServerPathSegment(objectId),
+  ].join("/");
+
+const leafServerJsonRequest = (body) => ({
+  headers: {
+    "content-type": "application/json",
+  },
+  body: JSON.stringify(body),
+});
+
+const parseLeafServerBlobFailure = async (response) => {
+  try {
+    const payload = await response.json();
+    if (isFailure(payload)) {
+      return payload;
+    }
+    return createBlobFailure("storage_unavailable", {
+      retryable: response?.status >= 500,
+      safeMessage: payload?.error?.message,
+    });
+  } catch (_error) {
+    return createBlobFailure("storage_unavailable", {
+      retryable: response?.status >= 500,
+    });
+  }
+};
+
+const readLeafServerBlobJson = async (response) => {
+  const payload = await response.json();
+  if (isFailure(payload)) {
+    throw new BlobRuntimeError(payload.code, payload.safeMessage, {
+      retryable: payload.retryable,
+    });
+  }
+  return payload;
+};
+
+const requireLeafServerFetch = (fetchImpl) => {
+  if (typeof fetchImpl !== "function") {
+    throw new BlobRuntimeError("missing_execution_context", "Leaf-server blob fetch is missing.");
+  }
+  return fetchImpl;
+};
+
+const createLeafServerHeadMetadata = (input, response) => {
+  const headers = response?.headers;
+  const header = (name) =>
+    typeof headers?.get === "function"
+      ? (headers.get(name) ?? headers.get(name.toLowerCase()))
+      : undefined;
+  const revision = Number.parseInt(header("x-blob-asset-revision") ?? "", 10);
+  const length = Number.parseInt(header("x-blob-content-length") ?? "", 10);
+  return {
+    schemaVersion: DATA_FILE_SCHEMA_VERSION,
+    blobElementId: input.blobElementId,
+    objectId: input.objectId,
+    objectType: "file",
+    contentType: header("x-blob-content-type"),
+    contentLength: Number.isSafeInteger(length) ? length : undefined,
+    contentHash: header("x-blob-content-hash"),
+    storage: undefined,
+    etag: header("etag"),
+    assetRevision: Number.isSafeInteger(revision) ? revision : undefined,
+    lastModifiedAt: header("last-modified"),
+  };
+};
+
+const requestLeafServerBlobStorage = async ({
+  baseUrl,
+  credentials,
+  fetchImpl,
+  method,
+  path,
+  body,
+}) => {
+  const request = {
+    method,
+    credentials,
+  };
+  if (body !== undefined) {
+    Object.assign(request, leafServerJsonRequest(body));
+  }
+  const response = await fetchImpl(resolveLeafServerBlobStorageUrl({ baseUrl, path }), request);
+  if (!response?.ok) {
+    throw asRuntimeError(await parseLeafServerBlobFailure(response));
+  }
+  return response;
+};
+
+const createLeafServerBlobStorageAdapter = ({
+  baseUrl = "",
+  fetchImpl = globalThis.fetch,
+  credentials = "include",
+} = {}) => {
+  const resolvedFetch = requireLeafServerFetch(fetchImpl);
+  return {
+    resolveRuntimeFileRef: async (input) => {
+      const ref = encodeLeafServerPathSegment(input.ref);
+      const response = await requestLeafServerBlobStorage({
+        baseUrl,
+        credentials,
+        fetchImpl: resolvedFetch,
+        method: "POST",
+        path: `api/v1/blob-storage/runtime-file-refs/${ref}:resolve`,
+        body: {
+          graphDomainId: input.graphDomainId,
+          graphAppId: input.graphAppId,
+          blobElementId: input.blobElementId,
+          contentHash: input.contentHash,
+          correlationId: input.correlationId,
+        },
+      });
+      return readLeafServerBlobJson(response);
+    },
+    headObject: async (input) => {
+      const response = await requestLeafServerBlobStorage({
+        baseUrl,
+        credentials,
+        fetchImpl: resolvedFetch,
+        method: "HEAD",
+        path: leafServerObjectPath(input),
+      });
+      return createLeafServerHeadMetadata(input, response);
+    },
+    putObject: async (input) => {
+      const response = await requestLeafServerBlobStorage({
+        baseUrl,
+        credentials,
+        fetchImpl: resolvedFetch,
+        method: "PUT",
+        path: leafServerObjectPath(input),
+        body: {
+          contentType: input.contentType,
+          contentLength: input.contentLength,
+          contentHash: input.contentHash,
+          payloadRef: input.payloadRef,
+          operation: input.operation,
+          expectedAssetRevision: input.expectedAssetRevision,
+          correlationId: input.correlationId,
+        },
+      });
+      return readLeafServerBlobJson(response);
+    },
+    getObject: async (input) => {
+      const response = await requestLeafServerBlobStorage({
+        baseUrl,
+        credentials,
+        fetchImpl: resolvedFetch,
+        method: "GET",
+        path: leafServerObjectPath(input),
+      });
+      return readLeafServerBlobJson(response);
+    },
+    deleteObject: async (input) => {
+      const response = await requestLeafServerBlobStorage({
+        baseUrl,
+        credentials,
+        fetchImpl: resolvedFetch,
+        method: "DELETE",
+        path: leafServerObjectPath(input),
+        body: {
+          expectedAssetRevision: input.expectedAssetRevision,
+          correlationId: input.correlationId,
+        },
+      });
+      return readLeafServerBlobJson(response);
+    },
+  };
+};
+
 const executeBlobBottle = async (bottle, executionContext) => {
   const content = unwrapBottle(bottle);
   if (content?.schemaVersion === STORE_SCHEMA_VERSION) {
@@ -658,6 +845,7 @@ export {
   assignDeterministicObjectId,
   createBlobFailure,
   createInMemoryBlobStorageAdapter,
+  createLeafServerBlobStorageAdapter,
   executeBlobBottle,
   executeBlobFetchBottle,
   executeBlobStoreBottle,

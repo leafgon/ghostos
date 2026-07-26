@@ -45,6 +45,7 @@ import { _edge_style_dict } from "./index.core.js";
 import { _leafgraph } from "./index.core.js";
 import { _leafelement } from "./index.core.js";
 import { createInMemoryBlobStorageAdapter } from "./index.core.js";
+import { createLeafServerBlobStorageAdapter } from "./index.core.js";
 import { executeBlobBottle } from "./index.core.js";
 import { executeBlobFetchBottle } from "./index.core.js";
 import { executeBlobStoreBottle } from "./index.core.js";
@@ -97,6 +98,7 @@ export {
   _leafgraph,
   _leafelement,
   createInMemoryBlobStorageAdapter,
+  createLeafServerBlobStorageAdapter,
   executeBlobBottle,
   executeBlobFetchBottle,
   executeBlobStoreBottle,
