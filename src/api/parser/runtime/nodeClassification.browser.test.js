@@ -129,7 +129,16 @@ describe("node runtime classification inventory", () => {
     const wiredNames = listWiredLeafElementNames();
 
     expect(wiredNames).toEqual(
-      expect.arrayContaining(["http", "href", "directus", "hermes", "cortex", "gnav", "popup"]),
+      expect.arrayContaining([
+        "http",
+        "href",
+        "directus",
+        "hermes",
+        "cortex",
+        "gnav",
+        "popup",
+        "blob",
+      ]),
     );
     expect(wiredNames).not.toContain("rancher");
     expect(wiredNames).not.toContain("token");
@@ -265,7 +274,7 @@ describe("node runtime classification inventory", () => {
   });
 
   it("flags P0 adapters until idempotency, retry, replay, and redaction metadata are present", () => {
-    ["http", "href", "directus", "hermes", "cortex", "rancher"].forEach((elementname) => {
+    ["http", "href", "directus", "hermes", "cortex", "rancher", "blob"].forEach((elementname) => {
       const classification = resolveLeafElementRuntimeClassification(elementname);
 
       expect(classification.priority).toBe("P0");
