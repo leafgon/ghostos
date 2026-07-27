@@ -587,6 +587,7 @@ const _leafstdlib_dataflow_api = (type) => {
           "hermes",
           "cortex",
           "hippocampus",
+          "blob",
         ],
         banduplicatename: false,
         banmultiplenode: false,
