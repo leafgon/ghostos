@@ -8,6 +8,8 @@ import {
   redactValue,
 } from "./safeLogging.js";
 
+const API_TOKEN = ["leaf", "live", "token-node-1", "secret"].join("_");
+
 const assertNoSecretLeak = (value) => {
   const serialized = JSON.stringify(value);
   expect(serialized).not.toContain("secret-token");
@@ -65,6 +67,36 @@ describe("runtime safe logging", () => {
     expect(redacted.headers["x-request-id"]).toBe("req-1");
     expect(redacted.fallback).toBe(`Bearer ${REDACTED}`);
     assertNoSecretLeak(redacted);
+  });
+
+  it("redacts raw API token leaf event material while preserving diagnostic metadata", () => {
+    const redacted = redactValue({
+      extensions: {
+        leafEvents: [
+          {
+            type: "apiToken.created",
+            version: "leaf.apiToken.v1",
+            tokenId: "token-node-1",
+            token: API_TOKEN,
+            message: `created ${API_TOKEN}`,
+            provenance: "user-a:main",
+            scopes: ["graphql:write"],
+            createdAt: "2026-07-12T12:00:00Z",
+            expiresAt: "2026-10-10T12:00:00Z",
+          },
+        ],
+      },
+    });
+
+    const event = redacted.extensions.leafEvents[0];
+    expect(event.token).toBe(REDACTED);
+    expect(event.message).toBe(`created ${REDACTED}`);
+    expect(event.tokenId).toBe("token-node-1");
+    expect(event.provenance).toBe("user-a:main");
+    expect(event.scopes).toEqual(["graphql:write"]);
+    expect(event.createdAt).toBe("2026-07-12T12:00:00Z");
+    expect(event.expiresAt).toBe("2026-10-10T12:00:00Z");
+    expect(JSON.stringify(redacted)).not.toContain(API_TOKEN);
   });
 
   it("redacts credential query parameters while preserving correlation fields", () => {

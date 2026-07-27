@@ -9,6 +9,7 @@ import {
   GRAPHQL_SUBSCRIPTIONS_PROTOCOL,
   handler as wsEventHandler,
 } from "./events.js";
+import { redactValue } from "../api/parser/runtime/safeLogging.js";
 
 const createGQLClient = (options) => {
   const { endpoint, websocket, headers, hook } = options;
@@ -38,7 +39,7 @@ const createGQLClient = (options) => {
     try {
       let response;
       //response = await fetch(clientContext.endpoint, {method: 'POST', body: JSON.stringify({"query": "query {getGraph(userid:\"1\", appid:\"2\") {userid appid nodes {uuid label data}}}"})});
-      console.log("graphql/client.js executeQuery: ", query);
+      console.log("graphql/client.js executeQuery: ", redactValue(query));
       response = await fetch(clientContext.endpoint, {
         method: "POST",
         headers: headers, // spark changed from headers, -> headers: headers,
@@ -48,7 +49,7 @@ const createGQLClient = (options) => {
       });
       const responseObj = await response.json();
       if (hook) {
-        hook(responseObj);
+        hook(redactValue(responseObj));
       }
       if (responseObj.errors) {
         if (errorCallback) {
@@ -62,7 +63,7 @@ const createGQLClient = (options) => {
         return responseObj;
       }
     } catch (e) {
-      console.log(e);
+      console.log(redactValue(e));
       throw e;
       //if (e.errors) {
       //  throw e;
