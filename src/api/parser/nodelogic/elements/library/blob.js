@@ -482,6 +482,18 @@ const parseLeafServerBlobFailure = async (response) => {
   }
 };
 
+const parseLeafServerHeadFailure = (response) => {
+  if (response?.status === 404) {
+    return createBlobFailure("missing_object");
+  }
+  if (response?.status === 401 || response?.status === 403) {
+    return createBlobFailure("storage_denied");
+  }
+  return createBlobFailure("storage_unavailable", {
+    retryable: response?.status >= 500,
+  });
+};
+
 const readLeafServerBlobJson = async (response) => {
   const payload = await response.json();
   if (isFailure(payload)) {
@@ -570,13 +582,14 @@ const createLeafServerBlobStorageAdapter = ({
       return readLeafServerBlobJson(response);
     },
     headObject: async (input) => {
-      const response = await requestLeafServerBlobStorage({
-        baseUrl,
-        credentials,
-        fetchImpl: resolvedFetch,
+      const path = leafServerObjectPath(input);
+      const response = await resolvedFetch(resolveLeafServerBlobStorageUrl({ baseUrl, path }), {
         method: "HEAD",
-        path: leafServerObjectPath(input),
+        credentials,
       });
+      if (!response?.ok) {
+        throw asRuntimeError(parseLeafServerHeadFailure(response));
+      }
       return createLeafServerHeadMetadata(input, response);
     },
     putObject: async (input) => {

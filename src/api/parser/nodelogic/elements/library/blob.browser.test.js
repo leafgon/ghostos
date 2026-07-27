@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { BehaviorSubject, Subject, firstValueFrom } from "rxjs";
 import { describe, expect, it, vi } from "vitest";
 
@@ -61,9 +62,34 @@ const jsonResponse = ({ status = 200, body = {}, headers = {} } = {}) => ({
   text: async () => JSON.stringify(body),
 });
 
+const emptyHeadResponse = ({ status }) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  headers: {
+    get: () => undefined,
+  },
+  json: async () => {
+    throw new Error("HEAD responses do not have a JSON body");
+  },
+  text: async () => "",
+});
+
 describe("leafelement:blob contract helpers", () => {
   it("registers the blob element adapter", () => {
     expect(LEAFELEMENT_ADAPTER_REGISTRY.blob).toBeTypeOf("function");
+  });
+
+  it("exposes blob helpers through the package ESM entrypoint", async () => {
+    const output = execFileSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        "import('./lib/index.esm.js').then((m) => console.log([typeof m.createInMemoryBlobStorageAdapter, typeof m.createLeafServerBlobStorageAdapter, typeof m.executeBlobBottle].join(' ')))",
+      ],
+      { cwd: process.cwd(), encoding: "utf8" },
+    );
+    expect(output.trim()).toBe("function function function");
   });
 
   it("stores and fetches deterministic data-file metadata through the fake adapter", async () => {
@@ -294,16 +320,7 @@ describe("leafelement:blob contract helpers", () => {
     };
     const fetchImpl = vi.fn(async (url, init) => {
       if (init.method === "HEAD") {
-        return jsonResponse({
-          status: 404,
-          body: {
-            schemaVersion: "ghostos.blob_failure.v1",
-            code: "missing_object",
-            retryable: false,
-            safeMessage: "Object was not found.",
-            correlationId: "corr-a",
-          },
-        });
+        return emptyHeadResponse({ status: 404 });
       }
       if (url.endsWith("/api/v1/blob-storage/runtime-file-refs/runtime-ref-a:resolve")) {
         return jsonResponse({
