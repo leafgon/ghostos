@@ -176,7 +176,7 @@ describe("leafelement:blob contract helpers", () => {
     await executeBlobStoreBottle(storeBottle(), context);
 
     await expect(
-      executeBlobStoreBottle(storeBottle({ contentType: "text/html" }), context),
+      executeBlobStoreBottle(storeBottle({ contentType: "image/svg+xml" }), context),
     ).resolves.toMatchObject({ code: "unsupported_content_type" });
     await expect(
       executeBlobStoreBottle(storeBottle({ contentLength: 11, requestedObjectId: "big" }), {
@@ -190,6 +190,38 @@ describe("leafelement:blob contract helpers", () => {
     await expect(
       executeBlobFetchBottle(fetchBottle("logo", { expectedContentHash: HASH_B }), context),
     ).resolves.toMatchObject({ code: "hash_mismatch" });
+  });
+
+  it("allows owner/editor HTML, JavaScript, and PDF blob object content types", async () => {
+    const context = createContext({ blobStorageAdapter: createInMemoryBlobStorageAdapter() });
+
+    await expect(
+      executeBlobStoreBottle(
+        storeBottle({ requestedObjectId: "html-page", contentType: "text/html" }),
+        context,
+      ),
+    ).resolves.toMatchObject({
+      objectId: "html-page",
+      contentType: "text/html",
+    });
+    await expect(
+      executeBlobStoreBottle(
+        storeBottle({ requestedObjectId: "module-js", contentType: "text/javascript" }),
+        context,
+      ),
+    ).resolves.toMatchObject({
+      objectId: "module-js",
+      contentType: "text/javascript",
+    });
+    await expect(
+      executeBlobStoreBottle(
+        storeBottle({ requestedObjectId: "document-pdf", contentType: "application/pdf" }),
+        context,
+      ),
+    ).resolves.toMatchObject({
+      objectId: "document-pdf",
+      contentType: "application/pdf",
+    });
   });
 
   it("fails closed when execution context or adapter methods are missing", async () => {

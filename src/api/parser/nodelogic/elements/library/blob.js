@@ -15,10 +15,13 @@ const ALLOWED_CONTENT_TYPES = Object.freeze([
   "image/jpeg",
   "image/gif",
   "image/webp",
+  "text/html",
   "text/plain",
   "text/css",
+  "text/javascript",
   "application/json",
   "application/javascript",
+  "application/pdf",
   "font/woff2",
 ]);
 
