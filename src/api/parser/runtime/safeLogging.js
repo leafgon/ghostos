@@ -10,6 +10,7 @@ const SENSITIVE_QUERY_PATTERN =
 const SIGNED_URL_QUERY_PATTERN =
   /^(x-amz-signature|x-amz-credential|x-amz-security-token|x-goog-signature|x-goog-credential|x-goog-security-token|signature|sig|awsaccesskeyid|policy|key-pair-id)$/i;
 const AUTH_SCHEME_PATTERN = /^(bearer|basic)\s+.+/i;
+const LEAF_API_TOKEN_PATTERN = /\bleaf_live_[^\s"'<>]+/g;
 const EMBEDDED_HTTP_URL_PATTERN = /https?:\/\/[^\s"'<>]+/gi;
 
 const SAFE_TRACE_FIELD_NAMES = new Set([
@@ -151,7 +152,10 @@ const redactUrlString = (value) => {
 };
 
 const redactString = (value) => {
-  const redactedUrls = value.replace(EMBEDDED_HTTP_URL_PATTERN, (url) => redactUrlString(url));
+  const redactedTokens = value.replace(LEAF_API_TOKEN_PATTERN, REDACTED);
+  const redactedUrls = redactedTokens.replace(EMBEDDED_HTTP_URL_PATTERN, (url) =>
+    redactUrlString(url),
+  );
   if (AUTH_SCHEME_PATTERN.test(value.trim())) {
     return redactedUrls.replace(AUTH_SCHEME_PATTERN, (_match, scheme) => `${scheme} ${REDACTED}`);
   }

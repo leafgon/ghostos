@@ -272,7 +272,7 @@ const initializeLEAFlakeGQLClient = ({
         };
 
         try {
-          leaflakeclientobj.gql_qm_client.query(
+          return leaflakeclientobj.gql_qm_client.query(
             query_options,
             (qmresponse) => {
               // successCallback argument of executeQuery in gos.graphql.client.js
@@ -321,7 +321,7 @@ const initializeLEAFlakeGQLClient = ({
       //},
     };
     try {
-      leaflakeclientobj.gql_qm_client.query(
+      return leaflakeclientobj.gql_qm_client.query(
         mut_options,
         (qmresponse) => {
           // successCallback argument of executeQuery in gos.graphql.client.js
@@ -365,7 +365,7 @@ const initializeLEAFlakeGQLClient = ({
     };
 
     try {
-      leaflakeclientobj.gql_qm_client.query(
+      return leaflakeclientobj.gql_qm_client.query(
         mut_options,
         (qmresponse) => {
           // successCallback argument of executeQuery in gos.graphql.client.js
@@ -403,7 +403,7 @@ const initializeLEAFlakeGQLClient = ({
       //},
     };
     try {
-      leaflakeclientobj.gql_qm_client.query(
+      return leaflakeclientobj.gql_qm_client.query(
         mut_options,
         //(data) => {
         //  console.log('gql_qm_client:query completed with sucess: ', data);
@@ -441,7 +441,7 @@ const initializeLEAFlakeGQLClient = ({
       //},
     };
     try {
-      leaflakeclientobj.gql_qm_client.query(
+      return leaflakeclientobj.gql_qm_client.query(
         mut_options,
         (qmresponse) => {
           // successCallback argument of executeQuery in gos.graphql.client.js
@@ -484,7 +484,7 @@ const initializeLEAFlakeGQLClient = ({
       //},
     };
     try {
-      leaflakeclientobj.gql_qm_client.query(
+      return leaflakeclientobj.gql_qm_client.query(
         mut_options,
         (qmresponse) => {
           // successCallback argument of executeQuery in gos.graphql.client.js

@@ -3,6 +3,7 @@
 //import sjcl from 'sjcl';
 //import gql from 'graphql-tag';
 import { createGQLClient } from "../../graphql/client.js"; //'../../lib/graphql/client';
+import { redactValue } from "../parser/runtime/safeLogging.js";
 
 const defaultLEAFgqlEndpoints = Object.freeze({
   endpoint_subs: process.env.LEAFGON_ENDPOINT_SUBS || "https://www.leafgon.com/sgraphql",
@@ -173,8 +174,9 @@ const mutateAddNode = async ({ variables, endpoint = endpoint_qm }) => {
     if (qmresponse.data) {
       console.log("mutateAddNode(): ", qmresponse.data);
     }
+    return qmresponse;
   } catch (e) {
-    console.log("Error mutateAddNode(): ", e);
+    console.log("Error mutateAddNode(): ", redactValue(e));
   }
 };
 
@@ -224,8 +226,9 @@ const mutateDelNode = async ({ node_uuid, endpoint = endpoint_qm }) => {
     if (qmresponse.data) {
       console.log("onElementsRemove(): ", qmresponse.data);
     }
+    return qmresponse;
   } catch (e) {
-    console.log("Error onElementsRemove(): ", e);
+    console.log("Error onElementsRemove(): ", redactValue(e));
   }
 };
 
@@ -269,8 +272,9 @@ const mutateUpdateNode = async ({ variables, endpoint = endpoint_qm }) => {
     if (qmresponse.data) {
       console.log("mutateUpdateNode(): ", qmresponse.data);
     }
+    return qmresponse;
   } catch (e) {
-    console.log("Error mutateUpdateNode(): ", e);
+    console.log("Error mutateUpdateNode(): ", redactValue(e));
   }
 };
 
@@ -314,8 +318,9 @@ const mutateAddEdge = async ({ variables, endpoint = endpoint_qm }) => {
     if (qmresponse.data) {
       console.log("mutateAddEdge(): ", qmresponse.data);
     }
+    return qmresponse;
   } catch (e) {
-    console.log("Error mutateAddEdge(): ", e);
+    console.log("Error mutateAddEdge(): ", redactValue(e));
   }
 };
 
@@ -364,8 +369,9 @@ const mutateDelEdge = async ({ edge_uuid, endpoint = endpoint_qm }) => {
     if (qmresponse.data) {
       console.log("onElementsRemove(): ", qmresponse.data);
     }
+    return qmresponse;
   } catch (e) {
-    console.log("Error onElementsRemove(): ", e);
+    console.log("Error onElementsRemove(): ", redactValue(e));
   }
 };
 
