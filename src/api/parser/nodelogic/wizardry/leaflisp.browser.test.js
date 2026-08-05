@@ -71,9 +71,19 @@ describe("executeLEAFlisp", () => {
   });
 
   it("throws a parse-json error for malformed JSON", () => {
-    expect(() => executeLEAFlisp([], '(return (parse-json "{\\"hello\\":}"))')).toThrow(
-      /Invalid JSON string/,
-    );
+    let thrown;
+    try {
+      executeLEAFlisp([], '(return (parse-json "{\\"hello\\":}"))', {
+        refnode: "json-parser-node",
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toMatch(/Invalid JSON string/);
+    expect(thrown.message).not.toContain("line: NaN");
+    expect(thrown.message).not.toContain('{"hello":}');
   });
 
   it("throws execution errors with leaflisp context", () => {

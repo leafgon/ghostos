@@ -46,6 +46,21 @@ const generateIndentsByDepth = (depth) => {
 
 const getObjectName = (obj) => obj?.constructor?.kind ?? obj?.constructor?.name ?? "unknown";
 
+const formatJSONParseFailure = (error) => {
+  const message = typeof error?.message === "string" ? error.message : "";
+  const positionMatch = message.match(/position\s+(\d+)/i);
+  const lineColumnMatch = message.match(/line\s+(\d+)\s+column\s+(\d+)/i);
+  const details = [];
+  if (positionMatch) details.push(`position ${positionMatch[1]}`);
+  if (lineColumnMatch) {
+    details.push(`line ${lineColumnMatch[1]}`);
+    details.push(`column ${lineColumnMatch[2]}`);
+  }
+  return details.length > 0
+    ? `Invalid JSON string (${details.join(", ")}).`
+    : "Invalid JSON string.";
+};
+
 const debuggerGlobal = {
   trace: [],
   probe: [],
@@ -370,7 +385,7 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = {}) => {
       try {
         parsedJson = JSON.parse(target_str);
       } catch (error) {
-        throw new StdRuntimeError(`Invalid JSON string: ${target_str}`);
+        throw new StdRuntimeError(formatJSONParseFailure(error));
       }
       return parseJsonToLEAFlispObj(parsedJson);
     },
@@ -478,14 +493,18 @@ const assertValidLEAFlispBindingName = (bindingName) => {
   }
 };
 
+const formatLEAFlispError = (errorType, error, preambleLength) => {
+  const rawLine = errorType === "Parser" ? error.line : error.position?.line;
+  const numericLine = Number(rawLine);
+  const linePrefix = Number.isFinite(numericLine) ? `line: ${numericLine - preambleLength} - ` : "";
+  return `${linePrefix}${error.message}`;
+};
+
 const formatLEAFlispInterpreterError = (error, refnode, preamble_len) => {
   if ("errors" in error) {
     return error.errors
       .map((err) => {
-        const msg =
-          error.type === "Parser"
-            ? `line: ${err.line - preamble_len} - ${err.message}`
-            : `line: ${err.position?.line - preamble_len} - ${err.message}`;
+        const msg = formatLEAFlispError(error.type, err, preamble_len);
         return `LEAFlisp error: {refnode: ${refnode}}: ${msg}`;
       })
       .join("\n");
@@ -678,10 +697,7 @@ const runLEAFlispcode = (_lispcode, refnode, _runtimeLEAFlisp, _leafaddress, _pr
     let errlist = [];
     if ("errors" in e) {
       for (let err of e.errors) {
-        const msg =
-          e.type === "Parser"
-            ? `line: ${err.line - _preamble_len} - ${err.message}`
-            : `line: ${err.position?.line - _preamble_len} - ${err.message}`;
+        const msg = formatLEAFlispError(e.type, err, _preamble_len);
         const leaflisp_errmsg = `LEAFlisp error: {refnode: ${refnode}}: ${msg}`;
         console.error(leaflisp_errmsg);
 
