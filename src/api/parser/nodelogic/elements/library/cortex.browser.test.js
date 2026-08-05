@@ -241,7 +241,7 @@ describe("cortex leafelement", () => {
     expect(output._content.workload.cortexInstanceId).toBe(TEST_REFNODE);
   });
 
-  it("defaults missing optional intent fields", async () => {
+  it("defaults schema and mode while omitting missing reliability policy fields", async () => {
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(makeJsonResponse(202, acceptedResponse("job-default-schema")))
@@ -264,8 +264,8 @@ describe("cortex leafelement", () => {
     const submittedBody = JSON.parse(global.fetch.mock.calls[0][1].body);
     expect(submittedBody.schemaVersion).toBe("v1");
     expect(submittedBody.mode).toBe("async");
-    expect(submittedBody.timeoutMs).toBe(2000);
-    expect(submittedBody.maxAttempts).toBe(2);
+    expect(submittedBody).not.toHaveProperty("timeoutMs");
+    expect(submittedBody).not.toHaveProperty("maxAttempts");
     expect(output._content.mode).toBe("async");
     expect(output._content.status).toBe("succeeded");
   });
