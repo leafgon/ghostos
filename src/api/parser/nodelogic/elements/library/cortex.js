@@ -609,17 +609,15 @@ const normalizeIntentFields = (intent) => {
     payloadRef: resolveIntentPayloadRef(intent),
   };
 
-  const timeoutMs = normalizePositiveInteger({
+  const timeoutMs = normalizeOptionalInteger({
     value: intent.timeoutMs,
     field: "timeoutMs",
-    fallback: 2000,
     min: 1,
     max: 3600000,
   });
-  const maxAttempts = normalizePositiveInteger({
+  const maxAttempts = normalizeOptionalInteger({
     value: intent.maxAttempts,
     field: "maxAttempts",
-    fallback: 2,
     min: 1,
     max: 1000,
   });
@@ -630,8 +628,8 @@ const normalizeIntentFields = (intent) => {
     max: Number.MAX_SAFE_INTEGER,
   });
 
-  normalized.timeoutMs = timeoutMs;
-  normalized.maxAttempts = maxAttempts;
+  if (timeoutMs !== undefined) normalized.timeoutMs = timeoutMs;
+  if (maxAttempts !== undefined) normalized.maxAttempts = maxAttempts;
   if (intent.providerHints !== undefined) {
     if (!isPlainObject(intent.providerHints)) {
       throw new CortexRuntimeError("validation_failed", "providerHints must be an object.", {

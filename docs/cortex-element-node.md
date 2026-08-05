@@ -93,10 +93,10 @@ Validation rules:
   equal to `0`.
 - `idempotencyKey`, when present, must be 8 to 256 characters matching
   `/^[A-Za-z0-9._:-]{8,256}$/`.
-- `timeoutMs` defaults to `2000` when omitted or blank. Explicit values must
-  be an integer from `1` through `3600000`.
-- `maxAttempts` defaults to `2` when omitted or blank. Explicit values must be
-  an integer from `1` through `1000`.
+- `timeoutMs` is omitted when absent or blank so Cortex can apply its server
+  policy. Explicit values must be an integer from `1` through `3600000`.
+- `maxAttempts` is omitted when absent or blank so Cortex can apply its server
+  policy. Explicit values must be an integer from `1` through `1000`.
 - `providerHints`, when present, must be a plain object.
 - `costBudgetUsd`, when present, must be a number greater than or equal to `0`.
 
