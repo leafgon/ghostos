@@ -1,0 +1,2203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leafgon.dev/contracts/user-domain-mvp-contracts.json",
+  "title": "Leafgon User-Domain MVP Contract Bundle",
+  "description": "Canonical Terraformer-owned contract schemas for User-Domain MVP fixtures.",
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "host": {
+      "type": "string",
+      "pattern": "^(?!\\d+\\.\\d+\\.\\d+\\.\\d+$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$"
+    },
+    "leafPath": {
+      "type": "string",
+      "pattern": "^/nav/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$"
+    },
+    "relativePageAssetPath": {
+      "type": "string",
+      "pattern": "^/_leafgon/api/v1/page-assets/[A-Za-z0-9][A-Za-z0-9._~-]{0,127}/[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+    },
+    "pathSegment": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "etag": {
+      "type": "string",
+      "pattern": "^\\\"[a-f0-9]{8,64}\\\"$"
+    },
+    "publicContentType": {
+      "type": "string",
+      "enum": [
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "text/css",
+        "text/plain",
+        "application/json"
+      ]
+    },
+    "blobStorageContentType": {
+      "type": "string",
+      "enum": [
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "text/html",
+        "text/plain",
+        "text/css",
+        "text/javascript",
+        "application/json",
+        "application/javascript",
+        "application/pdf",
+        "font/woff2"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "mode",
+        "domainId",
+        "appId",
+        "targetLeafPath"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "nav"
+          ]
+        },
+        "domainId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "appId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "targetLeafPath": {
+          "$ref": "#/$defs/leafPath"
+        },
+        "targetPageId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceGraphRef": {
+      "type": "object",
+      "required": [
+        "graphDomainId",
+        "graphAppId",
+        "elementId",
+        "revision"
+      ],
+      "properties": {
+        "graphDomainId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "graphAppId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "elementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "storageRef": {
+      "type": "object",
+      "required": [
+        "storageAccountName",
+        "storageContainerName",
+        "storageBlobName"
+      ],
+      "properties": {
+        "storageAccountName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "storageContainerName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "storageBlobName": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "blobObject": {
+      "type": "object",
+      "required": [
+        "objectId",
+        "objectType",
+        "isPublic",
+        "storageAccountName",
+        "storageContainerName",
+        "storageBlobName",
+        "contentType",
+        "contentLength",
+        "contentHash",
+        "etag",
+        "assetRevision",
+        "lastModifiedAt"
+      ],
+      "properties": {
+        "objectId": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "objectType": {
+          "type": "string",
+          "enum": [
+            "file"
+          ]
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "denialReason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "private_config",
+            "unsupported_content_type",
+            "reserved_path",
+            "policy_denied",
+            null
+          ]
+        },
+        "storageAccountName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "storageContainerName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "storageBlobName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "contentType": {
+          "$ref": "#/$defs/publicContentType"
+        },
+        "contentLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10485760
+        },
+        "contentHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "etag": {
+          "$ref": "#/$defs/etag"
+        },
+        "assetRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lastModifiedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "leafgon.domain_intent.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/leafgon.domain_intent.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "graphDomainId",
+        "graphAppId",
+        "intentElementId",
+        "requestedCanonicalHost",
+        "target",
+        "operation"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "leafgon.domain_intent.v1"
+        },
+        "graphDomainId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "graphAppId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "intentElementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "requestedCanonicalHost": {
+          "$ref": "#/$defs/host"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "bindingId": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "create_or_update",
+            "request_verification",
+            "request_activation",
+            "suspend",
+            "delete",
+            "retry"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "leaf_graph_domain_intent.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/leaf_graph_domain_intent.v1.json",
+      "deprecated": true,
+      "description": "Legacy Terraformer compatibility alias for graph intent. New fixtures use leafgon.domain_intent.v1.",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "graphDomainId",
+        "graphAppId",
+        "intentElementId",
+        "requestedCanonicalHost",
+        "target",
+        "operation"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "leaf_graph_domain_intent.v1"
+        },
+        "graphDomainId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "graphAppId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "intentElementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "requestedCanonicalHost": {
+          "$ref": "#/$defs/host"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "create_or_update",
+            "request_verification",
+            "request_activation",
+            "suspend",
+            "delete",
+            "retry"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_domain_binding_request.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/user_domain_binding_request.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "tenantId",
+        "callerService",
+        "sourceGraphRef",
+        "canonicalHost",
+        "target",
+        "operation",
+        "idempotencyKey",
+        "requestHash",
+        "correlationId"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "delegatedUserRef"
+          ]
+        },
+        {
+          "required": [
+            "authContextDigest"
+          ]
+        }
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "user_domain_binding_request.v1"
+        },
+        "tenantId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "callerService": {
+          "type": "string",
+          "enum": [
+            "leaf-server"
+          ]
+        },
+        "delegatedUserRef": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authContextDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "sourceGraphRef": {
+          "$ref": "#/$defs/sourceGraphRef"
+        },
+        "canonicalHost": {
+          "$ref": "#/$defs/host"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "create_or_update",
+            "request_verification",
+            "request_activation",
+            "suspend",
+            "delete",
+            "retry"
+          ]
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expectedMappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observedTxtValues": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "idempotencyKey": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "requestHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_domain_edge_operation.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/user_domain_edge_operation.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "bindingId",
+        "tenantId",
+        "bindingRevision",
+        "mappingRevision",
+        "action",
+        "hosts",
+        "correlationId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "user_domain_edge_operation.v1"
+        },
+        "operationId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "bindingId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "tenantId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "bindingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "activate",
+            "delete",
+            "renew_certificate",
+            "reconcile"
+          ]
+        },
+        "hosts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "canonicalHost",
+              "hostRole",
+              "trafficDnsTarget",
+              "frontdoorCustomDomainName",
+              "frontdoorRouteName",
+              "frontdoorSecretName",
+              "keyVaultCertificateName",
+              "acmeChallengeFqdn",
+              "acmeDelegationTarget",
+              "certbotCertificateName"
+            ],
+            "properties": {
+              "canonicalHost": {
+                "$ref": "#/$defs/host"
+              },
+              "hostRole": {
+                "type": "string",
+                "enum": [
+                  "direct",
+                  "apex_redirect_source",
+                  "www_canonical_target"
+                ]
+              },
+              "trafficDnsTarget": {
+                "$ref": "#/$defs/host"
+              },
+              "frontdoorCustomDomainName": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "frontdoorRouteName": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "frontdoorSecretName": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "keyVaultCertificateName": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "acmeChallengeFqdn": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "acmeDelegationTarget": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "certbotCertificateName": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_domain_edge_observation.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/user_domain_edge_observation.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "bindingId",
+        "bindingRevision",
+        "mappingRevision",
+        "hosts",
+        "observedAt",
+        "correlationId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "user_domain_edge_observation.v1"
+        },
+        "bindingId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "bindingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hosts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "tlsStatus": {
+                      "const": "ready"
+                    }
+                  },
+                  "required": [
+                    "tlsStatus"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "certbotCertificateName",
+                    "frontdoorCustomDomainResourceId",
+                    "frontdoorSecretResourceId",
+                    "certificateNotAfter"
+                  ],
+                  "properties": {
+                    "edgeStatus": {
+                      "const": "attached"
+                    },
+                    "certbotRegistrationStatus": {
+                      "const": "frontdoor_secret_ready"
+                    }
+                  }
+                }
+              }
+            ],
+            "required": [
+              "canonicalHost",
+              "edgeStatus",
+              "tlsStatus",
+              "certbotRegistrationStatus"
+            ],
+            "properties": {
+              "canonicalHost": {
+                "$ref": "#/$defs/host"
+              },
+              "edgeStatus": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "attached",
+                  "detached",
+                  "failed"
+                ]
+              },
+              "tlsStatus": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "ready",
+                  "expired",
+                  "invalid",
+                  "failed"
+                ]
+              },
+              "certbotRegistrationStatus": {
+                "type": "string",
+                "enum": [
+                  "not_requested",
+                  "pending_dns_challenge",
+                  "challenge_validated",
+                  "certificate_issued",
+                  "imported_to_key_vault",
+                  "frontdoor_secret_ready",
+                  "failed"
+                ]
+              },
+              "certbotOrderUri": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "certbotCertificateName": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "frontdoorCustomDomainResourceId": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "frontdoorSecretResourceId": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "certificateNotAfter": {
+                "$ref": "#/$defs/timestamp"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "observedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_domain_edge_map.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/user_domain_edge_map.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "generatedAt",
+        "items"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "user_domain_edge_map.v1"
+        },
+        "generatedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "mappingKind": {
+                      "const": "direct"
+                    }
+                  },
+                  "required": [
+                    "mappingKind"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "mode",
+                    "domainId",
+                    "appId",
+                    "targetLeafPath"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "mappingKind": {
+                      "const": "redirect"
+                    }
+                  },
+                  "required": [
+                    "mappingKind"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "redirectTargetHost",
+                    "redirectStatus",
+                    "preservePath"
+                  ]
+                }
+              }
+            ],
+            "required": [
+              "canonicalHost",
+              "bindingId",
+              "tenantId",
+              "mappingKind",
+              "hostRole",
+              "mode",
+              "domainId",
+              "appId",
+              "targetLeafPath",
+              "bindingRevision",
+              "mappingRevision",
+              "bindingStatus",
+              "verificationStatus",
+              "edgeStatus",
+              "tlsStatus",
+              "updatedAt"
+            ],
+            "properties": {
+              "canonicalHost": {
+                "$ref": "#/$defs/host"
+              },
+              "bindingId": {
+                "$ref": "#/$defs/uuid"
+              },
+              "tenantId": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "mappingKind": {
+                "type": "string",
+                "enum": [
+                  "direct",
+                  "redirect"
+                ]
+              },
+              "hostRole": {
+                "type": "string",
+                "enum": [
+                  "direct",
+                  "apex_redirect_source",
+                  "www_canonical_target"
+                ]
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "nav"
+                ]
+              },
+              "domainId": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "appId": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "targetLeafPath": {
+                "$ref": "#/$defs/leafPath"
+              },
+              "targetPageId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "redirectTargetHost": {
+                "$ref": "#/$defs/host"
+              },
+              "redirectStatus": {
+                "type": "integer",
+                "enum": [
+                  301,
+                  302,
+                  307,
+                  308
+                ]
+              },
+              "preservePath": {
+                "type": "boolean"
+              },
+              "bindingRevision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "mappingRevision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "bindingStatus": {
+                "type": "string",
+                "enum": [
+                  "active"
+                ]
+              },
+              "verificationStatus": {
+                "type": "string",
+                "enum": [
+                  "verified"
+                ]
+              },
+              "edgeStatus": {
+                "type": "string",
+                "enum": [
+                  "attached"
+                ]
+              },
+              "tlsStatus": {
+                "type": "string",
+                "enum": [
+                  "ready"
+                ]
+              },
+              "updatedAt": {
+                "$ref": "#/$defs/timestamp"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_domain_resolver_invalidation.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/user_domain_resolver_invalidation.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "canonicalHost",
+        "bindingId",
+        "mappingRevision",
+        "reason",
+        "occurredAt",
+        "correlationId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "user_domain_resolver_invalidation.v1"
+        },
+        "canonicalHost": {
+          "$ref": "#/$defs/host"
+        },
+        "bindingId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "activated",
+            "suspended",
+            "deleted",
+            "remapped",
+            "edge_detached",
+            "tls_not_ready",
+            "tls_expired",
+            "blob_assets_changed",
+            "manual_repair"
+          ]
+        },
+        "occurredAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_domain_resolver_decision.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/user_domain_resolver_decision.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "action",
+        "canonicalHost",
+        "failClosed"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "serve_piper_bootstrap"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "mappingRevision",
+              "failClosed",
+              "mode",
+              "domainId",
+              "appId",
+              "targetLeafPath",
+              "piperBootstrap"
+            ],
+            "properties": {
+              "failClosed": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "redirect"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "mappingRevision",
+              "failClosed",
+              "redirectTargetHost",
+              "redirectStatus",
+              "preservePath"
+            ],
+            "properties": {
+              "failClosed": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "fail_closed"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "failClosed",
+              "failureCode"
+            ],
+            "properties": {
+              "failClosed": {
+                "const": true
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "user_domain_resolver_decision.v1"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "serve_piper_bootstrap",
+            "redirect",
+            "fail_closed"
+          ]
+        },
+        "canonicalHost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/host"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "failClosed": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "nav"
+          ]
+        },
+        "domainId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "appId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "targetLeafPath": {
+          "$ref": "#/$defs/leafPath"
+        },
+        "piperBootstrap": {
+          "$ref": "#/$defs/piper_bootstrap.v1"
+        },
+        "redirectTargetHost": {
+          "$ref": "#/$defs/host"
+        },
+        "redirectStatus": {
+          "type": "integer",
+          "enum": [
+            301,
+            302,
+            307,
+            308
+          ]
+        },
+        "preservePath": {
+          "type": "boolean"
+        },
+        "failureCode": {
+          "type": "string",
+          "enum": [
+            "HOST_DENIED",
+            "USER_DOMAIN_NOT_FOUND",
+            "TLS_NOT_READY",
+            "EDGE_DETACHED",
+            "STALE_MAPPING",
+            "RESERVED_PATH_DENIED"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "piper_bootstrap.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/piper_bootstrap.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "mode",
+        "domainId",
+        "appId",
+        "canonicalLeafPath",
+        "customDomain",
+        "publicOrigin",
+        "platformAssetBaseUrl",
+        "pageAssetBaseUrl",
+        "mappingRevision"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "piper_bootstrap.v1"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "nav"
+          ]
+        },
+        "domainId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "appId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "canonicalLeafPath": {
+          "$ref": "#/$defs/leafPath"
+        },
+        "customDomain": {
+          "type": "boolean"
+        },
+        "publicOrigin": {
+          "type": "string",
+          "pattern": "^https://[a-z0-9.-]+$"
+        },
+        "platformAssetBaseUrl": {
+          "type": "string",
+          "pattern": "^/_leafgon/static/[A-Za-z0-9._~/-]+/$"
+        },
+        "pageAssetBaseUrl": {
+          "type": "string",
+          "pattern": "^/_leafgon/api/v1/page-assets/$"
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "targetPageId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bindingId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ghostos.blob_store_bottle.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/ghostos.blob_store_bottle.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "operation",
+        "blobElementId",
+        "contentType",
+        "contentLength",
+        "contentHash",
+        "payloadRef"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "overwrite"
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          },
+          "then": {
+            "required": [
+              "requestedObjectId",
+              "expectedAssetRevision"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "ghostos.blob_store_bottle.v1"
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "create",
+            "overwrite"
+          ]
+        },
+        "blobElementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "contentType": {
+          "$ref": "#/$defs/blobStorageContentType"
+        },
+        "contentLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10485760
+        },
+        "contentHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "payloadRef": {
+          "type": "object",
+          "required": [
+            "kind",
+            "ref"
+          ],
+          "properties": {
+            "kind": {
+              "const": "runtime-file-ref"
+            },
+            "ref": {
+              "type": "string",
+              "pattern": "^rfr_[A-Za-z0-9_-]{32,96}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "requestedObjectId": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "expectedAssetRevision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "ghostos.blob_fetch_bottle.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/ghostos.blob_fetch_bottle.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "blobElementId",
+        "objectId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "ghostos.blob_fetch_bottle.v1"
+        },
+        "blobElementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "objectId": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "expectedAssetRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expectedContentHash": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_domain_blob_asset_lut.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/user_domain_blob_asset_lut.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "canonical_host",
+        "binding_id",
+        "tenant_id",
+        "mapping_revision",
+        "target_page_id",
+        "domain_id",
+        "app_id",
+        "blob_element_id",
+        "spell_name",
+        "object_id",
+        "object_type",
+        "is_public",
+        "storage_account_name",
+        "storage_container_name",
+        "storage_blob_name",
+        "content_type",
+        "content_length",
+        "content_hash",
+        "etag",
+        "last_modified_at",
+        "asset_revision",
+        "reassessed_at",
+        "updated_at"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "user_domain_blob_asset_lut.v1"
+        },
+        "canonical_host": {
+          "$ref": "#/$defs/host"
+        },
+        "binding_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "tenant_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "mapping_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "target_page_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "domain_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "app_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blob_element_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "spell_name": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "object_id": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "object_type": {
+          "type": "string",
+          "enum": [
+            "file"
+          ]
+        },
+        "is_public": {
+          "type": "boolean"
+        },
+        "storage_account_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "storage_container_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "storage_blob_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "content_type": {
+          "$ref": "#/$defs/publicContentType"
+        },
+        "content_length": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "content_hash": {
+          "$ref": "#/$defs/hash"
+        },
+        "etag": {
+          "$ref": "#/$defs/etag"
+        },
+        "last_modified_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "asset_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reassessed_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "updated_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_domain_blob_asset_reassessment.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/user_domain_blob_asset_reassessment.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "tenantId",
+        "callerService",
+        "canonicalHost",
+        "bindingId",
+        "mappingRevision",
+        "targetPageId",
+        "domainId",
+        "appId",
+        "blobElementId",
+        "spellName",
+        "sourceGraphRef",
+        "assetRevision",
+        "objects",
+        "idempotencyKey",
+        "requestHash",
+        "correlationId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "user_domain_blob_asset_reassessment.v1"
+        },
+        "tenantId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "callerService": {
+          "type": "string",
+          "enum": [
+            "leaf-server"
+          ]
+        },
+        "canonicalHost": {
+          "$ref": "#/$defs/host"
+        },
+        "bindingId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "targetPageId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "domainId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "appId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blobElementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "spellName": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "sourceGraphRef": {
+          "$ref": "#/$defs/sourceGraphRef"
+        },
+        "assetRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "objects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/blobObject"
+          }
+        },
+        "idempotencyKey": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "requestHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_domain_blob_asset_reassessment_result.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/user_domain_blob_asset_reassessment_result.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "canonicalHost",
+        "mappingRevision",
+        "acceptedAssetRevision",
+        "upsertedCount",
+        "removedCount",
+        "outboxEventIds",
+        "correlationId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "user_domain_blob_asset_reassessment_result.v1"
+        },
+        "canonicalHost": {
+          "$ref": "#/$defs/host"
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "acceptedAssetRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "upsertedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "removedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outboxEventIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/uuid"
+          }
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_domain_blob_assets_changed.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/user_domain_blob_assets_changed.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "canonicalHost",
+        "bindingId",
+        "mappingRevision",
+        "targetPageId",
+        "blobElementId",
+        "spellName",
+        "changedObjectIds",
+        "occurredAt",
+        "correlationId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "user_domain_blob_assets_changed.v1"
+        },
+        "canonicalHost": {
+          "$ref": "#/$defs/host"
+        },
+        "bindingId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "targetPageId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blobElementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "spellName": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "changedObjectIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pathSegment"
+          }
+        },
+        "occurredAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "leafgon.blob_asset_reassessment_requested.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/leafgon.blob_asset_reassessment_requested.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "reason",
+        "tenantId",
+        "graphDomainId",
+        "graphAppId",
+        "targetPageId",
+        "canonicalHost",
+        "bindingId",
+        "mappingRevision",
+        "blobElementId",
+        "spellName",
+        "changedObjectIds",
+        "sourceGraphRef",
+        "sourceGraphRevision",
+        "payloadHash",
+        "correlationId",
+        "occurredAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "leafgon.blob_asset_reassessment_requested.v1"
+        },
+        "eventId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "graph_pattern_changed",
+            "blob_config_changed",
+            "blob_inventory_changed",
+            "mapping_revision_changed",
+            "manual_repair"
+          ]
+        },
+        "tenantId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "graphDomainId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "graphAppId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "targetPageId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "canonicalHost": {
+          "$ref": "#/$defs/host"
+        },
+        "bindingId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "blobElementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "spellName": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "changedObjectIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pathSegment"
+          }
+        },
+        "sourceGraphRef": {
+          "$ref": "#/$defs/sourceGraphRef"
+        },
+        "sourceGraphRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "payloadHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "occurredAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "leafgon.blob_public_config.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/leafgon.blob_public_config.v1.json",
+      "type": "object",
+      "required": [
+        "public",
+        "whitelist"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "leafgon.blob_public_config.v1"
+        },
+        "public": {
+          "type": "boolean"
+        },
+        "whitelist": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/pathSegment"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "blob_asset_public_cache.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/blob_asset_public_cache.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "canonicalHost",
+        "mappingRevision",
+        "spellName",
+        "objectId",
+        "blobElementId",
+        "isPublic",
+        "storageAccountName",
+        "storageContainerName",
+        "storageBlobName",
+        "contentType",
+        "contentLength",
+        "contentHash",
+        "etag",
+        "assetRevision",
+        "lastModifiedAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "blob_asset_public_cache.v1"
+        },
+        "canonicalHost": {
+          "$ref": "#/$defs/host"
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "spellName": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "objectId": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "blobElementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "isPublic": {
+          "const": true
+        },
+        "storageAccountName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "storageContainerName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "storageBlobName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "contentType": {
+          "$ref": "#/$defs/publicContentType"
+        },
+        "contentLength": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contentHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "etag": {
+          "$ref": "#/$defs/etag"
+        },
+        "assetRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lastModifiedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "blob_asset_public_cache_key.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/blob_asset_public_cache_key.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "namespaceUuid",
+        "canonicalHost",
+        "mappingRevision",
+        "spellName",
+        "objectId",
+        "key"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "blob_asset_public_cache_key.v1"
+        },
+        "namespaceUuid": {
+          "const": "6f21e90d-c7b8-5f50-9d70-6bb26c0f0f8a"
+        },
+        "canonicalHost": {
+          "$ref": "#/$defs/host"
+        },
+        "mappingRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "spellName": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "objectId": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "key": {
+          "$ref": "#/$defs/uuid"
+        }
+      },
+      "additionalProperties": false
+    },
+    "leafgon.user_domain_product_state.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/leafgon.user_domain_product_state.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "bindingId",
+        "requestedCanonicalHost",
+        "target",
+        "bindingStatus",
+        "verificationStatus",
+        "edgeStatus",
+        "tlsStatus",
+        "failedOperation",
+        "retryable",
+        "nextAction",
+        "dnsInstructions",
+        "updatedAt",
+        "correlationId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "leafgon.user_domain_product_state.v1"
+        },
+        "bindingId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/pathSegment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requestedCanonicalHost": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/host"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "bindingStatus": {
+          "type": "string",
+          "enum": [
+            "not_requested",
+            "awaiting_dns_verification",
+            "verified",
+            "provisioning",
+            "active",
+            "suspended",
+            "failed",
+            "deleting",
+            "deleted"
+          ]
+        },
+        "verificationStatus": {
+          "type": "string",
+          "enum": [
+            "not_requested",
+            "pending",
+            "verified",
+            "failed"
+          ]
+        },
+        "edgeStatus": {
+          "type": "string",
+          "enum": [
+            "not_requested",
+            "pending",
+            "attached",
+            "detached",
+            "failed"
+          ]
+        },
+        "tlsStatus": {
+          "type": "string",
+          "enum": [
+            "not_requested",
+            "pending",
+            "ready",
+            "expired",
+            "invalid",
+            "failed"
+          ]
+        },
+        "failedOperation": {
+          "type": "string",
+          "enum": [
+            "none",
+            "verification",
+            "activation",
+            "edge_reconcile",
+            "tls_provision",
+            "lifecycle_update",
+            "deletion",
+            "unknown"
+          ]
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "nextAction": {
+          "type": "string",
+          "enum": [
+            "create_or_update",
+            "show_dns_instructions",
+            "request_verification",
+            "request_activation",
+            "retry",
+            "suspend",
+            "delete",
+            "wait",
+            "none"
+          ]
+        },
+        "dnsInstructions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "anyOf": [
+              {
+                "required": [
+                  "name"
+                ]
+              },
+              {
+                "required": [
+                  "type"
+                ]
+              },
+              {
+                "required": [
+                  "value"
+                ]
+              }
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "type": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "value": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "additionalProperties": false
+          },
+          "uniqueItems": true
+        },
+        "updatedAt": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "leafgon.user_domain_product_state_list.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/leafgon.user_domain_product_state_list.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "items"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "leafgon.user_domain_product_state_list.v1"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/leafgon.user_domain_product_state.v1"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ghostos.blob_data_file.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/ghostos.blob_data_file.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "blobElementId",
+        "objectId",
+        "objectType",
+        "contentType",
+        "contentLength",
+        "contentHash",
+        "storage",
+        "etag",
+        "assetRevision",
+        "lastModifiedAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "ghostos.blob_data_file.v1"
+        },
+        "blobElementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "objectId": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "objectType": {
+          "type": "string",
+          "enum": [
+            "file"
+          ]
+        },
+        "contentType": {
+          "$ref": "#/$defs/blobStorageContentType"
+        },
+        "contentLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10485760
+        },
+        "contentHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "storage": {
+          "$ref": "#/$defs/storageRef"
+        },
+        "etag": {
+          "$ref": "#/$defs/etag"
+        },
+        "assetRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lastModifiedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ghostos.blob_failure.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/ghostos.blob_failure.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "code",
+        "retryable",
+        "safeMessage",
+        "correlationId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "ghostos.blob_failure.v1"
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_object_id",
+            "reserved_object_id",
+            "path_traversal",
+            "unsupported_content_type",
+            "oversized_object",
+            "hash_mismatch",
+            "duplicate_object_id",
+            "asset_revision_mismatch",
+            "missing_object",
+            "storage_unavailable",
+            "storage_denied",
+            "invalid_payload_ref",
+            "missing_execution_context"
+          ]
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "safeMessage": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "leafgon.runtime_file_ref_create.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/leafgon.runtime_file_ref_create.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "graphDomainId",
+        "graphAppId",
+        "blobElementId",
+        "fileName",
+        "contentType",
+        "contentLength",
+        "contentHash",
+        "correlationId",
+        "payloadBase64"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "leafgon.runtime_file_ref_create.v1"
+        },
+        "graphDomainId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "graphAppId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blobElementId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "fileName": {
+          "$ref": "#/$defs/pathSegment"
+        },
+        "contentType": {
+          "$ref": "#/$defs/blobStorageContentType"
+        },
+        "contentLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10485760
+        },
+        "contentHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "payloadBase64": {
+          "type": "string",
+          "minLength": 4,
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "leafgon.runtime_file_ref.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/leafgon.runtime_file_ref.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "kind",
+        "ref",
+        "expiresAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "leafgon.runtime_file_ref.v1"
+        },
+        "kind": {
+          "const": "runtime-file-ref"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^rfr_[A-Za-z0-9_-]{32,96}$"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "leafgon.page_asset_http_case.v1": {
+      "$id": "https://leafgon.dev/contracts/user-domain-mvp/leafgon.page_asset_http_case.v1.json",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "method",
+        "path",
+        "hostSource",
+        "expectedStatus",
+        "expectedHeaders",
+        "expectedBodyKind"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "leafgon.page_asset_http_case.v1"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "GET",
+            "HEAD",
+            "POST"
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/relativePageAssetPath"
+        },
+        "hostSource": {
+          "type": "string",
+          "enum": [
+            "host",
+            "trusted-afd-original-host"
+          ]
+        },
+        "expectedStatus": {
+          "type": "integer",
+          "enum": [
+            200,
+            304,
+            404,
+            405
+          ]
+        },
+        "expectedHeaders": {
+          "type": "object",
+          "required": [
+            "cache-control",
+            "content-type"
+          ],
+          "properties": {
+            "cache-control": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "content-type": {
+              "$ref": "#/$defs/publicContentType"
+            },
+            "etag": {
+              "$ref": "#/$defs/etag"
+            }
+          },
+          "additionalProperties": false
+        },
+        "expectedBodyKind": {
+          "type": "string",
+          "enum": [
+            "bytes",
+            "empty",
+            "safe-error"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
