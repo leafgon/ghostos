@@ -177,6 +177,7 @@ const mutateAddNode = async ({ variables, endpoint = endpoint_qm }) => {
     return qmresponse;
   } catch (e) {
     console.log("Error mutateAddNode(): ", redactValue(e));
+    throw e;
   }
 };
 
@@ -229,6 +230,7 @@ const mutateDelNode = async ({ node_uuid, endpoint = endpoint_qm }) => {
     return qmresponse;
   } catch (e) {
     console.log("Error onElementsRemove(): ", redactValue(e));
+    throw e;
   }
 };
 
@@ -275,6 +277,7 @@ const mutateUpdateNode = async ({ variables, endpoint = endpoint_qm }) => {
     return qmresponse;
   } catch (e) {
     console.log("Error mutateUpdateNode(): ", redactValue(e));
+    throw e;
   }
 };
 
@@ -321,6 +324,7 @@ const mutateAddEdge = async ({ variables, endpoint = endpoint_qm }) => {
     return qmresponse;
   } catch (e) {
     console.log("Error mutateAddEdge(): ", redactValue(e));
+    throw e;
   }
 };
 
@@ -372,6 +376,7 @@ const mutateDelEdge = async ({ edge_uuid, endpoint = endpoint_qm }) => {
     return qmresponse;
   } catch (e) {
     console.log("Error onElementsRemove(): ", redactValue(e));
+    throw e;
   }
 };
 
