@@ -173,8 +173,10 @@ const mutateAddNode = async ({ variables, endpoint = endpoint_qm }) => {
     if (qmresponse.data) {
       console.log("mutateAddNode(): ", qmresponse.data);
     }
+    return qmresponse;
   } catch (e) {
     console.log("Error mutateAddNode(): ", e);
+    throw e;
   }
 };
 
@@ -224,8 +226,10 @@ const mutateDelNode = async ({ node_uuid, endpoint = endpoint_qm }) => {
     if (qmresponse.data) {
       console.log("onElementsRemove(): ", qmresponse.data);
     }
+    return qmresponse;
   } catch (e) {
     console.log("Error onElementsRemove(): ", e);
+    throw e;
   }
 };
 
@@ -269,8 +273,10 @@ const mutateUpdateNode = async ({ variables, endpoint = endpoint_qm }) => {
     if (qmresponse.data) {
       console.log("mutateUpdateNode(): ", qmresponse.data);
     }
+    return qmresponse;
   } catch (e) {
     console.log("Error mutateUpdateNode(): ", e);
+    throw e;
   }
 };
 
@@ -314,8 +320,10 @@ const mutateAddEdge = async ({ variables, endpoint = endpoint_qm }) => {
     if (qmresponse.data) {
       console.log("mutateAddEdge(): ", qmresponse.data);
     }
+    return qmresponse;
   } catch (e) {
     console.log("Error mutateAddEdge(): ", e);
+    throw e;
   }
 };
 
@@ -364,8 +372,10 @@ const mutateDelEdge = async ({ edge_uuid, endpoint = endpoint_qm }) => {
     if (qmresponse.data) {
       console.log("onElementsRemove(): ", qmresponse.data);
     }
+    return qmresponse;
   } catch (e) {
     console.log("Error onElementsRemove(): ", e);
+    throw e;
   }
 };
 
