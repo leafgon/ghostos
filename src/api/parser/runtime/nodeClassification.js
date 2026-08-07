@@ -840,6 +840,19 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
     migrationGate: sideEffectGate,
     config: sideEffectConfigPolicy,
   }),
+  domain: elementMetadata({
+    elementname: "domain",
+    runtimeClass: RUNTIME_CLASSES.STRUCTURAL,
+    trigger: "none",
+    priority: "P0",
+    status: "metadata_only",
+    wired: false,
+    inventory: inventory({
+      state: "metadata-only",
+      reason:
+        "Domain elements express user-domain control-plane topology without runtime execution.",
+    }),
+  }),
 });
 
 const validateTriggerPolicy = (trigger) => {
