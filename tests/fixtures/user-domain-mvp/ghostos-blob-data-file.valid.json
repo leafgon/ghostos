@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "ghostos.blob_data_file.v1",
+  "blobElementId": "blob-hero-image",
+  "objectId": "logo-png",
+  "objectType": "file",
+  "contentType": "image/png",
+  "contentLength": 8421,
+  "contentHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "storage": {
+    "storageAccountName": "leafgonassetsdev",
+    "storageContainerName": "public-page-assets",
+    "storageBlobName": "tenant-a/page-home/logo-png"
+  },
+  "etag": "\"abcd1234\"",
+  "assetRevision": 5,
+  "lastModifiedAt": "2026-07-25T11:00:00Z"
+}

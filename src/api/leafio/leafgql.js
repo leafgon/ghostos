@@ -3,6 +3,7 @@
 //import sjcl from 'sjcl';
 //import gql from 'graphql-tag';
 import { createGQLClient } from "../../graphql/client.js"; //'../../lib/graphql/client';
+import { redactValue } from "../parser/runtime/safeLogging.js";
 
 const defaultLEAFgqlEndpoints = Object.freeze({
   endpoint_subs: process.env.LEAFGON_ENDPOINT_SUBS || "https://www.leafgon.com/sgraphql",
@@ -175,7 +176,7 @@ const mutateAddNode = async ({ variables, endpoint = endpoint_qm }) => {
     }
     return qmresponse;
   } catch (e) {
-    console.log("Error mutateAddNode(): ", e);
+    console.log("Error mutateAddNode(): ", redactValue(e));
     throw e;
   }
 };
@@ -228,7 +229,7 @@ const mutateDelNode = async ({ node_uuid, endpoint = endpoint_qm }) => {
     }
     return qmresponse;
   } catch (e) {
-    console.log("Error onElementsRemove(): ", e);
+    console.log("Error onElementsRemove(): ", redactValue(e));
     throw e;
   }
 };
@@ -275,7 +276,7 @@ const mutateUpdateNode = async ({ variables, endpoint = endpoint_qm }) => {
     }
     return qmresponse;
   } catch (e) {
-    console.log("Error mutateUpdateNode(): ", e);
+    console.log("Error mutateUpdateNode(): ", redactValue(e));
     throw e;
   }
 };
@@ -322,7 +323,7 @@ const mutateAddEdge = async ({ variables, endpoint = endpoint_qm }) => {
     }
     return qmresponse;
   } catch (e) {
-    console.log("Error mutateAddEdge(): ", e);
+    console.log("Error mutateAddEdge(): ", redactValue(e));
     throw e;
   }
 };
@@ -374,7 +375,7 @@ const mutateDelEdge = async ({ edge_uuid, endpoint = endpoint_qm }) => {
     }
     return qmresponse;
   } catch (e) {
-    console.log("Error onElementsRemove(): ", e);
+    console.log("Error onElementsRemove(): ", redactValue(e));
     throw e;
   }
 };

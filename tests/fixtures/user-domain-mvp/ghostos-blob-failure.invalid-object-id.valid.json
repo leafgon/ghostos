@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "ghostos.blob_failure.v1",
+  "code": "invalid_object_id",
+  "retryable": false,
+  "safeMessage": "Object id is invalid for public page asset serving.",
+  "correlationId": "corr-blob-failure-001"
+}

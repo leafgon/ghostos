@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "ghostos.blob_store_bottle.v1",
+  "operation": "create",
+  "blobElementId": "blob-hero-image",
+  "contentType": "image/png",
+  "contentLength": 8421,
+  "contentHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "payloadRef": {
+    "kind": "runtime-file-ref",
+    "ref": "rfr_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789"
+  }
+}

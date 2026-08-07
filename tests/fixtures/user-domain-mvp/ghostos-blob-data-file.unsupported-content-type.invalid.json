@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "ghostos.blob_data_file.v1",
+  "blobElementId": "blob-script",
+  "objectId": "app-js",
+  "objectType": "file",
+  "contentType": "image/svg+xml",
+  "contentLength": 4200,
+  "contentHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "storage": {
+    "storageAccountName": "leafgonassetsdev",
+    "storageContainerName": "public-page-assets",
+    "storageBlobName": "tenant-a/page-home/app-js"
+  },
+  "etag": "\"ffff1234\"",
+  "assetRevision": 1,
+  "lastModifiedAt": "2026-07-25T11:00:00Z"
+}
