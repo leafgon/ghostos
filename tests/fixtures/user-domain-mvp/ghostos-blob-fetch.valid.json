@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "ghostos.blob_fetch_bottle.v1",
+  "blobElementId": "blob-hero-image",
+  "objectId": "logo-png",
+  "expectedAssetRevision": 5,
+  "expectedContentHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

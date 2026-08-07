@@ -1,0 +1,52 @@
+{
+  "sourceRepository": "leafgon/terraformer",
+  "sourceRevision": "a0d35fe022f59a93702dd8e1001dc049ddcbc93f",
+  "sourceSchemaBundlePath": "infra/conventions/user-domain-mvp-contracts.json",
+  "sourceSchemaBundleSha256": "4466c8b0acc993bfd215ef83537faddaaafab671ee41c37358273f8394867310",
+  "sourceFixtureDirectory": "tests/fixtures/user-domain-mvp",
+  "schemaBundleCopy": "schema-bundle.json",
+  "fixtures": [
+    [
+      "ghostos-blob-store.valid.json",
+      "ghostos.blob_store_bottle.v1",
+      true,
+      "23db588893209478a1051332ff46320d36e7c60fd59bf0be5a6c47af794944fb"
+    ],
+    [
+      "ghostos-blob-fetch.valid.json",
+      "ghostos.blob_fetch_bottle.v1",
+      true,
+      "76445a668815bc2c8a6dfa88f47355bf02e8b128cbb8bc161926d39441dcea36"
+    ],
+    [
+      "ghostos-blob-data-file.valid.json",
+      "ghostos.blob_data_file.v1",
+      true,
+      "ae2c359a9da05971ca17a1c62b3d72154242bba864077a20d3f2dabb94f1f20a"
+    ],
+    [
+      "ghostos-blob-data-file.unsupported-content-type.invalid.json",
+      "ghostos.blob_data_file.v1",
+      false,
+      "9e74e629ea3c385ed179c5d3267224bcb6d5810e08dbb38027c3bb061f5f37ad"
+    ],
+    [
+      "ghostos-blob-failure.invalid-object-id.valid.json",
+      "ghostos.blob_failure.v1",
+      true,
+      "80ecc38de30bd58b9b6e0931955756749377f86c332c379303de01dd050298a7"
+    ],
+    [
+      "runtime-file-ref.valid.json",
+      "leafgon.runtime_file_ref.v1",
+      true,
+      "be2cb88bb48abfe67ac7e1e922d2cf8818a74869881f167bad7d20f87ba3e84b"
+    ],
+    [
+      "runtime-file-ref.cross-graph.invalid.json",
+      "leafgon.runtime_file_ref.v1",
+      false,
+      "bf562690d5c4f62134ed30f954bbe2b919169b20652667381c6bc262b8684781"
+    ]
+  ]
+}
