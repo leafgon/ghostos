@@ -15,6 +15,7 @@ import { props as _form } from "./form.js";
 import { props as _directus } from "./directus.js";
 import { props as _hermes, cachekeys as _hermes_cachekeys } from "./hermes.js";
 import { props as _cortex, cachekeys as _cortex_cachekeys } from "./cortex.js";
+import { props as _blob } from "./blob.js";
 import { doBottle } from "../../datautils/bottling.js";
 
 const ElemCacheKeyLUT = {
@@ -64,6 +65,7 @@ const LEAFELEMENT_ADAPTER_REGISTRY = Object.freeze({
   directus: _directus,
   hermes: _hermes,
   cortex: _cortex,
+  blob: _blob,
 });
 
 const _std_elements_lut = LEAFELEMENT_ADAPTER_REGISTRY;
