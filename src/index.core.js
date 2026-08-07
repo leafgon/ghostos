@@ -44,6 +44,13 @@ import { _edge_handle_dict } from "./api/metamodel.js";
 import { _edge_style_dict } from "./api/metamodel.js";
 import { _leafgraph } from "./api/parser/nodelogic/abstraction/index.js";
 import { _leafelement } from "./api/parser/nodelogic/elements/index.js";
+import {
+  createInMemoryBlobStorageAdapter,
+  createLeafServerBlobStorageAdapter,
+  executeBlobBottle,
+  executeBlobFetchBottle,
+  executeBlobStoreBottle,
+} from "./api/parser/nodelogic/elements/library/blob.js";
 export {
   executeLEAFLogic,
   executeLEAFLogicInSync,
@@ -91,4 +98,9 @@ export {
   _edge_style_dict,
   _leafgraph,
   _leafelement,
+  createInMemoryBlobStorageAdapter,
+  createLeafServerBlobStorageAdapter,
+  executeBlobBottle,
+  executeBlobFetchBottle,
+  executeBlobStoreBottle,
 };

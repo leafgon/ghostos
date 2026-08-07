@@ -830,6 +830,16 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
       reason: "Hippocampus adapter requires persistence and security contracts.",
     }),
   }),
+  blob: elementMetadata({
+    elementname: "blob",
+    runtimeClass: RUNTIME_CLASSES.SIDE_EFFECTING_ACTION,
+    trigger: "data",
+    priority: "P0",
+    wired: true,
+    idempotency: { required: true },
+    migrationGate: sideEffectGate,
+    config: sideEffectConfigPolicy,
+  }),
 });
 
 const validateTriggerPolicy = (trigger) => {
