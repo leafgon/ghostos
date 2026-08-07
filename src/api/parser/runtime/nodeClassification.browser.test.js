@@ -15,6 +15,7 @@ import {
 } from "../breezyforest.js";
 import {
   NodeClassificationError,
+  RUNTIME_CLASSES,
   assertLeafElementAdapterSupported,
   assertNodeAllowedForNewGraphs,
   assertRuntimeExecutionModeled,
@@ -119,10 +120,41 @@ describe("node runtime classification inventory", () => {
     allowedNames.forEach((elementname) => {
       const classification = resolveLeafElementRuntimeClassification(elementname);
       expect(classification.runtimeTargetKey).toBe(`leafelement:${elementname}`);
-      expect(classification.wired === true || classification.rejectForNewGraphs === true).toBe(
-        true,
-      );
+      expect(
+        classification.wired === true ||
+          classification.rejectForNewGraphs === true ||
+          (classification.runtimeClass === RUNTIME_CLASSES.STRUCTURAL &&
+            classification.inventory?.runtimeExecution === "none"),
+      ).toBe(true);
     });
+  });
+
+  it("allows domain topology metadata in new graphs without a runtime adapter", () => {
+    const domain = resolveLeafElementRuntimeClassification("domain");
+
+    expect(allowedElementNames()).toContain("domain");
+    expect(listWiredLeafElementNames()).not.toContain("domain");
+    expect(domain).toMatchObject({
+      runtimeTargetKey: "leafelement:domain",
+      runtimeClass: RUNTIME_CLASSES.STRUCTURAL,
+      trigger: "none",
+      status: "metadata_only",
+      wired: false,
+      rejectForNewGraphs: false,
+      inventory: { state: "metadata-only", runtimeExecution: "none" },
+    });
+    expect(() =>
+      assertNodeAllowedForNewGraphs({
+        type: "leafelement",
+        args: { elementname: "domain" },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertRuntimeExecutionModeled({
+        type: "leafelement",
+        args: { elementname: "domain" },
+      }),
+    ).toThrow("leafelement:domain does not have modeled runtime execution.");
   });
 
   it("tracks wired adapter names separately from allowed metadata names", () => {
