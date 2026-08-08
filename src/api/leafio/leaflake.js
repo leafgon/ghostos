@@ -6,9 +6,15 @@
 import { LEAFIOmetamodel } from "../metamodel.js";
 
 import { createGQLClient } from "../../graphql/client.js";
-import lodashpkg from "lodash";
-
-const { memoize } = lodashpkg; // nodejs compatible lodash import
+/**
+ * @license
+ * Lodash <https://lodash.com/>
+ * Copyright OpenJS Foundation and other contributors
+ * Released under MIT license <https://lodash.com/license>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ */
+import memoize from "lodash/memoize.js";
 
 const SUBS_GRAPH = ({ _domain, _appid, filter = {}, query } = {}) =>
   `

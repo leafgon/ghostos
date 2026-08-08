@@ -24,14 +24,12 @@ import {
   StdRuntimeError,
 } from "../../../parser/leaflisp/plispstdlib/index.js";
 import { encodeUnicode } from "../../../utils/leafbase64.js";
-//import { result } from 'lodash';
 import { etaReduceLambdaGraphs } from "../../eta.js";
 //import { _leafLISPHelpText } from './leaflisphelp';
 import { driveDataflowByCtrlflow, executeLEAFLogic, parseAddressableGraph } from "../../leaf.js";
 import { _leafgraph } from "../abstraction/index.js";
 import { _common_methods } from "../common.js";
-//import { memoize } from 'lodash';
-import _ from "lodash";
+import memoize from "lodash/memoize.js";
 import { isBottle } from "../../predicates.js";
 import { doBottle, doUnbottle } from "../datautils/bottling.js";
 
@@ -788,7 +786,7 @@ const _leaflisp = {
       let runtimeLEAFlisp;
       let spawnVIMEditor = undefined;
 
-      const probeGraph = _.memoize(async () => {
+      const probeGraph = memoize(async () => {
         const graphaddrstr = "breezyforest/probe";
         const _probegraph = await parseAddressableGraph(
           graphaddrstr,

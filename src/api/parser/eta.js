@@ -1,7 +1,7 @@
 import { map, filter, share, withLatestFrom, switchMap } from "rxjs/operators";
 import { merge, race, Subject } from "rxjs";
 
-import lodashpkg from "lodash";
+import memoize from "lodash/memoize.js";
 
 import { getLEAFNodeCoreLogic } from "./breezyforest.js";
 //import { LEAFIOmetamodel } from '../metamodel';
@@ -15,7 +15,6 @@ import { runtimeLogger } from "./runtime/safeLogging.js";
 import { v4 as uuid4 } from "uuid";
 
 // locally global constants
-const { memoize } = lodashpkg; // nodejs compatible lodash import
 const EtaTreeConfig = {
   isdebug: process.env.LEAFGON_ENV_TYPE === "development" ? true : false,
 };

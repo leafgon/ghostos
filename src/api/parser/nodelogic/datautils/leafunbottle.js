@@ -4,7 +4,6 @@ import { isBottle } from "../../predicates.js";
 import { of, Subject } from "rxjs";
 import { driveDataflowByCtrlflow } from "../../leaf.js";
 import { doUnbottle } from "./bottling.js";
-//import { memoize } from 'lodash';
 
 /*
  * _leafunbottle() is a runtime function for the LEAFgraph node of logic type 'leafdataunbottle'.
