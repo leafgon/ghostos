@@ -6,7 +6,7 @@ import { ElemCacheKeyLUT, formatElementFlowdata } from "./index.js";
 import axios from "axios";
 import { driveDataflowByCtrlflow } from "../../../leaf.js";
 import { createSafeLogger } from "../../../runtime/safeLogging.js";
-import _ from "lodash";
+import throttle from "lodash/throttle.js";
 
 const runtimeLogger = createSafeLogger({ component: "leafelement.rancher" });
 
@@ -121,7 +121,7 @@ const initElementInterface = (_stream_cache) => {
       : validLambdaKeyList.includes("put")
         ? "put"
         : "get";
-    const throttled_uri_request = _.throttle(async () => {
+    const throttled_uri_request = throttle(async () => {
       return await _do_uri_request({ http_mode, uri: _uri });
     }, 1000); // 1000 ms gap
     const req_result = await throttled_uri_request();
