@@ -2,6 +2,13 @@
 
 A reference LEAF parser implementation used by leafgon.com
 
+## Canonical LEAFlisp node data
+
+The standard `leaflisp` scaffold always includes `leaf.object`, initialized to
+`null`. Graph mutation clients must preserve that field alongside
+`leaf.logic.args.lispexpression`; Leaf Server materializes its value from the
+expression when the node has no incoming data-edge connection.
+
 ## Node setup
 
 ```bash
