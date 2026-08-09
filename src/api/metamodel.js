@@ -1224,6 +1224,7 @@ const _leafstdlib_dataflow_api = (type) => {
             //lispnodename: 'leaflisp'
           },
         },
+        object: null,
       },
       editorconfig: {
         nodetype: "circularnode",
