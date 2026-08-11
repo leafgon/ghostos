@@ -683,7 +683,7 @@ const runLEAFlispcode = (_lispcode, refnode, _runtimeLEAFlisp, _leafaddress, _pr
     //    result instanceof PLFractionNumber || result instanceof PLNumber || result instanceof PLString)
     try {
       //    return (result instanceof PLHashMap) ? result.toJSON() : result.toJS();
-      const jsonized_result = result.toJSON();
+      const jsonized_result = leaflispValueToJS(result);
       //lisp_assert(jsonized_result == undefined);
       return [0, jsonized_result];
     } catch {
