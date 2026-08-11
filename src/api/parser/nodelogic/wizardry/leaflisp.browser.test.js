@@ -1,4 +1,4 @@
-import { createLEAFlispRuntime, executeLEAFlisp } from "./leaflisp.js";
+import { createLEAFlispRuntime, executeLEAFlisp, runLEAFlispcode } from "./leaflisp.js";
 
 describe("executeLEAFlisp", () => {
   it("executes leaflisp code with input data bound as inport", () => {
@@ -88,5 +88,19 @@ describe("executeLEAFlisp", () => {
 
   it("throws execution errors with leaflisp context", () => {
     expect(() => executeLEAFlisp(1, "(return (+ inport missing-value))")).toThrow(/LEAFlisp error/);
+  });
+});
+
+describe("runLEAFlispcode", () => {
+  it("preserves numeric values in graph-node output", () => {
+    const runtimeLEAFlisp = createLEAFlispRuntime();
+    const run = (code) => runLEAFlispcode(code, "number-output", runtimeLEAFlisp, "local", 0);
+
+    expect(run("(return 42)")).toEqual([0, 42]);
+    expect(run("(return [1 2.5])")).toEqual([0, [1, 2.5]]);
+    expect(run("(return {:count 2 :nested {:ratio 1.5}})")).toEqual([
+      0,
+      { count: 2, nested: { ratio: 1.5 } },
+    ]);
   });
 });
