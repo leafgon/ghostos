@@ -378,7 +378,7 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = {}) => {
       else return plNumber(parsednum.intValue, parsednum.decimals);
     },
     "parse-json": (_str) => {
-      const target_str = _str.toJSON();
+      const target_str = _str.toJSON().replace(/\\(?:\r\n|\r|\n)/g, "\\n");
       let parsedJson;
       try {
         parsedJson = JSON.parse(target_str);
