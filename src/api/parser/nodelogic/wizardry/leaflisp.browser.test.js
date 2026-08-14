@@ -86,6 +86,14 @@ describe("executeLEAFlisp", () => {
     expect(thrown.message).not.toContain('{"hello":}');
   });
 
+  it("normalizes escaped physical line continuations in JSON strings", () => {
+    const malformedProviderJson = '{"answer":"First paragraph.\\\n\\\r\nSecond paragraph."}';
+
+    expect(executeLEAFlisp(malformedProviderJson, "(return (parse-json inport))")).toEqual({
+      answer: "First paragraph.\n\nSecond paragraph.",
+    });
+  });
+
   it("throws execution errors with leaflisp context", () => {
     expect(() => executeLEAFlisp(1, "(return (+ inport missing-value))")).toThrow(/LEAFlisp error/);
   });
