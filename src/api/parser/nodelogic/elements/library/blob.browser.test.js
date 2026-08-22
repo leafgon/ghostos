@@ -10,6 +10,7 @@ import {
   createLeafServerBlobStorageAdapter,
   executeBlobFetchBottle,
   executeBlobStoreBottle,
+  normalizeIdempotencyKey,
   normalizeBlobObjectId,
   props as blobProps,
 } from "./blob.js";
@@ -381,8 +382,12 @@ describe("leafelement:blob contract helpers", () => {
     const adapter = createLeafServerBlobStorageAdapter({
       baseUrl: "https://www.leafgon.com",
       fetchImpl,
+      operationIdFactory: () => "operation-00000001",
     });
-    const context = createContext({ blobStorageAdapter: adapter });
+    const context = createContext({
+      blobStorageAdapter: adapter,
+      blobOperationIdFactory: () => "operation-00000001",
+    });
 
     const stored = await executeBlobStoreBottle(
       storeBottle({
@@ -434,6 +439,48 @@ describe("leafelement:blob contract helpers", () => {
     expect(putBody).not.toHaveProperty("actorRef");
     expect(putBody).not.toHaveProperty("storage");
     expect(putBody).not.toHaveProperty("storageAccountName");
+    expect(fetchImpl.mock.calls[2][1].headers["Idempotency-Key"]).toBe("operation-00000001");
+    expect(fetchImpl.mock.calls[4][1].headers["Idempotency-Key"]).toBe("operation-00000001");
+  });
+
+  it("keeps mutation IDs stable across transport retries and rejects unsafe metadata", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ body: { assetRevision: 1 } }));
+    const operationIdFactory = vi
+      .fn()
+      .mockReturnValueOnce("operation-00000001")
+      .mockReturnValueOnce("operation-00000002");
+    const adapter = createLeafServerBlobStorageAdapter({ fetchImpl, operationIdFactory });
+    const putCommand = {
+      graphDomainId: "domain-a",
+      graphAppId: "app-a",
+      blobElementId: "blob-node-uuid",
+      objectId: "logo",
+      contentType: "image/png",
+      contentLength: 12345,
+      contentHash: HASH_A,
+      payloadRef: { kind: "temp-file", ref: "runtime-ref-a" },
+      operation: "create",
+    };
+
+    await adapter.putObject(putCommand);
+    await adapter.putObject(putCommand);
+    await adapter.putObject({ ...putCommand });
+
+    expect(fetchImpl.mock.calls.map(([, request]) => request.headers["Idempotency-Key"])).toEqual([
+      "operation-00000001",
+      "operation-00000001",
+      "operation-00000002",
+    ]);
+    expect(operationIdFactory).toHaveBeenCalledTimes(2);
+    expect(() => normalizeIdempotencyKey("short")).toThrowError(
+      expect.objectContaining({ code: "invalid_idempotency_key" }),
+    );
+    await expect(
+      adapter.putObject({ ...putCommand, idempotencyKey: "contains spaces 000" }),
+    ).rejects.toMatchObject({ code: "invalid_idempotency_key" });
+    await expect(adapter.deleteObject({ ...putCommand })).rejects.toMatchObject({
+      code: "missing_expected_asset_revision",
+    });
   });
 
   it("returns metadata for leaf-server HEAD responses and typed failures for denied responses", async () => {

@@ -9,6 +9,7 @@ const DEFAULT_MAX_OBJECT_BYTES = 10 * 1024 * 1024;
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 const HASH_RE = /^sha256:[0-9a-f]{64}$/i;
 const OBJECT_ID_RE = /^[A-Za-z0-9._~-]+$/;
+const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9._~-]{16,128}$/;
 
 const ALLOWED_CONTENT_TYPES = Object.freeze([
   "image/png",
@@ -40,6 +41,8 @@ const FAILURE_MESSAGES = Object.freeze({
   invalid_payload_ref: "Payload reference is invalid.",
   missing_execution_context: "Blob execution context is missing.",
   invalid_blob_bottle: "Blob bottle is invalid.",
+  invalid_idempotency_key: "Idempotency key is invalid.",
+  missing_expected_asset_revision: "Expected asset revision is required.",
 });
 
 class BlobRuntimeError extends Error {
@@ -105,6 +108,23 @@ const failureFromError = (error, correlationId) => {
 };
 
 const isSafeInteger = (value) => Number.isSafeInteger(value) && value >= 0;
+
+const normalizeIdempotencyKey = (value) => {
+  if (typeof value !== "string" || !IDEMPOTENCY_KEY_RE.test(value)) {
+    throw new BlobRuntimeError("invalid_idempotency_key");
+  }
+  return value;
+};
+
+const defaultBlobOperationIdFactory = () => {
+  const operationId = globalThis.crypto?.randomUUID?.();
+  if (!operationId) {
+    throw new BlobRuntimeError("storage_unavailable", "UUID generation is unavailable.", {
+      retryable: true,
+    });
+  }
+  return operationId;
+};
 
 const assertHash = (contentHash) => {
   if (typeof contentHash !== "string" || !HASH_RE.test(contentHash)) {
@@ -356,6 +376,9 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
     let payloadRef = bottle.payloadRef;
     const adapter = executionContext.blobStorageAdapter;
     const baseInput = commonStorageInput(executionContext, bottle, objectId);
+    const idempotencyKey = normalizeIdempotencyKey(
+      executionContext.blobOperationIdFactory?.() ?? defaultBlobOperationIdFactory(),
+    );
     const existing = await tryHeadObject(adapter, baseInput);
 
     if (operation === "create" && existing) {
@@ -396,6 +419,7 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       contentHash,
       payloadRef,
       operation,
+      idempotencyKey,
       expectedAssetRevision: bottle.expectedAssetRevision,
     });
     if (stored.contentHash && stored.contentHash !== contentHash) {
@@ -544,6 +568,7 @@ const requestLeafServerBlobStorage = async ({
   method,
   path,
   body,
+  headers,
 }) => {
   const request = {
     method,
@@ -551,6 +576,9 @@ const requestLeafServerBlobStorage = async ({
   };
   if (body !== undefined) {
     Object.assign(request, leafServerJsonRequest(body));
+  }
+  if (headers !== undefined) {
+    request.headers = { ...(request.headers ?? {}), ...headers };
   }
   const response = await fetchImpl(resolveLeafServerBlobStorageUrl({ baseUrl, path }), request);
   if (!response?.ok) {
@@ -563,8 +591,26 @@ const createLeafServerBlobStorageAdapter = ({
   baseUrl = "",
   fetchImpl = globalThis.fetch,
   credentials = "include",
+  operationIdFactory = defaultBlobOperationIdFactory,
 } = {}) => {
   const resolvedFetch = requireLeafServerFetch(fetchImpl);
+  const operationIds = new WeakMap();
+  const resolveMutationId = (input) => {
+    if (!isPlainObject(input)) {
+      throw new BlobRuntimeError("invalid_idempotency_key");
+    }
+    const explicit = input.idempotencyKey;
+    if (explicit !== undefined) {
+      return normalizeIdempotencyKey(explicit);
+    }
+    const existing = operationIds.get(input);
+    if (existing) {
+      return existing;
+    }
+    const generated = normalizeIdempotencyKey(operationIdFactory());
+    operationIds.set(input, generated);
+    return generated;
+  };
   return {
     resolveRuntimeFileRef: async (input) => {
       const ref = encodeLeafServerPathSegment(input.ref);
@@ -596,12 +642,14 @@ const createLeafServerBlobStorageAdapter = ({
       return createLeafServerHeadMetadata(input, response);
     },
     putObject: async (input) => {
+      const idempotencyKey = resolveMutationId(input);
       const response = await requestLeafServerBlobStorage({
         baseUrl,
         credentials,
         fetchImpl: resolvedFetch,
         method: "PUT",
         path: leafServerObjectPath(input),
+        headers: { "Idempotency-Key": idempotencyKey },
         body: {
           contentType: input.contentType,
           contentLength: input.contentLength,
@@ -625,12 +673,17 @@ const createLeafServerBlobStorageAdapter = ({
       return readLeafServerBlobJson(response);
     },
     deleteObject: async (input) => {
+      if (!Number.isSafeInteger(input?.expectedAssetRevision) || input.expectedAssetRevision < 1) {
+        throw new BlobRuntimeError("missing_expected_asset_revision");
+      }
+      const idempotencyKey = resolveMutationId(input);
       const response = await requestLeafServerBlobStorage({
         baseUrl,
         credentials,
         fetchImpl: resolvedFetch,
         method: "DELETE",
         path: leafServerObjectPath(input),
+        headers: { "Idempotency-Key": idempotencyKey },
         body: {
           expectedAssetRevision: input.expectedAssetRevision,
           correlationId: input.correlationId,
@@ -866,5 +919,6 @@ export {
   executeBlobFetchBottle,
   executeBlobStoreBottle,
   normalizeBlobObjectId,
+  normalizeIdempotencyKey,
   props,
 };
