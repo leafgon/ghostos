@@ -72,10 +72,11 @@ export function createInMemoryBlobStorageAdapter({ accountName, containerName, m
     getObject: (input: any) => Promise<any>;
     deleteObject: (input: any) => Promise<any>;
 };
-export function createLeafServerBlobStorageAdapter({ baseUrl, fetchImpl, credentials, }?: {
+export function createLeafServerBlobStorageAdapter({ baseUrl, fetchImpl, credentials, operationIdFactory, }?: {
     baseUrl?: string | undefined;
     fetchImpl?: typeof fetch | undefined;
     credentials?: string | undefined;
+    operationIdFactory?: (() => `${string}-${string}-${string}-${string}-${string}`) | undefined;
 }): {
     resolveRuntimeFileRef: (input: any) => Promise<any>;
     headObject: (input: any) => Promise<{
@@ -153,6 +154,7 @@ export function executeBlobStoreBottle(rawBottle: any, executionContext: any): P
     lastModifiedAt: any;
 }>;
 export function normalizeBlobObjectId(value: any): any;
+export function normalizeIdempotencyKey(value: any): string;
 export function props(streamCache: any): {
     leaflogic: (input$objArr: any, controlflow$obj: any) => {
         _stream: Observable<any>;
