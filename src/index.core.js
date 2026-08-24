@@ -49,6 +49,7 @@ import {
   createLeafServerBlobStorageAdapter,
   executeBlobBottle,
   executeBlobFetchBottle,
+  executeBlobListBottle,
   executeBlobStoreBottle,
 } from "./api/parser/nodelogic/elements/library/blob.js";
 export {
@@ -102,5 +103,6 @@ export {
   createLeafServerBlobStorageAdapter,
   executeBlobBottle,
   executeBlobFetchBottle,
+  executeBlobListBottle,
   executeBlobStoreBottle,
 };

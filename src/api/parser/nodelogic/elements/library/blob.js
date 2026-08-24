@@ -3,9 +3,13 @@ import { concatMap, map, share, startWith, withLatestFrom } from "rxjs/operators
 
 const STORE_SCHEMA_VERSION = "ghostos.blob_store_bottle.v1";
 const FETCH_SCHEMA_VERSION = "ghostos.blob_fetch_bottle.v1";
+const LIST_SCHEMA_VERSION = "ghostos.blob_list_bottle.v1";
 const DATA_FILE_SCHEMA_VERSION = "ghostos.blob_data_file.v1";
+const DATA_FILE_PAGE_SCHEMA_VERSION = "ghostos.blob_data_file_page.v1";
 const FAILURE_SCHEMA_VERSION = "ghostos.blob_failure.v1";
 const DEFAULT_MAX_OBJECT_BYTES = 10 * 1024 * 1024;
+const DEFAULT_BLOB_LIST_LIMIT = 50;
+const MAX_BLOB_LIST_LIMIT = 100;
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 const HASH_RE = /^sha256:[0-9a-f]{64}$/i;
 const OBJECT_ID_RE = /^[A-Za-z0-9._~-]+$/;
@@ -465,6 +469,59 @@ const executeBlobFetchBottle = async (rawBottle, executionContext) => {
   }
 };
 
+const executeBlobListBottle = async (rawBottle, executionContext) => {
+  try {
+    const bottle = unwrapBottle(rawBottle);
+    requireBlobExecutionContext(executionContext);
+    if (!isPlainObject(bottle) || bottle.schemaVersion !== LIST_SCHEMA_VERSION) {
+      throw new BlobRuntimeError("invalid_blob_bottle");
+    }
+    if (typeof bottle.blobElementId !== "string" || bottle.blobElementId.trim() === "") {
+      throw new BlobRuntimeError("invalid_blob_bottle");
+    }
+    const limit = bottle.limit ?? DEFAULT_BLOB_LIST_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_BLOB_LIST_LIMIT) {
+      throw new BlobRuntimeError("invalid_blob_bottle");
+    }
+    if (
+      bottle.cursor !== undefined &&
+      bottle.cursor !== null &&
+      (typeof bottle.cursor !== "string" || bottle.cursor.length === 0)
+    ) {
+      throw new BlobRuntimeError("invalid_blob_bottle");
+    }
+    const adapter = executionContext.blobStorageAdapter;
+    if (typeof adapter.listObjects !== "function") {
+      throw new BlobRuntimeError("missing_execution_context");
+    }
+    const page = await callStorage("listObjects", adapter, {
+      tenantId: executionContext.tenantId,
+      graphDomainId: executionContext.graphDomainId,
+      graphAppId: executionContext.graphAppId,
+      actorRef: executionContext.actorRef,
+      blobElementId: bottle.blobElementId,
+      correlationId: executionContext.correlationId,
+      limit,
+      cursor: bottle.cursor,
+    });
+    if (!isPlainObject(page) || !Array.isArray(page.items)) {
+      throw new BlobRuntimeError("storage_unavailable");
+    }
+    return {
+      schemaVersion: DATA_FILE_PAGE_SCHEMA_VERSION,
+      items: page.items.map((item) =>
+        normalizeBlobMetadata(item, {
+          blobElementId: bottle.blobElementId,
+          objectId: item?.objectId,
+        }),
+      ),
+      nextCursor: page.nextCursor ?? null,
+    };
+  } catch (error) {
+    return failureFromError(error, executionContext?.correlationId);
+  }
+};
+
 const resolveLeafServerBlobStorageUrl = ({ baseUrl = "", path }) => {
   const normalizedBase = `${baseUrl ?? ""}`.replace(/\/+$/, "");
   const normalizedPath = `${path ?? ""}`.replace(/^\/+/, "");
@@ -483,6 +540,14 @@ const leafServerObjectPath = ({ graphDomainId, graphAppId, blobElementId, object
     encodeLeafServerPathSegment(graphAppId),
     encodeLeafServerPathSegment(blobElementId),
     encodeLeafServerPathSegment(objectId),
+  ].join("/");
+
+const leafServerObjectCollectionPath = ({ graphDomainId, graphAppId, blobElementId }) =>
+  [
+    "api/v1/blob-storage/objects",
+    encodeLeafServerPathSegment(graphDomainId),
+    encodeLeafServerPathSegment(graphAppId),
+    encodeLeafServerPathSegment(blobElementId),
   ].join("/");
 
 const leafServerJsonRequest = (body) => ({
@@ -672,6 +737,20 @@ const createLeafServerBlobStorageAdapter = ({
       });
       return readLeafServerBlobJson(response);
     },
+    listObjects: async (input) => {
+      const query = [`limit=${encodeURIComponent(input.limit)}`];
+      if (input.cursor) {
+        query.push(`cursor=${encodeURIComponent(input.cursor)}`);
+      }
+      const response = await requestLeafServerBlobStorage({
+        baseUrl,
+        credentials,
+        fetchImpl: resolvedFetch,
+        method: "GET",
+        path: `${leafServerObjectCollectionPath(input)}?${query.join("&")}`,
+      });
+      return readLeafServerBlobJson(response);
+    },
     deleteObject: async (input) => {
       if (!Number.isSafeInteger(input?.expectedAssetRevision) || input.expectedAssetRevision < 1) {
         throw new BlobRuntimeError("missing_expected_asset_revision");
@@ -701,6 +780,9 @@ const executeBlobBottle = async (bottle, executionContext) => {
   }
   if (content?.schemaVersion === FETCH_SCHEMA_VERSION) {
     return executeBlobFetchBottle(content, executionContext);
+  }
+  if (content?.schemaVersion === LIST_SCHEMA_VERSION) {
+    return executeBlobListBottle(content, executionContext);
   }
   return createBlobFailure("invalid_blob_bottle", {
     correlationId: executionContext?.correlationId,
@@ -736,6 +818,7 @@ const createInMemoryBlobStorageAdapter = ({
     resolveRuntimeFileRef: 0,
     putObject: 0,
     getObject: 0,
+    listObjects: 0,
     headObject: 0,
     deleteObject: 0,
   };
@@ -837,6 +920,21 @@ const createInMemoryBlobStorageAdapter = ({
       }
       return object;
     },
+    listObjects: async (input) => {
+      executionCounts.listObjects += 1;
+      const prefix = keyFor({ ...input, objectId: "" });
+      const items = [...objects.entries()]
+        .filter(([key]) => key.startsWith(prefix))
+        .map(([, object]) => object)
+        .sort((left, right) => left.objectId.localeCompare(right.objectId))
+        .filter((object) => !input.cursor || object.objectId > input.cursor);
+      const pageItems = items.slice(0, input.limit);
+      return {
+        schemaVersion: DATA_FILE_PAGE_SCHEMA_VERSION,
+        items: pageItems,
+        nextCursor: items.length > input.limit ? pageItems.at(-1).objectId : null,
+      };
+    },
     deleteObject: async (input) => {
       executionCounts.deleteObject += 1;
       const key = keyFor(input);
@@ -907,9 +1005,13 @@ export {
   ALLOWED_CONTENT_TYPES,
   BlobRuntimeError,
   DATA_FILE_SCHEMA_VERSION,
+  DATA_FILE_PAGE_SCHEMA_VERSION,
+  DEFAULT_BLOB_LIST_LIMIT,
   DEFAULT_MAX_OBJECT_BYTES,
   FAILURE_SCHEMA_VERSION,
   FETCH_SCHEMA_VERSION,
+  LIST_SCHEMA_VERSION,
+  MAX_BLOB_LIST_LIMIT,
   STORE_SCHEMA_VERSION,
   assignDeterministicObjectId,
   createBlobFailure,
@@ -917,6 +1019,7 @@ export {
   createLeafServerBlobStorageAdapter,
   executeBlobBottle,
   executeBlobFetchBottle,
+  executeBlobListBottle,
   executeBlobStoreBottle,
   normalizeBlobObjectId,
   normalizeIdempotencyKey,

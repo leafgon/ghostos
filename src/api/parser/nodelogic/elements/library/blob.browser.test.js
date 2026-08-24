@@ -6,9 +6,11 @@ import { LEAFELEMENT_ADAPTER_REGISTRY } from "./index.js";
 import {
   STORE_SCHEMA_VERSION,
   FETCH_SCHEMA_VERSION,
+  LIST_SCHEMA_VERSION,
   createInMemoryBlobStorageAdapter,
   createLeafServerBlobStorageAdapter,
   executeBlobFetchBottle,
+  executeBlobListBottle,
   executeBlobStoreBottle,
   normalizeIdempotencyKey,
   normalizeBlobObjectId,
@@ -53,6 +55,12 @@ const fetchBottle = (objectId = "logo", overrides = {}) => ({
   ...overrides,
 });
 
+const listBottle = (overrides = {}) => ({
+  schemaVersion: LIST_SCHEMA_VERSION,
+  blobElementId: "blob-node-uuid",
+  ...overrides,
+});
+
 const jsonResponse = ({ status = 200, body = {}, headers = {} } = {}) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -86,11 +94,11 @@ describe("leafelement:blob contract helpers", () => {
       [
         "--input-type=module",
         "-e",
-        "import('./lib/index.esm.js').then((m) => console.log([typeof m.createInMemoryBlobStorageAdapter, typeof m.createLeafServerBlobStorageAdapter, typeof m.executeBlobBottle].join(' ')))",
+        "import('./lib/index.esm.js').then((m) => console.log([typeof m.createInMemoryBlobStorageAdapter, typeof m.createLeafServerBlobStorageAdapter, typeof m.executeBlobBottle, typeof m.executeBlobListBottle].join(' ')))",
       ],
       { cwd: process.cwd(), encoding: "utf8" },
     );
-    expect(output.trim()).toBe("function function function");
+    expect(output.trim()).toBe("function function function function");
   });
 
   it("stores and fetches deterministic data-file metadata through the fake adapter", async () => {
@@ -119,6 +127,43 @@ describe("leafelement:blob contract helpers", () => {
       putObject: 1,
       getObject: 1,
     });
+  });
+
+  it("lists scoped blob objects in stable cursor pages", async () => {
+    const context = createContext();
+    for (const objectId of ["charlie", "alpha", "bravo"]) {
+      await executeBlobStoreBottle(storeBottle({ requestedObjectId: objectId }), context);
+    }
+    await executeBlobStoreBottle(storeBottle({ requestedObjectId: "excluded" }), {
+      ...context,
+      graphAppId: "other-app",
+    });
+
+    const firstPage = await executeBlobListBottle(listBottle({ limit: 2 }), context);
+    expect(firstPage).toMatchObject({
+      schemaVersion: "ghostos.blob_data_file_page.v1",
+      items: [{ objectId: "alpha" }, { objectId: "bravo" }],
+    });
+    expect(firstPage.nextCursor).toBe("bravo");
+
+    await expect(
+      executeBlobListBottle(listBottle({ limit: 2, cursor: firstPage.nextCursor }), context),
+    ).resolves.toMatchObject({
+      items: [{ objectId: "charlie" }],
+      nextCursor: null,
+    });
+    expect(context.blobStorageAdapter.getExecutionCounts()).toMatchObject({ listObjects: 2 });
+  });
+
+  it("rejects invalid blob list limits before calling storage", async () => {
+    const context = createContext();
+    await expect(executeBlobListBottle(listBottle({ limit: 101 }), context)).resolves.toMatchObject(
+      {
+        schemaVersion: "ghostos.blob_failure.v1",
+        code: "invalid_blob_bottle",
+      },
+    );
+    expect(context.blobStorageAdapter.getExecutionCounts()).toMatchObject({ listObjects: 0 });
   });
 
   it("assigns stable object IDs and treats same-content assigned creates as idempotent", async () => {
@@ -481,6 +526,33 @@ describe("leafelement:blob contract helpers", () => {
     await expect(adapter.deleteObject({ ...putCommand })).rejects.toMatchObject({
       code: "missing_expected_asset_revision",
     });
+  });
+
+  it("requests leaf-server blob collection pages without client-owned scope", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        body: {
+          schemaVersion: "ghostos.blob_data_file_page.v1",
+          items: [],
+          nextCursor: null,
+        },
+      }),
+    );
+    const adapter = createLeafServerBlobStorageAdapter({ fetchImpl });
+
+    await adapter.listObjects({
+      tenantId: "tenant-a",
+      graphDomainId: "domain-a",
+      graphAppId: "app-a",
+      blobElementId: "blob-node-uuid",
+      limit: 25,
+      cursor: "opaque+cursor",
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/v1/blob-storage/objects/domain-a/app-a/blob-node-uuid?limit=25&cursor=opaque%2Bcursor",
+      { method: "GET", credentials: "include" },
+    );
   });
 
   it("returns metadata for leaf-server HEAD responses and typed failures for denied responses", async () => {
