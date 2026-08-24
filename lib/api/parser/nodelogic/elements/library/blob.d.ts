@@ -6,9 +6,13 @@ export class BlobRuntimeError extends Error {
     details: any;
 }
 export const DATA_FILE_SCHEMA_VERSION: "ghostos.blob_data_file.v1";
+export const DATA_FILE_PAGE_SCHEMA_VERSION: "ghostos.blob_data_file_page.v1";
+export const DEFAULT_BLOB_LIST_LIMIT: 50;
 export const DEFAULT_MAX_OBJECT_BYTES: number;
 export const FAILURE_SCHEMA_VERSION: "ghostos.blob_failure.v1";
 export const FETCH_SCHEMA_VERSION: "ghostos.blob_fetch_bottle.v1";
+export const LIST_SCHEMA_VERSION: "ghostos.blob_list_bottle.v1";
+export const MAX_BLOB_LIST_LIMIT: 100;
 export const STORE_SCHEMA_VERSION: "ghostos.blob_store_bottle.v1";
 export function assignDeterministicObjectId({ contentHash, contentType, contentLength }: {
     contentHash: any;
@@ -35,6 +39,7 @@ export function createInMemoryBlobStorageAdapter({ accountName, containerName, m
         resolveRuntimeFileRef: number;
         putObject: number;
         getObject: number;
+        listObjects: number;
         headObject: number;
         deleteObject: number;
     };
@@ -42,6 +47,7 @@ export function createInMemoryBlobStorageAdapter({ accountName, containerName, m
         resolveRuntimeFileRef: number;
         putObject: number;
         getObject: number;
+        listObjects: number;
         headObject: number;
         deleteObject: number;
     };
@@ -70,6 +76,11 @@ export function createInMemoryBlobStorageAdapter({ accountName, containerName, m
         lastModifiedAt: string;
     }>;
     getObject: (input: any) => Promise<any>;
+    listObjects: (input: any) => Promise<{
+        schemaVersion: string;
+        items: any[];
+        nextCursor: any;
+    }>;
     deleteObject: (input: any) => Promise<any>;
 };
 export function createLeafServerBlobStorageAdapter({ baseUrl, fetchImpl, credentials, operationIdFactory, }?: {
@@ -94,6 +105,7 @@ export function createLeafServerBlobStorageAdapter({ baseUrl, fetchImpl, credent
     }>;
     putObject: (input: any) => Promise<any>;
     getObject: (input: any) => Promise<any>;
+    listObjects: (input: any) => Promise<any>;
     deleteObject: (input: any) => Promise<any>;
 };
 export function executeBlobBottle(bottle: any, executionContext: any): Promise<{
@@ -114,6 +126,10 @@ export function executeBlobBottle(bottle: any, executionContext: any): Promise<{
     etag: any;
     assetRevision: any;
     lastModifiedAt: any;
+} | {
+    schemaVersion: string;
+    items: any;
+    nextCursor: any;
 }>;
 export function executeBlobFetchBottle(rawBottle: any, executionContext: any): Promise<{
     schemaVersion: string;
@@ -133,6 +149,17 @@ export function executeBlobFetchBottle(rawBottle: any, executionContext: any): P
     etag: any;
     assetRevision: any;
     lastModifiedAt: any;
+}>;
+export function executeBlobListBottle(rawBottle: any, executionContext: any): Promise<{
+    schemaVersion: string;
+    code: any;
+    retryable: boolean;
+    safeMessage: any;
+    correlationId: any;
+} | {
+    schemaVersion: string;
+    items: any;
+    nextCursor: any;
 }>;
 export function executeBlobStoreBottle(rawBottle: any, executionContext: any): Promise<{
     schemaVersion: string;

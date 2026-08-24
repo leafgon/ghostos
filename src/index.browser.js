@@ -48,6 +48,7 @@ import { createInMemoryBlobStorageAdapter } from "./index.core.js";
 import { createLeafServerBlobStorageAdapter } from "./index.core.js";
 import { executeBlobBottle } from "./index.core.js";
 import { executeBlobFetchBottle } from "./index.core.js";
+import { executeBlobListBottle } from "./index.core.js";
 import { executeBlobStoreBottle } from "./index.core.js";
 
 export {
@@ -101,5 +102,6 @@ export {
   createLeafServerBlobStorageAdapter,
   executeBlobBottle,
   executeBlobFetchBottle,
+  executeBlobListBottle,
   executeBlobStoreBottle,
 };
