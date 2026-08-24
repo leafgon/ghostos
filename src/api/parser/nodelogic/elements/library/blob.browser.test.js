@@ -355,8 +355,10 @@ describe("leafelement:blob contract helpers", () => {
 
   it("executes through the blob adapter dataflow with host-injected context", async () => {
     const context = createContext();
-    const adapter = blobProps({}).leaflogic;
-    const input$ = new BehaviorSubject(storeBottle({ requestedObjectId: "flow-logo" }));
+    const adapter = blobProps({ _refnode: "blob-node-uuid" }).leaflogic;
+    const input$ = new BehaviorSubject(
+      storeBottle({ blobElementId: undefined, requestedObjectId: "flow-logo" }),
+    );
     const ctrl$ = new Subject();
     const flow = adapter([{ _stream: input$ }], {
       _stream: ctrl$,
@@ -376,6 +378,49 @@ describe("leafelement:blob contract helpers", () => {
       objectId: "flow-logo",
     });
     expect(context.blobStorageAdapter.getExecutionCounts().putObject).toBe(1);
+  });
+
+  it("binds list bottles to the executing blob element", async () => {
+    const context = createContext();
+    const adapter = blobProps({ _refnode: "blob-node-uuid" }).leaflogic;
+    const input$ = new BehaviorSubject({ schemaVersion: LIST_SCHEMA_VERSION, limit: 50 });
+    const ctrl$ = new Subject();
+    const flow = adapter([{ _stream: input$ }], {
+      _stream: ctrl$,
+      _config: { blobExecutionContext: context },
+    });
+    const outputPromise = firstValueFrom(flow._stream);
+    const ctrlPromise = firstValueFrom(flow._control._stream);
+
+    ctrl$.next({ frame: 1 });
+
+    expect(await outputPromise).toMatchObject({
+      schemaVersion: "ghostos.blob_data_file_page.v1",
+      items: [],
+    });
+    await ctrlPromise;
+    expect(context.blobStorageAdapter.getExecutionCounts().listObjects).toBe(1);
+  });
+
+  it("rejects a bottle that targets a different blob element", async () => {
+    const context = createContext();
+    const adapter = blobProps({ _refnode: "blob-node-uuid" }).leaflogic;
+    const input$ = new BehaviorSubject(listBottle({ blobElementId: "another-node" }));
+    const ctrl$ = new Subject();
+    const flow = adapter([{ _stream: input$ }], {
+      _stream: ctrl$,
+      _config: { blobExecutionContext: context },
+    });
+    const outputPromise = firstValueFrom(flow._stream);
+    const ctrlPromise = firstValueFrom(flow._control._stream);
+
+    ctrl$.next({ frame: 1 });
+
+    expect(await outputPromise).toMatchObject({
+      schemaVersion: "ghostos.blob_failure.v1",
+      code: "invalid_blob_bottle",
+    });
+    await ctrlPromise;
   });
 
   it("maps the host adapter to the first-party leaf-server blob storage API", async () => {

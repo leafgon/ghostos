@@ -1,6 +1,6 @@
 {
   "name": "ghostos",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "description": "A reference LEAF graph parser implementation used by leafgon.com",
   "main": "lib/index.esm.js",
   "module": "lib/index.esm.js",
