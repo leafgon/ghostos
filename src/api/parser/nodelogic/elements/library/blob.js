@@ -789,6 +789,25 @@ const executeBlobBottle = async (bottle, executionContext) => {
   });
 };
 
+const executeElementBlobBottle = async (rawBottle, executionContext, blobElementId) => {
+  try {
+    const bottle = unwrapBottle(rawBottle);
+    if (
+      !isPlainObject(bottle) ||
+      typeof blobElementId !== "string" ||
+      blobElementId.trim() === ""
+    ) {
+      throw new BlobRuntimeError("invalid_blob_bottle");
+    }
+    if (bottle.blobElementId !== undefined && bottle.blobElementId !== blobElementId) {
+      throw new BlobRuntimeError("invalid_blob_bottle");
+    }
+    return executeBlobBottle({ ...bottle, blobElementId }, executionContext);
+  } catch (error) {
+    return failureFromError(error, executionContext?.correlationId);
+  }
+};
+
 const createMetadata = (input, revision) => ({
   schemaVersion: DATA_FILE_SCHEMA_VERSION,
   blobElementId: input.blobElementId,
@@ -966,9 +985,9 @@ const initElementInterface = (streamCache) => {
       concatMap(([ctrl, ...inputValues]) => {
         const command = inputValues.find((value) => value !== undefined) ?? ctrl;
         const executionContext = resolveBlobExecutionContext(streamCache, controlflow$obj);
-        return from(executeBlobBottle(command, executionContext)).pipe(
-          map((output) => ({ ctrl, output })),
-        );
+        return from(
+          executeElementBlobBottle(command, executionContext, streamCache?._refnode),
+        ).pipe(map((output) => ({ ctrl, output })));
       }),
       map(({ ctrl, output }) => {
         _outflow_data$.next(output);
@@ -1018,6 +1037,7 @@ export {
   createInMemoryBlobStorageAdapter,
   createLeafServerBlobStorageAdapter,
   executeBlobBottle,
+  executeElementBlobBottle,
   executeBlobFetchBottle,
   executeBlobListBottle,
   executeBlobStoreBottle,
