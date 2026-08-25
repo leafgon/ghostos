@@ -1,133 +1,128 @@
-import * as tonepkg from "tone";
-//import { Tone } from "tone/build/esm/core/Tone";
-//import * as tonepkg from "tone";
-//const { Synth, AMSynth, DuoSynth, FMSynth, MembraneSynth, MetalSynth, MonoSynth, NoiseSynth, PluckSynth, PolySynth, Sampler, Transport } = tonepkg;
-//import { Synth, AMSynth, DuoSynth, FMSynth, MembraneSynth, MetalSynth, MonoSynth, NoiseSynth, PluckSynth, PolySynth, Sampler, Transport } from "tone";
-// core clock & routing
-//import { Transport }   from "tone";
+let toneModulePromise;
 
-// instruments  – every file exports a *named* class
-import { Synth } from "tone/build/esm/instrument/Synth.js";
-import { AMSynth } from "tone/build/esm/instrument/AMSynth.js";
-import { DuoSynth } from "tone/build/esm/instrument/DuoSynth.js";
-import { FMSynth } from "tone/build/esm/instrument/FMSynth.js";
-import { MembraneSynth } from "tone/build/esm/instrument/MembraneSynth.js";
-import { MetalSynth } from "tone/build/esm/instrument/MetalSynth.js";
-import { MonoSynth } from "tone/build/esm/instrument/MonoSynth.js";
-import { NoiseSynth } from "tone/build/esm/instrument/NoiseSynth.js";
-import { PluckSynth } from "tone/build/esm/instrument/PluckSynth.js";
-import { PolySynth } from "tone/build/esm/instrument/PolySynth.js";
-import { Sampler } from "tone/build/esm/instrument/Sampler.js";
-
-const toneinstrument_lut = {
-  synth: {
-    new: (options) => {
-      return new Synth(options);
-    },
-  },
-  amsynth: {
-    new: (options) => {
-      return new AMSynth(options);
-    },
-  },
-  duosynth: {
-    new: (options) => {
-      return new DuoSynth(options);
-    },
-  },
-  fmsynth: {
-    new: (options) => {
-      return new FMSynth(options);
-    },
-  },
-  membranesynth: {
-    new: (options) => {
-      return new MembraneSynth(options);
-    },
-  },
-  metalsynth: {
-    new: (options) => {
-      return new MetalSynth(options);
-    },
-  },
-  monosynth: {
-    new: (options) => {
-      return new MonoSynth(options);
-    },
-  },
-  noisesynth: {
-    new: (options) => {
-      return new NoiseSynth(options);
-    },
-  },
-  plucksynth: {
-    new: (options) => {
-      return new PluckSynth(options);
-    },
-  },
-  polysynth: {
-    new: (voice, options) => {
-      return new PolySynth(voice, options);
-    },
-  },
-  sampler: {
-    new: (options) => {
-      return new Sampler(options);
-    },
-  },
+const resetToneModulePromise = () => {
+  toneModulePromise = undefined;
 };
 
-// "synth", "monosynth", "fmsynth", "duosynth", "amsynth"
-const tonevoice_lut = {
-  synth: Synth, // default
-  monosynth: MonoSynth,
-  fmsynth: FMSynth,
-  duosyntho: DuoSynth,
-  amsynth: AMSynth,
+const loadToneModule = async () => {
+  if (!toneModulePromise) {
+    toneModulePromise = import("tone")
+      .then((toneModule) => toneModule?.default ?? toneModule)
+      .catch((error) => {
+        resetToneModulePromise();
+        throw error;
+      });
+  }
+
+  return toneModulePromise;
 };
 
-const toneeffect_lut = {
-  autofilter: {
-    new: (options) => {
-      return new tonepkg.AutoFilter(options);
-    },
-  },
-  bitcrusher: {
-    new: (options) => {
-      return new tonepkg.BitCrusher(options);
-    },
-  },
-  chebyshev: {
-    new: (options) => {
-      return new tonepkg.Chebyshev(options);
-    },
-  },
-  pitchshift: {
-    new: (options) => {
-      return new tonepkg.PitchShift(options);
-    },
-  },
+const resolveToneCtor = (toneModule, constructorName) => {
+  const constructor = toneModule?.[constructorName];
+  if (typeof constructor !== "function") {
+    throw new Error(`Tone constructor '${constructorName}' is not available.`);
+  }
+
+  return constructor;
 };
 
-const doConfigureInstrument = (refnode, _config, is_reset = false) => {
-  // for instruments, _config should have "instrument" among its keys
-
+const doConfigureInstrument = async (refnode, _config, is_reset = false) => {
   try {
     if (_config?.instrument) {
-      const _instrument = !is_reset
-        ? toneinstrument_lut[_config.instrument.type]?.new(
-            _config.instrument.voice ? tonevoice_lut[_config.instrument.voice] : Synth,
-            _config.instrument.options,
-          )
-        : (() => {
-            globalThis.sound[refnode].set(_config.instrument.options);
-            return globalThis.sound[refnode];
-          })();
-      return _instrument;
+      if (is_reset) {
+        globalThis.sound[refnode].set(_config.instrument.options);
+        return globalThis.sound[refnode];
+      }
+
+      const toneModule = await loadToneModule();
+      const toneConstructors = {
+        Synth: resolveToneCtor(toneModule, "Synth"),
+        AMSynth: resolveToneCtor(toneModule, "AMSynth"),
+        DuoSynth: resolveToneCtor(toneModule, "DuoSynth"),
+        FMSynth: resolveToneCtor(toneModule, "FMSynth"),
+        MembraneSynth: resolveToneCtor(toneModule, "MembraneSynth"),
+        MetalSynth: resolveToneCtor(toneModule, "MetalSynth"),
+        MonoSynth: resolveToneCtor(toneModule, "MonoSynth"),
+        NoiseSynth: resolveToneCtor(toneModule, "NoiseSynth"),
+        PluckSynth: resolveToneCtor(toneModule, "PluckSynth"),
+        PolySynth: resolveToneCtor(toneModule, "PolySynth"),
+        Sampler: resolveToneCtor(toneModule, "Sampler"),
+      };
+
+      const toneinstrument_lut = {
+        synth: {
+          new: (_voice, options) => {
+            return new toneConstructors.Synth(options);
+          },
+        },
+        amsynth: {
+          new: (_voice, options) => {
+            return new toneConstructors.AMSynth(options);
+          },
+        },
+        duosynth: {
+          new: (_voice, options) => {
+            return new toneConstructors.DuoSynth(options);
+          },
+        },
+        fmsynth: {
+          new: (_voice, options) => {
+            return new toneConstructors.FMSynth(options);
+          },
+        },
+        membranesynth: {
+          new: (_voice, options) => {
+            return new toneConstructors.MembraneSynth(options);
+          },
+        },
+        metalsynth: {
+          new: (_voice, options) => {
+            return new toneConstructors.MetalSynth(options);
+          },
+        },
+        monosynth: {
+          new: (_voice, options) => {
+            return new toneConstructors.MonoSynth(options);
+          },
+        },
+        noisesynth: {
+          new: (_voice, options) => {
+            return new toneConstructors.NoiseSynth(options);
+          },
+        },
+        plucksynth: {
+          new: (_voice, options) => {
+            return new toneConstructors.PluckSynth(options);
+          },
+        },
+        polysynth: {
+          new: (voice, options) => {
+            return new toneConstructors.PolySynth(voice, options);
+          },
+        },
+        sampler: {
+          new: (_voice, options) => {
+            return new toneConstructors.Sampler(options);
+          },
+        },
+      };
+
+      const tonevoice_lut = {
+        synth: toneConstructors.Synth,
+        monosynth: toneConstructors.MonoSynth,
+        fmsynth: toneConstructors.FMSynth,
+        duosynth: toneConstructors.DuoSynth,
+        amsynth: toneConstructors.AMSynth,
+      };
+
+      const instrumentType = _config.instrument.type?.toLowerCase();
+      const voiceType = _config.instrument.voice?.toLowerCase();
+      const selectedVoice = voiceType ? tonevoice_lut[voiceType] : toneConstructors.Synth;
+
+      return toneinstrument_lut[instrumentType]?.new(selectedVoice, _config.instrument.options);
     }
 
-    //return undefined;
-    throw "instrument is not defined in the config";
+    throw new Error("instrument is not defined in the config");
   } catch (err) {
     console.error(
       `LEAF Error: a leafsound element ${refnode} could not be configured, returning error:`,
@@ -138,25 +133,45 @@ const doConfigureInstrument = (refnode, _config, is_reset = false) => {
   }
 };
 
-const doConfigureEffect = (refnode, _config, is_reset = false) => {
-  // for instruments, _config should have "instrument" among its keys
-
+const doConfigureEffect = async (refnode, _config, is_reset = false) => {
   try {
     if (_config?.effect) {
-      const _effect = !is_reset
-        ? toneeffect_lut[_config.effect.type]?.new(_config.effect.options)
-        : (() => {
-            globalThis.sound[refnode].set(_config.effect.options);
-            return globalThis.sound[refnode];
-          })();
-      return _effect;
+      if (is_reset) {
+        globalThis.sound[refnode].set(_config.effect.options);
+        return globalThis.sound[refnode];
+      }
+
+      const toneModule = await loadToneModule();
+      const toneeffect_lut = {
+        autofilter: {
+          new: (options) => {
+            return new (resolveToneCtor(toneModule, "AutoFilter"))(options);
+          },
+        },
+        bitcrusher: {
+          new: (options) => {
+            return new (resolveToneCtor(toneModule, "BitCrusher"))(options);
+          },
+        },
+        chebyshev: {
+          new: (options) => {
+            return new (resolveToneCtor(toneModule, "Chebyshev"))(options);
+          },
+        },
+        pitchshift: {
+          new: (options) => {
+            return new (resolveToneCtor(toneModule, "PitchShift"))(options);
+          },
+        },
+      };
+
+      return toneeffect_lut[_config.effect.type?.toLowerCase()]?.new(_config.effect.options);
     }
 
-    //return undefined;
-    throw "effect is not defined in the config";
+    throw new Error("effect is not defined in the config");
   } catch (err) {
     console.error(
-      "LEAF Error: a leafsound element `${refnode}` could not be configured, returning error:",
+      `LEAF Error: a leafsound element ${refnode} could not be configured, returning error:`,
       err,
     );
 
@@ -165,7 +180,6 @@ const doConfigureEffect = (refnode, _config, is_reset = false) => {
 };
 
 const doConfigureSource = (_config) => {
-  // TBI
   return undefined;
 };
 
@@ -178,12 +192,12 @@ const initializeSoundStage = () => {
   globalThis.sound = {};
 };
 
-const initializeToneState = () => {
-  if (tonepkg.Transport.state !== "started") {
-    tonepkg.start();
-    tonepkg.Transport.start();
-  } else {
-    //Tone.Transport.stop();
+const initializeToneState = async () => {
+  const toneModule = await loadToneModule();
+
+  if (toneModule.Transport.state !== "started") {
+    await toneModule.start();
+    toneModule.Transport.start();
   }
 };
 
@@ -191,10 +205,6 @@ const cacheSoundStageNode = (nodeuuid, _soundnode) => {
   globalThis.sound[nodeuuid] = _soundnode;
 };
 
-// spark_dev_note: 15/Sep/2023
-// currently unsure whether web audio sound nodes would need to be
-// explicitly disconnected from any connected nodes upon getting destroyed.
-// just assuming and hoping that the web audio api would handle this automtically.
 const connectCachedSoundStageNodes = (nodeuuid1, nodeuuid2) => {
   globalThis.sound[nodeuuid1].connect(globalThis.sound[nodeuuid2]);
 };
