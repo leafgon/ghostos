@@ -876,7 +876,10 @@ const executeElementBlobBottle = async (rawBottle, executionContext, blobElement
     ) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
-    if (bottlecontent.blobElementId !== undefined && bottlecontent.blobElementId !== blobElementId) {
+    if (
+      bottlecontent.blobElementId !== undefined &&
+      bottlecontent.blobElementId !== blobElementId
+    ) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
     return executeBlobBottle({ ...bottlecontent, blobElementId }, executionContext);
