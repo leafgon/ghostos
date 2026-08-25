@@ -22,19 +22,18 @@ export default {
   output: {
     path: path.resolve(__dirname, "lib"),
     filename: "[name].esm.js", // [name] expands to  index.esm.js
-    //chunkFilename: '[name].[contenthash].esm.js', // for dynamically loaded chunks
+    chunkFilename: "[name].[contenthash].esm.js", // for dynamically loaded chunks
     clean: true, // clean the output directory before emit
     //publicPath: './',
+    publicPath: "auto",
     library: {
       type: "module", // This is required for ESM output
     },
     environment: {
       module: true, // This is required for ESM output
-      dynamicImport: false, // to prevent chunk loading
+      dynamicImport: true,
     },
     globalObject: "globalThis", // global compatible both in browsers and node
-    // disable chunk loading completely
-    chunkLoading: false,
     wasmLoading: false,
   },
   experiments: {

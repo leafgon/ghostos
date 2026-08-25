@@ -1,15 +1,33 @@
-import { Subject, merge } from "rxjs";
+import { from, Subject, merge } from "rxjs";
 import { map, share, switchMap } from "rxjs/operators";
 
 import { ElemCacheKeyLUT } from "./index.js";
 //import {JZZ} from 'jzz'; // midi interface
-import jzzpkg from "jzz";
 //import Wad from "web-audio-daw";
 //const Wad = () => {};
 import { isBottle, isEmptyBottle } from "../../../predicates.js";
 import { doBottle, doUnbottle } from "../../datautils/bottling.js";
 
-const { JZZ } = jzzpkg; // nodejs friendly import
+let jzzLoaderPromise;
+
+const loadJzzConstructor = async () => {
+  if (!jzzLoaderPromise) {
+    jzzLoaderPromise = import("jzz")
+      .then((jzzModule) => {
+        const JZZ = jzzModule?.JZZ ?? jzzModule?.default?.JZZ ?? jzzModule?.default;
+        if (typeof JZZ !== "function") {
+          throw new Error("JZZ constructor is unavailable.");
+        }
+        return JZZ;
+      })
+      .catch((error) => {
+        jzzLoaderPromise = undefined;
+        throw error;
+      });
+  }
+
+  return jzzLoaderPromise;
+};
 
 /*
  * spark_dev_note: 25/Apr/2023
@@ -104,6 +122,28 @@ const initElementInterface = (_stream_cache) => {
   };
 
   const midi_device = {};
+
+  const ensureMidiInputDevice = async () => {
+    if ("default" in midi_device || midi_device._initAttempted) return;
+    midi_device._initAttempted = true;
+
+    try {
+      const JZZ = await loadJzzConstructor();
+      midi_device["default"] = JZZ()
+        .openMidiIn()
+        .or("Error: Cannot open MIDI In port")
+        .and((_midi) => {
+          console.log("MIDI-In: ", _midi);
+        })
+        .connect(midiMessageReceived);
+    } catch (error) {
+      midi_device.default = null;
+      console.error(
+        "LEAF Error: MIDI runtime is unavailable because optional dependency 'jzz' could not be loaded.",
+        error,
+      );
+    }
+  };
   //const midiMap = (_event) => {
   //    console.log(_event.receivedTime, _event.receivedData);
   //};
@@ -124,21 +164,18 @@ const initElementInterface = (_stream_cache) => {
     const _ctrl_out$ = controlflow$obj._stream.pipe(
       switchMap((_ctrl_in) => {
         _stream_cache[ElemCacheKeyLUT.CTRLIN] = _ctrl_in;
-        if (!("default" in midi_device))
-          midi_device["default"] = JZZ()
-            .openMidiIn()
-            .or("Error: Cannot open MIDI In port")
-            .and((_midi) => {
-              console.log("MIDI-In: ", _midi);
-            })
-            .connect(midiMessageReceived);
-        // perform any input data (read) operations specific to the element here
-        // like accessing the most up-to-date messages from rx subjects/streams, etc
-        // spark_dev_note: #http_dataflow_point
-        const _data_in$ = merge(...input$objArr.map((_input) => _input._stream), midiInput$);
 
-        // return data read from the rx stream domain as an array
-        return _data_in$;
+        return from(ensureMidiInputDevice()).pipe(
+          switchMap(() => {
+            // perform any input data (read) operations specific to the element here
+            // like accessing the most up-to-date messages from rx subjects/streams, etc
+            // spark_dev_note: #http_dataflow_point
+            const _data_in$ = merge(...input$objArr.map((_input) => _input._stream), midiInput$);
+
+            // return data read from the rx stream domain as an array
+            return _data_in$;
+          }),
+        );
       }),
 
       //bufferTime(5),

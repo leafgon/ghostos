@@ -1,5 +1,5 @@
 import { BehaviorSubject } from "rxjs";
-import { map, share, filter, withLatestFrom } from "rxjs/operators";
+import { filter, map, share, switchMap, withLatestFrom } from "rxjs/operators";
 
 import { ElemCacheKeyLUT } from "./index.js";
 import { executeLEAFLogic } from "../../../leaf.js";
@@ -17,6 +17,7 @@ import {
 const cachekeys = {
   CONFIG: "_sound_config",
   SOUNDSTAGE: "_daw_object",
+  CONFIG_PROMISE: "_sound_config_promise",
 };
 
 const midi_base_notenum = 24;
@@ -224,7 +225,7 @@ const initElementInterface = (_stream_cache) => {
 
   // onConfigBottle is a bottle handler, triggered when a leaf bottle named "soundconfig" arrives in the input port of the leaf dataflow stream
   // of a sound element.
-  const onConfigBottle = (_cbottle = undefined) => {
+  const onConfigBottle = async (_cbottle = undefined) => {
     let newconfig;
     if (_cbottle) {
       // change the config and create a daw obj to replace an old one, if any.
@@ -238,19 +239,19 @@ const initElementInterface = (_stream_cache) => {
 
     let _soundnode;
     if (is_instrument) {
-      _soundnode = doConfigureInstrument(_stream_cache[ElemCacheKeyLUT.REFNODE], newconfig);
+      _soundnode = await doConfigureInstrument(_stream_cache[ElemCacheKeyLUT.REFNODE], newconfig);
       //_soundnode.toDestination();
     } else if (is_source) {
       _soundnode = doConfigureSource(newconfig);
     } else if (is_effect) {
-      _soundnode = doConfigureEffect(
+      _soundnode = await doConfigureEffect(
         _stream_cache[ElemCacheKeyLUT.REFNODE],
         newconfig,
         _stream_cache[ElemCacheKeyLUT.sound.SOUNDSTAGE] !== undefined,
       );
     } else {
       // default is an effect
-      _soundnode = doConfigureEffect(_stream_cache[ElemCacheKeyLUT.REFNODE], newconfig);
+      _soundnode = await doConfigureEffect(_stream_cache[ElemCacheKeyLUT.REFNODE], newconfig);
     }
 
     //delete _stream_cache[ElemCacheKeyLUT.sound.SOUNDSTAGE];
@@ -348,25 +349,22 @@ const initElementInterface = (_stream_cache) => {
       //}),
       //bufferTime(20),
       //filter(_=>_.length>0),
-      map((_combined_in) => {
+      switchMap(async (_combined_in) => {
         //console.log("testing element _leaflogic: ", _data_in);
         // perform any output data (write) operations specific to the element here
         // like sending messages to rx subjects, etc
 
-        const processed_in = _combined_in
-          .slice(1)
-          .flat()
-          .map((_bottle) => {
-            if (_bottle._bname === "_data_in") return doUnbottle("*", _bottle);
-            else if (_bottle._bname === "_midi_in") {
-              return _bottle;
-            } else if (_bottle._bname === "soundconfig") onConfigBottle(_bottle);
-            else if (_bottle._bname === "soundinit") return onInitBottle(_bottle);
-            return undefined;
-          })
-          .filter((_b) => _b);
+        const processed_in = [];
+        for (const _bottle of _combined_in.slice(1).flat()) {
+          if (_bottle._bname === "_data_in") processed_in.push(doUnbottle("*", _bottle));
+          else if (_bottle._bname === "_midi_in") {
+            processed_in.push(_bottle);
+          } else if (_bottle._bname === "soundconfig") await onConfigBottle(_bottle);
+          else if (_bottle._bname === "soundinit") processed_in.push(onInitBottle(_bottle));
+        }
 
-        if (processed_in.length > 0) _outflow_data$.next(processed_in);
+        const filtered_processed_in = processed_in.filter((_b) => _b);
+        if (filtered_processed_in.length > 0) _outflow_data$.next(filtered_processed_in);
 
         //if (processed_in.length === 1)
         //    _outflow_data$.next(processed_in[0]);
@@ -397,7 +395,15 @@ const initElementInterface = (_stream_cache) => {
     //const data_out = doBottle("_data_in", data_in);
     const data_out = data_in;
     if (!_stream_cache[ElemCacheKeyLUT.sound.SOUNDSTAGE] && !is_target) {
-      onConfigBottle(); // first call
+      if (!_stream_cache[cachekeys.CONFIG_PROMISE]) {
+        _stream_cache[cachekeys.CONFIG_PROMISE] = onConfigBottle()
+          .catch((error) => {
+            console.error("LEAF Error: failed to initialize sound stage config", error);
+          })
+          .finally(() => {
+            delete _stream_cache[cachekeys.CONFIG_PROMISE];
+          });
+      }
       //console.error("LEAF Error: leaf sound element was used before initialization");
       //try {
       //_stream_cache[ElemCacheKeyLUT.sound.CONFIG] = await default_config_prom;
@@ -414,7 +420,11 @@ const initElementInterface = (_stream_cache) => {
       //}
     }
 
-    if (is_target) initializeToneState();
+    if (is_target) {
+      void initializeToneState().catch((error) => {
+        console.error("LEAF Error: failed to initialize tone transport state", error);
+      });
+    }
 
     return data_out;
   };

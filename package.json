@@ -1,6 +1,6 @@
 {
   "name": "ghostos",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "description": "A reference LEAF graph parser implementation used by leafgon.com",
   "main": "lib/index.esm.js",
   "module": "lib/index.esm.js",
@@ -18,7 +18,8 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/"
+    "lib/",
+    "!lib/**/*.map"
   ],
   "engines": {
     "node": ">=24.0.0"
@@ -98,7 +99,6 @@
     "highest-power-two": "^1.0.2",
     "image-promise": "^7.0.1",
     "json-stringify-safe": "^5.0.1",
-    "jzz": "^1.9.3",
     "lodash": "^4.17.21",
     "p-map": "^7.0.3",
     "path-browserify": "^1.0.1",
@@ -112,9 +112,12 @@
     "react-router-dom": "^7.6.3",
     "react-youtube": "^10.1.0",
     "rxjs": "^7.8.2",
-    "tone": "^15.1.22",
     "use-resize-observer": "^9.1.0",
     "uuid": "^11.1.0"
+  },
+  "optionalDependencies": {
+    "jzz": "^1.9.3",
+    "tone": "^15.1.22"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
