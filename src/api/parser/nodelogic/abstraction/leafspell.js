@@ -391,9 +391,9 @@ const _leafspell = {
                   console.error("undefined spellname: ", JSON.stringify(node_context));
                 _executeSpell(spellprom, relay_ctrl$, relay_data$).then((spell_output$) => {
                   if (spell_output$ === undefined) {
-                    relay_data$.next(_combined_in[1]);
-                    //relay_data$.next(undefined);
-                    relay_ctrl$.next(_combined_in[0]);
+                    // fail-open passthrough: keep downstream graph execution alive even when
+                    // a spell cannot be resolved at runtime.
+                    spell_output_relay$.next(_combined_in);
                   } else {
                     spell_subscription = spell_output$.subscribe({
                       next: (_next_out) => {
@@ -425,15 +425,11 @@ const _leafspell = {
               //return spell_output;
               return spell_output_relay$;
             }),
-            //switchMap(_relay$ => {
-            //    return _relay$;
-            //}),
-            withLatestFrom(spell_output_relay$),
-            map((_combined_in) => {
-              _outflow_data$.next(_combined_in[1][1]);
+            map((_spell_output) => {
+              _outflow_data$.next(_spell_output[1]);
 
-              outer_relay_ctrl$.next(_combined_in[1][0]);
-              return _combined_in[1]; // pass thru the data in the flow;
+              outer_relay_ctrl$.next(_spell_output[0]);
+              return _spell_output; // pass thru the data in the flow;
             }),
             withLatestFrom(outer_relay_ctrl$),
             map((_out_sig) => {
@@ -510,9 +506,8 @@ const _leafspell = {
 
                   _executeSpell(spellprom, relay_ctrl$, relay_data$).then((spell_output$) => {
                     if (spell_output$ === undefined) {
-                      relay_data$.next(_combined_in[1]);
-                      //relay_data$.next(undefined);
-                      relay_ctrl$.next(_combined_in[0]);
+                      // fail-open passthrough for unresolved runtime spell references.
+                      spell_output_relay$.next(_combined_in);
                     } else {
                       spell_subscription = spell_output$.subscribe({
                         next: (_next_out) => {
@@ -546,12 +541,11 @@ const _leafspell = {
 
               return spell_output_relay$;
             }),
-            withLatestFrom(spell_output_relay$),
-            map((_combined_in) => {
-              _outflow_data$.next(_combined_in[1][1]);
+            map((_spell_output) => {
+              _outflow_data$.next(_spell_output[1]);
 
-              outer_relay_ctrl$.next(_combined_in[1][0]);
-              return _combined_in[1]; // pass thru the data in the flow;
+              outer_relay_ctrl$.next(_spell_output[0]);
+              return _spell_output; // pass thru the data in the flow;
             }),
             withLatestFrom(outer_relay_ctrl$),
             map((_out_sig) => {
