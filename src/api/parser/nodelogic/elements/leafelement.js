@@ -181,7 +181,10 @@ const _leafelement = {
 
               const _ctrl_data$ = of(_ctrl_input);
               const domain$obj = driveDataflowByCtrlflow(
-                { _stream: _ctrl_data$ },
+                {
+                  _stream: _ctrl_data$,
+                  _config: controlflow$obj?._config,
+                },
                 input$objArr,
                 undefined,
                 { ...node_context, step: "get the current domain" },
@@ -544,7 +547,10 @@ const _leafelement = {
             : input$objArr;
 
         const output$obj = driveDataflowByCtrlflow(
-          { _stream: inflow_ctrl$ },
+          {
+            _stream: inflow_ctrl$,
+            _config: controlflow$obj?._config,
+          },
           runtime_input$objArr,
           undefined,
           { ...node_context, metastep: "element " + elementname },
