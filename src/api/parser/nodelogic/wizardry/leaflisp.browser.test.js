@@ -169,4 +169,47 @@ describe("leaflisp lambda scope", () => {
       club: "blob-config",
     });
   });
+
+  it("treats empty lispexpression as pass-through", async () => {
+    const lambdactrl = {
+      gos: {
+        etaTree: {
+          domain: "breezyforest",
+          appid: "guides",
+          gRuntimeLEAFlisp: createLEAFlispRuntime(),
+        },
+      },
+    };
+    const lambdaFactory = _leaflisp.lambda(lambdactrl);
+    const lambdaLUT = await lambdaFactory({
+      refnode: "leaflisp-empty-node",
+      refnodedata: {
+        leaf: {
+          logic: {
+            type: "leaflisp",
+            args: {
+              lispexpression: "",
+            },
+          },
+        },
+      },
+      nodelambda: [],
+      contextuallambda: [],
+    });
+
+    const input$ = new BehaviorSubject({ hello: "world" });
+    const ctrl$ = new BehaviorSubject({ _bname: "accio" });
+    const output$obj = lambdaLUT._default([{ _stream: input$ }], {
+      _stream: ctrl$,
+      _config: {},
+    });
+
+    const outputPromise = firstValueFrom(output$obj._stream);
+    const controlSubscription = output$obj._control._stream.subscribe();
+
+    const output = await outputPromise;
+    controlSubscription.unsubscribe();
+
+    expect(output).toEqual({ hello: "world" });
+  });
 });
