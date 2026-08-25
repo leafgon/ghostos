@@ -77,6 +77,25 @@ const unwrapBottle = (value) => {
   return value;
 };
 
+const normalizeListBottleSchemaVersion = (rawBottle) => {
+  const bottle = unwrapBottle(rawBottle);
+  if (!isPlainObject(bottle)) {
+    return bottle;
+  }
+  const schemaVersion =
+    typeof bottle.schemaVersion === "string" ? bottle.schemaVersion.trim() : undefined;
+  if (schemaVersion && schemaVersion.length > 0) {
+    return bottle;
+  }
+  if (rawBottle?._bname !== "blob-list") {
+    return bottle;
+  }
+  return {
+    ...bottle,
+    schemaVersion: LIST_SCHEMA_VERSION,
+  };
+};
+
 const createBlobFailure = (
   code,
   { retryable = false, safeMessage = FAILURE_MESSAGES[code], correlationId } = {},
@@ -273,13 +292,27 @@ const requireBlobExecutionContext = (executionContext) => {
 
 const resolveBlobExecutionContext = (streamCache, controlflow = {}) => {
   const config = controlflow?._config ?? {};
-  return (
+  const context =
     config.blobExecutionContext ??
     config.runtimeContext?.blobExecutionContext ??
     config.runtimeContext ??
     streamCache?.runtimeContext ??
-    streamCache?.blobExecutionContext
-  );
+    streamCache?.blobExecutionContext;
+  if (!isPlainObject(context)) {
+    return context;
+  }
+  const fallbackBlobElementId =
+    (typeof context.blobElementId === "string" && context.blobElementId.trim()) ||
+    (typeof controlflow?.refnode === "string" && controlflow.refnode.trim()) ||
+    (typeof streamCache?._refnode === "string" && streamCache._refnode.trim()) ||
+    undefined;
+  if (!fallbackBlobElementId || context.blobElementId === fallbackBlobElementId) {
+    return context;
+  }
+  return {
+    ...context,
+    blobElementId: fallbackBlobElementId,
+  };
 };
 
 const callStorage = async (method, adapter, input) => {
@@ -471,12 +504,19 @@ const executeBlobFetchBottle = async (rawBottle, executionContext) => {
 
 const executeBlobListBottle = async (rawBottle, executionContext) => {
   try {
-    const bottle = unwrapBottle(rawBottle);
+    const bottle = normalizeListBottleSchemaVersion(rawBottle);
     requireBlobExecutionContext(executionContext);
     if (!isPlainObject(bottle) || bottle.schemaVersion !== LIST_SCHEMA_VERSION) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
-    if (typeof bottle.blobElementId !== "string" || bottle.blobElementId.trim() === "") {
+    const blobElementId =
+      typeof bottle.blobElementId === "string" && bottle.blobElementId.trim() !== ""
+        ? bottle.blobElementId.trim()
+        : typeof executionContext?.blobElementId === "string" &&
+            executionContext.blobElementId.trim() !== ""
+          ? executionContext.blobElementId.trim()
+          : undefined;
+    if (!blobElementId) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
     const limit = bottle.limit ?? DEFAULT_BLOB_LIST_LIMIT;
@@ -499,7 +539,7 @@ const executeBlobListBottle = async (rawBottle, executionContext) => {
       graphDomainId: executionContext.graphDomainId,
       graphAppId: executionContext.graphAppId,
       actorRef: executionContext.actorRef,
-      blobElementId: bottle.blobElementId,
+      blobElementId,
       correlationId: executionContext.correlationId,
       limit,
       cursor: bottle.cursor,
@@ -511,7 +551,7 @@ const executeBlobListBottle = async (rawBottle, executionContext) => {
       schemaVersion: DATA_FILE_PAGE_SCHEMA_VERSION,
       items: page.items.map((item) =>
         normalizeBlobMetadata(item, {
-          blobElementId: bottle.blobElementId,
+          blobElementId,
           objectId: item?.objectId,
         }),
       ),
@@ -774,7 +814,7 @@ const createLeafServerBlobStorageAdapter = ({
 };
 
 const executeBlobBottle = async (bottle, executionContext) => {
-  const content = unwrapBottle(bottle);
+  const content = normalizeListBottleSchemaVersion(bottle);
   if (content?.schemaVersion === STORE_SCHEMA_VERSION) {
     return executeBlobStoreBottle(content, executionContext);
   }
@@ -782,7 +822,7 @@ const executeBlobBottle = async (bottle, executionContext) => {
     return executeBlobFetchBottle(content, executionContext);
   }
   if (content?.schemaVersion === LIST_SCHEMA_VERSION) {
-    return executeBlobListBottle(content, executionContext);
+    return executeBlobListBottle(bottle, executionContext);
   }
   return createBlobFailure("invalid_blob_bottle", {
     correlationId: executionContext?.correlationId,

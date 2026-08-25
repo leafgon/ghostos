@@ -9,6 +9,7 @@ import {
   LIST_SCHEMA_VERSION,
   createInMemoryBlobStorageAdapter,
   createLeafServerBlobStorageAdapter,
+  executeBlobBottle,
   executeBlobFetchBottle,
   executeBlobListBottle,
   executeBlobStoreBottle,
@@ -28,6 +29,7 @@ const createContext = (overrides = {}) => {
     graphAppId: "app-a",
     actorRef: "user:owner-a",
     correlationId: "corr-a",
+    blobElementId: "blob-node-uuid",
     blobStorageAdapter: adapter,
     ...overrides,
   };
@@ -153,6 +155,25 @@ describe("leafelement:blob contract helpers", () => {
       nextCursor: null,
     });
     expect(context.blobStorageAdapter.getExecutionCounts()).toMatchObject({ listObjects: 2 });
+  });
+
+  it("defaults blob-list schemaVersion and blobElementId from GhostOS context", async () => {
+    const context = createContext();
+    await executeBlobStoreBottle(storeBottle({ requestedObjectId: "alpha" }), context);
+
+    const result = await executeBlobBottle(
+      {
+        _bname: "blob-list",
+        _content: {},
+      },
+      context,
+    );
+
+    expect(result).toMatchObject({
+      schemaVersion: "ghostos.blob_data_file_page.v1",
+      items: [{ objectId: "alpha" }],
+      nextCursor: null,
+    });
   });
 
   it("rejects invalid blob list limits before calling storage", async () => {
