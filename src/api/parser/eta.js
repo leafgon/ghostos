@@ -764,6 +764,21 @@ const weaveDataflowPlane = (
   prime_ctrlflow$obj,
   prime_dataflow$obj,
 ) => {
+  const asControlConfig = (value) =>
+    value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+
+  const mergeControlflowConfig = (controlflowObjects = [], fallbackConfig = undefined) => {
+    const mergedConfig = controlflowObjects.reduce((accumulator, flowObject) => {
+      const config = asControlConfig(flowObject?._control?._config ?? flowObject?._config);
+      return config ? { ...accumulator, ...config } : accumulator;
+    }, {});
+
+    if (Object.keys(mergedConfig).length > 0) {
+      return mergedConfig;
+    }
+    return asControlConfig(fallbackConfig) ?? {};
+  };
+
   const rt_context = {
     refnode,
     codebase: "eta.js weaveDataflowPlane",
@@ -918,7 +933,10 @@ const weaveDataflowPlane = (
           return flowinterface[nodeuuid].data_in$Arr.map((_data_in$, _flow_idx) => {
             return {
               _stream: _data_in$,
-              _control: { _stream: flowinterface[nodeuuid].ctrl_in$Arr[_flow_idx] },
+              _control: {
+                _stream: flowinterface[nodeuuid].ctrl_in$Arr[_flow_idx],
+                _config: _upstream_ctrlflow$objArr[_flow_idx]?._config,
+              },
             };
           });
         },
@@ -974,6 +992,7 @@ const weaveDataflowPlane = (
                 return _ctrl_out;
               }),
             ),
+            _config: flowinterface[nodeuuid].ctrl_out?._config,
           },
         };
       } else {
@@ -1000,7 +1019,10 @@ const weaveDataflowPlane = (
             ? [
                 {
                   _stream: prime_dataflow$obj._stream,
-                  _control: { _stream: prime_ctrlflow$obj._stream },
+                  _control: {
+                    _stream: prime_ctrlflow$obj._stream,
+                    _config: prime_ctrlflow$obj._config,
+                  },
                 },
               ] // prime input flow for the starting node
             : _weaveDataflowPlane(datainputnodes).filter((x) => x); // weaved input flow (aka the output flow of previous node) for the rest
@@ -1011,7 +1033,7 @@ const weaveDataflowPlane = (
         initializeFlowInterface(
           nodeuuid,
           _upstream_out$objArr.map((_) => {
-            return { _stream: _._control._stream };
+            return { _stream: _._control._stream, _config: _._control._config };
           }),
           _upstream_out$objArr.map((_) => {
             return { _stream: _._stream };
@@ -1055,6 +1077,7 @@ const weaveDataflowPlane = (
               return _ctrl_in;
             }),
           ),
+          _config: mergeControlflowConfig(_upstream_out$objArr, prime_ctrlflow$obj._config),
         };
         const synced_upstream_dataflow$objArr = is_chronosflow
           ? //[{
@@ -1122,7 +1145,10 @@ const weaveDataflowPlane = (
 
               // now store this etaoutput$obj in flowinterface
               flowinterface[nodeuuid].data_out = { _stream: etaoutput$obj._stream };
-              flowinterface[nodeuuid].ctrl_out = { _stream: etaoutput$obj._control._stream };
+              flowinterface[nodeuuid].ctrl_out = {
+                _stream: etaoutput$obj._control._stream,
+                _config: etaoutput$obj._control._config,
+              };
 
               return {
                 // now return a composite from current _weaveDataflowPlane() to the next connected node
@@ -1140,6 +1166,7 @@ const weaveDataflowPlane = (
                       return x;
                     }),
                   ),
+                  _config: etaoutput$obj._control._config,
                 },
               };
             } else {
@@ -1193,6 +1220,7 @@ const weaveDataflowPlane = (
                     return _ctrl_out;
                   }),
                 ),
+                _config: etaoutput$obj._control._config,
               };
 
               return {
@@ -1215,6 +1243,7 @@ const weaveDataflowPlane = (
                       return x;
                     }),
                   ),
+                  _config: flowinterface[nodeuuid].ctrl_out?._config,
                 },
               };
             }
@@ -1230,7 +1259,10 @@ const weaveDataflowPlane = (
             flowinterface[nodeuuid].data_out = { _stream: etaoutput$obj._stream };
             //if (!etaoutput$obj._control)
             //    console.log("start debugging");
-            flowinterface[nodeuuid].ctrl_out = { _stream: etaoutput$obj._control._stream };
+            flowinterface[nodeuuid].ctrl_out = {
+              _stream: etaoutput$obj._control._stream,
+              _config: etaoutput$obj._control._config,
+            };
 
             return {
               _stream: etaoutput$obj._stream.pipe(
@@ -1250,6 +1282,7 @@ const weaveDataflowPlane = (
                     return x;
                   }),
                 ),
+                _config: etaoutput$obj._control._config,
               },
             };
           }
@@ -1274,7 +1307,10 @@ const weaveDataflowPlane = (
 
             // now store this etaoutput$obj in flowinterface
             flowinterface[nodeuuid].data_out = { _stream: etaoutput$obj._stream };
-            flowinterface[nodeuuid].ctrl_out = { _stream: etaoutput$obj._control._stream };
+            flowinterface[nodeuuid].ctrl_out = {
+              _stream: etaoutput$obj._control._stream,
+              _config: etaoutput$obj._control._config,
+            };
 
             return {
               // now return a composite from current _weaveDataflowPlane() to the next connected node
@@ -1291,6 +1327,7 @@ const weaveDataflowPlane = (
                     return x;
                   }),
                 ),
+                _config: etaoutput$obj._control._config,
               },
             };
           } else {
@@ -1348,7 +1385,10 @@ const weaveDataflowPlane = (
             ); // return the subsequent output$ as returned by the etafunc against upstream_output$
             // now store this etaoutput$obj in flowinterface
             flowinterface[nodeuuid].data_out = { _stream: etaoutput$obj._stream };
-            flowinterface[nodeuuid].ctrl_out = { _stream: etaoutput$obj._control._stream };
+            flowinterface[nodeuuid].ctrl_out = {
+              _stream: etaoutput$obj._control._stream,
+              _config: etaoutput$obj._control._config,
+            };
             return {
               // now return a composite from current _weaveDataflowPlane() to the next connected node
               _stream: etaoutput$obj._stream.pipe(
@@ -1364,6 +1404,7 @@ const weaveDataflowPlane = (
                     return x;
                   }),
                 ),
+                _config: etaoutput$obj._control._config,
               },
             };
           }
@@ -1394,7 +1435,10 @@ const weaveDataflowPlane = (
         };
   //const [synced_upstream_controlflow$obj, synced_upstream_dataflow$objArr] = _synchronizeFlow(nodeuuid, _upstream_out$objArr);
   //const [synced_exit_controlflow$obj, synced_exit_dataflow$obj] =  _synchronizeFlow(undefined, weavedplane_out$objArr, true);
-  const synced_exit_controlflow$obj = { _stream: _chronos_ctrl_out$ };
+  const synced_exit_controlflow$obj = {
+    _stream: _chronos_ctrl_out$,
+    _config: mergeControlflowConfig(weavedplane_out$objArr, prime_ctrlflow$obj._config),
+  };
   const synced_exit_dataflow$obj = { _stream: _chronos_data_out$ };
   //if (endnodes.includes('d3553691-cdc9-4cc1-815f-e629a94899cd')) {
   //    // testing condition
@@ -1530,7 +1574,11 @@ const parseDataflowFunc = (refnode, startnodes, endnodes, eta_lut, etaTree, meta
     };
 
     const prime_dataflow$obj = { _stream: flowinterface.data_in };
-    const prime_ctrlflow$obj = { _stream: flowinterface.ctrl_in, _config: {} };
+    const runtimeConfig =
+      controlflow$obj?._config && typeof controlflow$obj._config === "object"
+        ? controlflow$obj._config
+        : {};
+    const prime_ctrlflow$obj = { _stream: flowinterface.ctrl_in, _config: runtimeConfig };
 
     if (
       ["3980759d-7c59-4b9e-b799-87b5fd4cbcec", "62890d97-837a-463e-aac9-d7fca2293427"].includes(
