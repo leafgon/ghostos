@@ -401,6 +401,36 @@ describe("leafelement:blob contract helpers", () => {
     expect(context.blobStorageAdapter.getExecutionCounts().putObject).toBe(1);
   });
 
+  it("accepts runtime context from runtimeOptions for browser-hosted execution", async () => {
+    const context = createContext();
+    const adapter = blobProps({ _refnode: "blob-node-uuid" }).leaflogic;
+    const input$ = new BehaviorSubject(
+      storeBottle({ blobElementId: undefined, requestedObjectId: "runtime-options-logo" }),
+    );
+    const ctrl$ = new Subject();
+    const flow = adapter([{ _stream: input$ }], {
+      _stream: ctrl$,
+      _config: {
+        runtimeOptions: {
+          runtimeContext: {
+            blobExecutionContext: context,
+          },
+        },
+      },
+    });
+    const outputPromise = firstValueFrom(flow._stream);
+    const ctrlPromise = firstValueFrom(flow._control._stream);
+
+    ctrl$.next({ frame: 1 });
+
+    expect(await outputPromise).toMatchObject({
+      schemaVersion: "ghostos.blob_data_file.v1",
+      objectId: "runtime-options-logo",
+    });
+    await ctrlPromise;
+    expect(context.blobStorageAdapter.getExecutionCounts().putObject).toBe(1);
+  });
+
   it("binds list bottles to the executing blob element", async () => {
     const context = createContext();
     const adapter = blobProps({ _refnode: "blob-node-uuid" }).leaflogic;
