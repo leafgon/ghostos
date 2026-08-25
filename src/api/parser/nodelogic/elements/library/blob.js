@@ -298,6 +298,24 @@ const requireBlobExecutionContext = (executionContext) => {
   return executionContext;
 };
 
+const resolveGlobalBlobExecutionContext = ({ streamCache, controlflow }) => {
+  let resolved;
+  if (typeof globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT_FACTORY__ === "function") {
+    try {
+      resolved = globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT_FACTORY__({
+        streamCache,
+        controlflow,
+      });
+    } catch (_error) {
+      resolved = undefined;
+    }
+  }
+  if (!isPlainObject(resolved) && isPlainObject(globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT__)) {
+    resolved = globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT__;
+  }
+  return isPlainObject(resolved) ? resolved : undefined;
+};
+
 const resolveBlobExecutionContext = (streamCache, controlflow = {}) => {
   const config = controlflow?._config ?? {};
   const configRuntimeContext =
@@ -305,7 +323,7 @@ const resolveBlobExecutionContext = (streamCache, controlflow = {}) => {
     config.ghostRuntimeOptions?.runtimeContext ??
     config.runtimeOptions?.runtimeContext ??
     config.ghostosRuntimeOptions?.runtimeContext;
-  const context =
+  const configuredContext =
     config.blobExecutionContext ??
     config.runtimeContext?.blobExecutionContext ??
     config.ghostRuntimeOptions?.blobExecutionContext ??
@@ -320,6 +338,16 @@ const resolveBlobExecutionContext = (streamCache, controlflow = {}) => {
     streamCache?.runtimeContext?.blobExecutionContext ??
     streamCache?.runtimeContext ??
     streamCache?.blobExecutionContext;
+  const fallbackContext = resolveGlobalBlobExecutionContext({
+    streamCache,
+    controlflow,
+  });
+  const context =
+    isPlainObject(fallbackContext) && isPlainObject(configuredContext)
+      ? { ...fallbackContext, ...configuredContext }
+      : isPlainObject(configuredContext)
+        ? configuredContext
+        : (fallbackContext ?? configuredContext);
   if (!isPlainObject(context)) {
     return context;
   }

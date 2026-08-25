@@ -431,6 +431,90 @@ describe("leafelement:blob contract helpers", () => {
     expect(context.blobStorageAdapter.getExecutionCounts().putObject).toBe(1);
   });
 
+  it("falls back to a host-provided global blob execution context factory", async () => {
+    const context = createContext();
+    const adapter = blobProps({ _refnode: "blob-node-uuid" }).leaflogic;
+    const input$ = new BehaviorSubject({ schemaVersion: LIST_SCHEMA_VERSION, limit: 50 });
+    const ctrl$ = new Subject();
+    const globalFactory = vi.fn(() => ({ ...context, correlationId: "corr-global" }));
+    const previousFactory = globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT_FACTORY__;
+    const previousContext = globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT__;
+    globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT_FACTORY__ = globalFactory;
+    delete globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT__;
+    try {
+      const flow = adapter([{ _stream: input$ }], {
+        _stream: ctrl$,
+        _config: {},
+      });
+      const outputPromise = firstValueFrom(flow._stream);
+      const ctrlPromise = firstValueFrom(flow._control._stream);
+
+      ctrl$.next({ frame: 1 });
+
+      expect(await outputPromise).toMatchObject({
+        schemaVersion: "ghostos.blob_data_file_page.v1",
+        items: [],
+      });
+      await ctrlPromise;
+      expect(globalFactory).toHaveBeenCalled();
+      expect(context.blobStorageAdapter.getExecutionCounts().listObjects).toBe(1);
+    } finally {
+      if (previousFactory === undefined) {
+        delete globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT_FACTORY__;
+      } else {
+        globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT_FACTORY__ = previousFactory;
+      }
+      if (previousContext === undefined) {
+        delete globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT__;
+      } else {
+        globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT__ = previousContext;
+      }
+    }
+  });
+
+  it("prefers explicit blob execution context over global fallback context", async () => {
+    const configuredContext = createContext();
+    const fallbackContext = createContext({ correlationId: "corr-fallback" });
+    const adapter = blobProps({ _refnode: "blob-node-uuid" }).leaflogic;
+    const input$ = new BehaviorSubject({ schemaVersion: LIST_SCHEMA_VERSION, limit: 50 });
+    const ctrl$ = new Subject();
+    const previousFactory = globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT_FACTORY__;
+    const previousContext = globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT__;
+    globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT_FACTORY__ = () => fallbackContext;
+    delete globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT__;
+    try {
+      const flow = adapter([{ _stream: input$ }], {
+        _stream: ctrl$,
+        _config: {
+          blobExecutionContext: configuredContext,
+        },
+      });
+      const outputPromise = firstValueFrom(flow._stream);
+      const ctrlPromise = firstValueFrom(flow._control._stream);
+
+      ctrl$.next({ frame: 1 });
+
+      expect(await outputPromise).toMatchObject({
+        schemaVersion: "ghostos.blob_data_file_page.v1",
+        items: [],
+      });
+      await ctrlPromise;
+      expect(configuredContext.blobStorageAdapter.getExecutionCounts().listObjects).toBe(1);
+      expect(fallbackContext.blobStorageAdapter.getExecutionCounts().listObjects).toBe(0);
+    } finally {
+      if (previousFactory === undefined) {
+        delete globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT_FACTORY__;
+      } else {
+        globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT_FACTORY__ = previousFactory;
+      }
+      if (previousContext === undefined) {
+        delete globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT__;
+      } else {
+        globalThis.__LEAFGON_BLOB_EXECUTION_CONTEXT__ = previousContext;
+      }
+    }
+  });
+
   it("binds list bottles to the executing blob element", async () => {
     const context = createContext();
     const adapter = blobProps({ _refnode: "blob-node-uuid" }).leaflogic;
