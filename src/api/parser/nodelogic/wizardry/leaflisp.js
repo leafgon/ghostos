@@ -545,6 +545,14 @@ const buildLEAFlispPreamble = (inputData, { inputBinding = "inport", bindings = 
   return preambleParts.join("");
 };
 
+const normalizeLeaflispSourceCode = (value) => {
+  if (typeof value !== "string") {
+    return "(return inport)";
+  }
+
+  return value.trim().length > 0 ? value : "(return inport)";
+};
+
 const isPlainObject = (value) => {
   return (
     typeof value === "object" &&
@@ -928,10 +936,11 @@ const _leaflisp = {
       is_interactive_lut[refnode] = "interactive" in reduced_lambda_obj ? true : false;
       const is_interactive = is_interactive_lut[refnode];
 
-      const lispcode =
+      const lispcode = normalizeLeaflispSourceCode(
         leafgon_env_type === "development"
           ? hijackTestURL(refnodedata.leaf.logic.args.lispexpression)
-          : refnodedata.leaf.logic.args.lispexpression;
+          : refnodedata.leaf.logic.args.lispexpression,
+      );
 
       if ("global" in reduced_lambda_obj) {
         runtimeLEAFlisp = lambdactrl.gos.etaTree.gRuntimeLEAFlisp;
@@ -1410,10 +1419,11 @@ const _leaflisp = {
         contextuallambda,
         etaTree: lambdactrl.gos.etaTree,
       });
-      const lispcode =
+      const lispcode = normalizeLeaflispSourceCode(
         leafgon_env_type === "development"
           ? hijackTestURL(refnodedata.leaf.logic.args.lispexpression)
-          : refnodedata.leaf.logic.args.lispexpression;
+          : refnodedata.leaf.logic.args.lispexpression,
+      );
 
       const runtimeLEAFlisp =
         "global" in reduced_lambda_obj
