@@ -404,9 +404,12 @@ const _leafspell = {
                         console.error(
                           `leafspell ${spellname} had an error in the subscription stream: ${emsg}`,
                         );
+                        spell_subscription = undefined;
+                        spell_output_relay$.next(_combined_in);
                       },
                       complete: () => {
                         console.log(`leafspell ${spellname} subscription completed.`);
+                        spell_subscription = undefined;
                       },
                     });
                     setTimeout(() => {
@@ -414,6 +417,10 @@ const _leafspell = {
                       relay_ctrl$.next(_combined_in[0]);
                     }, 1);
                   }
+                }).catch((error) => {
+                  console.error(`leafspell ${spellname} execution failed:`, error);
+                  spell_subscription = undefined;
+                  spell_output_relay$.next(_combined_in);
                 });
               } else {
                 relay_data$.next(_combined_in[1]);
@@ -518,9 +525,12 @@ const _leafspell = {
                           console.error(
                             `leafspell ${spellname} had an error in the subscription stream: ${emsg}`,
                           );
+                          spell_subscription = undefined;
+                          spell_output_relay$.next(_combined_in);
                         },
                         complete: () => {
                           console.log(`leafspell ${spellname} subscription completed.`);
+                          spell_subscription = undefined;
                         },
                       });
                       setTimeout(() => {
@@ -529,6 +539,10 @@ const _leafspell = {
                         relay_ctrl$.next(_combined_in[0]);
                       }, 1);
                     }
+                  }).catch((error) => {
+                    console.error(`leafspell ${spellname} execution failed:`, error);
+                    spell_subscription = undefined;
+                    spell_output_relay$.next(_combined_in);
                   });
                 } else {
                   relay_data$.next(_combined_in[1]);
