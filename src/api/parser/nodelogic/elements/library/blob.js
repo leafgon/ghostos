@@ -1,6 +1,8 @@
 import { Observable, Subject, from, of } from "rxjs";
 import { concatMap, map, share, startWith, withLatestFrom } from "rxjs/operators";
 
+import { doUnbottle } from "../../datautils/bottling.js";
+
 const STORE_SCHEMA_VERSION = "ghostos.blob_store_bottle.v1";
 const FETCH_SCHEMA_VERSION = "ghostos.blob_fetch_bottle.v1";
 const LIST_SCHEMA_VERSION = "ghostos.blob_list_bottle.v1";
@@ -70,28 +72,34 @@ const isPlainObject = (value) => {
 
 const isFailure = (value) => value?.schemaVersion === FAILURE_SCHEMA_VERSION;
 
-const unwrapBottle = (value) => {
-  if (value && typeof value === "object" && "_content" in value && "_bname" in value) {
+const unbottleContent = (value, bottleName = "*") => {
+  const bottlecontent = doUnbottle(bottleName, value);
+  if (bottlecontent !== undefined) {
+    return bottlecontent;
+  }
+  if (value && typeof value === "object" && "_bname" in value && "_content" in value) {
     return value._content;
   }
   return value;
 };
 
 const normalizeListBottleSchemaVersion = (rawBottle) => {
-  const bottle = unwrapBottle(rawBottle);
-  if (!isPlainObject(bottle)) {
-    return bottle;
+  const bottlecontent = unbottleContent(rawBottle, "blob-list");
+  if (!isPlainObject(bottlecontent)) {
+    return bottlecontent;
   }
   const schemaVersion =
-    typeof bottle.schemaVersion === "string" ? bottle.schemaVersion.trim() : undefined;
+    typeof bottlecontent.schemaVersion === "string"
+      ? bottlecontent.schemaVersion.trim()
+      : undefined;
   if (schemaVersion && schemaVersion.length > 0) {
-    return bottle;
+    return bottlecontent;
   }
   if (rawBottle?._bname !== "blob-list") {
-    return bottle;
+    return bottlecontent;
   }
   return {
-    ...bottle,
+    ...bottlecontent,
     schemaVersion: LIST_SCHEMA_VERSION,
   };
 };
@@ -292,10 +300,24 @@ const requireBlobExecutionContext = (executionContext) => {
 
 const resolveBlobExecutionContext = (streamCache, controlflow = {}) => {
   const config = controlflow?._config ?? {};
+  const configRuntimeContext =
+    config.runtimeContext ??
+    config.ghostRuntimeOptions?.runtimeContext ??
+    config.runtimeOptions?.runtimeContext ??
+    config.ghostosRuntimeOptions?.runtimeContext;
   const context =
     config.blobExecutionContext ??
     config.runtimeContext?.blobExecutionContext ??
-    config.runtimeContext ??
+    config.ghostRuntimeOptions?.blobExecutionContext ??
+    config.ghostRuntimeOptions?.runtimeContext?.blobExecutionContext ??
+    config.runtimeOptions?.blobExecutionContext ??
+    config.runtimeOptions?.runtimeContext?.blobExecutionContext ??
+    config.ghostosRuntimeOptions?.blobExecutionContext ??
+    config.ghostosRuntimeOptions?.runtimeContext?.blobExecutionContext ??
+    configRuntimeContext ??
+    controlflow?.blobExecutionContext ??
+    controlflow?.runtimeContext ??
+    streamCache?.runtimeContext?.blobExecutionContext ??
     streamCache?.runtimeContext ??
     streamCache?.blobExecutionContext;
   if (!isPlainObject(context)) {
@@ -362,47 +384,50 @@ const normalizeBlobMetadata = (metadata, { blobElementId, objectId }) => {
   };
 };
 
-const commonStorageInput = (executionContext, bottle, objectId) => ({
+const commonStorageInput = (executionContext, bottlecontent, objectId) => ({
   tenantId: executionContext.tenantId,
   graphDomainId: executionContext.graphDomainId,
   graphAppId: executionContext.graphAppId,
   actorRef: executionContext.actorRef,
-  blobElementId: bottle.blobElementId,
+  blobElementId: bottlecontent.blobElementId,
   objectId,
   correlationId: executionContext.correlationId,
 });
 
 const executeBlobStoreBottle = async (rawBottle, executionContext) => {
   try {
-    const bottle = unwrapBottle(rawBottle);
+    const bottlecontent = unbottleContent(rawBottle);
     requireBlobExecutionContext(executionContext);
-    if (!isPlainObject(bottle) || bottle.schemaVersion !== STORE_SCHEMA_VERSION) {
+    if (!isPlainObject(bottlecontent) || bottlecontent.schemaVersion !== STORE_SCHEMA_VERSION) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
-    const operation = bottle.operation ?? "create";
+    const operation = bottlecontent.operation ?? "create";
     if (!["create", "overwrite"].includes(operation)) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
-    if (typeof bottle.blobElementId !== "string" || bottle.blobElementId.trim() === "") {
+    if (
+      typeof bottlecontent.blobElementId !== "string" ||
+      bottlecontent.blobElementId.trim() === ""
+    ) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
-    const contentType = normalizeContentType(bottle.contentType);
-    const contentHash = assertHash(bottle.contentHash);
+    const contentType = normalizeContentType(bottlecontent.contentType);
+    const contentHash = assertHash(bottlecontent.contentHash);
     const contentLength = validateContentLength(
-      bottle.contentLength,
+      bottlecontent.contentLength,
       resolveMaxObjectBytes(executionContext),
     );
-    if (!isPlainObject(bottle.payloadRef) || !bottle.payloadRef.kind) {
+    if (!isPlainObject(bottlecontent.payloadRef) || !bottlecontent.payloadRef.kind) {
       throw new BlobRuntimeError("invalid_payload_ref");
     }
-    if (operation === "overwrite" && bottle.expectedAssetRevision === undefined) {
+    if (operation === "overwrite" && bottlecontent.expectedAssetRevision === undefined) {
       throw new BlobRuntimeError("asset_revision_mismatch");
     }
 
     const requestedObjectId =
-      bottle.requestedObjectId === undefined
+      bottlecontent.requestedObjectId === undefined
         ? undefined
-        : normalizeBlobObjectId(bottle.requestedObjectId);
+        : normalizeBlobObjectId(bottlecontent.requestedObjectId);
     if (operation === "overwrite" && requestedObjectId === undefined) {
       throw new BlobRuntimeError("invalid_object_id");
     }
@@ -410,9 +435,9 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       requestedObjectId ??
       (await assignDeterministicObjectId({ contentHash, contentType, contentLength }));
 
-    let payloadRef = bottle.payloadRef;
+    let payloadRef = bottlecontent.payloadRef;
     const adapter = executionContext.blobStorageAdapter;
-    const baseInput = commonStorageInput(executionContext, bottle, objectId);
+    const baseInput = commonStorageInput(executionContext, bottlecontent, objectId);
     const idempotencyKey = normalizeIdempotencyKey(
       executionContext.blobOperationIdFactory?.() ?? defaultBlobOperationIdFactory(),
     );
@@ -420,7 +445,10 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
 
     if (operation === "create" && existing) {
       if (!requestedObjectId && existing.contentHash === contentHash) {
-        return normalizeBlobMetadata(existing, { blobElementId: bottle.blobElementId, objectId });
+        return normalizeBlobMetadata(existing, {
+          blobElementId: bottlecontent.blobElementId,
+          objectId,
+        });
       }
       throw new BlobRuntimeError("duplicate_object_id");
     }
@@ -428,7 +456,7 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       if (!existing) {
         throw new BlobRuntimeError("missing_object");
       }
-      if (existing.assetRevision !== bottle.expectedAssetRevision) {
+      if (existing.assetRevision !== bottlecontent.expectedAssetRevision) {
         throw new BlobRuntimeError("asset_revision_mismatch");
       }
     }
@@ -439,7 +467,7 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
         tenantId: executionContext.tenantId,
         graphDomainId: executionContext.graphDomainId,
         graphAppId: executionContext.graphAppId,
-        blobElementId: bottle.blobElementId,
+        blobElementId: bottlecontent.blobElementId,
         contentHash,
         correlationId: executionContext.correlationId,
       });
@@ -457,12 +485,15 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       payloadRef,
       operation,
       idempotencyKey,
-      expectedAssetRevision: bottle.expectedAssetRevision,
+      expectedAssetRevision: bottlecontent.expectedAssetRevision,
     });
     if (stored.contentHash && stored.contentHash !== contentHash) {
       throw new BlobRuntimeError("hash_mismatch");
     }
-    return normalizeBlobMetadata(stored, { blobElementId: bottle.blobElementId, objectId });
+    return normalizeBlobMetadata(stored, {
+      blobElementId: bottlecontent.blobElementId,
+      objectId,
+    });
   } catch (error) {
     return failureFromError(error, executionContext?.correlationId);
   }
@@ -470,33 +501,39 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
 
 const executeBlobFetchBottle = async (rawBottle, executionContext) => {
   try {
-    const bottle = unwrapBottle(rawBottle);
+    const bottlecontent = unbottleContent(rawBottle);
     requireBlobExecutionContext(executionContext);
-    if (!isPlainObject(bottle) || bottle.schemaVersion !== FETCH_SCHEMA_VERSION) {
+    if (!isPlainObject(bottlecontent) || bottlecontent.schemaVersion !== FETCH_SCHEMA_VERSION) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
-    if (typeof bottle.blobElementId !== "string" || bottle.blobElementId.trim() === "") {
+    if (
+      typeof bottlecontent.blobElementId !== "string" ||
+      bottlecontent.blobElementId.trim() === ""
+    ) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
-    const objectId = normalizeBlobObjectId(bottle.objectId);
+    const objectId = normalizeBlobObjectId(bottlecontent.objectId);
     const fetched = await callStorage("getObject", executionContext.blobStorageAdapter, {
-      ...commonStorageInput(executionContext, bottle, objectId),
-      expectedAssetRevision: bottle.expectedAssetRevision,
-      expectedContentHash: bottle.expectedContentHash,
+      ...commonStorageInput(executionContext, bottlecontent, objectId),
+      expectedAssetRevision: bottlecontent.expectedAssetRevision,
+      expectedContentHash: bottlecontent.expectedContentHash,
     });
     if (
-      bottle.expectedAssetRevision !== undefined &&
-      fetched.assetRevision !== bottle.expectedAssetRevision
+      bottlecontent.expectedAssetRevision !== undefined &&
+      fetched.assetRevision !== bottlecontent.expectedAssetRevision
     ) {
       throw new BlobRuntimeError("asset_revision_mismatch");
     }
     if (
-      bottle.expectedContentHash !== undefined &&
-      fetched.contentHash !== bottle.expectedContentHash
+      bottlecontent.expectedContentHash !== undefined &&
+      fetched.contentHash !== bottlecontent.expectedContentHash
     ) {
       throw new BlobRuntimeError("hash_mismatch");
     }
-    return normalizeBlobMetadata(fetched, { blobElementId: bottle.blobElementId, objectId });
+    return normalizeBlobMetadata(fetched, {
+      blobElementId: bottlecontent.blobElementId,
+      objectId,
+    });
   } catch (error) {
     return failureFromError(error, executionContext?.correlationId);
   }
@@ -504,14 +541,14 @@ const executeBlobFetchBottle = async (rawBottle, executionContext) => {
 
 const executeBlobListBottle = async (rawBottle, executionContext) => {
   try {
-    const bottle = normalizeListBottleSchemaVersion(rawBottle);
+    const bottlecontent = normalizeListBottleSchemaVersion(rawBottle);
     requireBlobExecutionContext(executionContext);
-    if (!isPlainObject(bottle) || bottle.schemaVersion !== LIST_SCHEMA_VERSION) {
+    if (!isPlainObject(bottlecontent) || bottlecontent.schemaVersion !== LIST_SCHEMA_VERSION) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
     const blobElementId =
-      typeof bottle.blobElementId === "string" && bottle.blobElementId.trim() !== ""
-        ? bottle.blobElementId.trim()
+      typeof bottlecontent.blobElementId === "string" && bottlecontent.blobElementId.trim() !== ""
+        ? bottlecontent.blobElementId.trim()
         : typeof executionContext?.blobElementId === "string" &&
             executionContext.blobElementId.trim() !== ""
           ? executionContext.blobElementId.trim()
@@ -519,14 +556,14 @@ const executeBlobListBottle = async (rawBottle, executionContext) => {
     if (!blobElementId) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
-    const limit = bottle.limit ?? DEFAULT_BLOB_LIST_LIMIT;
+    const limit = bottlecontent.limit ?? DEFAULT_BLOB_LIST_LIMIT;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_BLOB_LIST_LIMIT) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
     if (
-      bottle.cursor !== undefined &&
-      bottle.cursor !== null &&
-      (typeof bottle.cursor !== "string" || bottle.cursor.length === 0)
+      bottlecontent.cursor !== undefined &&
+      bottlecontent.cursor !== null &&
+      (typeof bottlecontent.cursor !== "string" || bottlecontent.cursor.length === 0)
     ) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
@@ -542,7 +579,7 @@ const executeBlobListBottle = async (rawBottle, executionContext) => {
       blobElementId,
       correlationId: executionContext.correlationId,
       limit,
-      cursor: bottle.cursor,
+      cursor: bottlecontent.cursor,
     });
     if (!isPlainObject(page) || !Array.isArray(page.items)) {
       throw new BlobRuntimeError("storage_unavailable");
@@ -813,16 +850,16 @@ const createLeafServerBlobStorageAdapter = ({
   };
 };
 
-const executeBlobBottle = async (bottle, executionContext) => {
-  const content = normalizeListBottleSchemaVersion(bottle);
-  if (content?.schemaVersion === STORE_SCHEMA_VERSION) {
-    return executeBlobStoreBottle(content, executionContext);
+const executeBlobBottle = async (rawInput, executionContext) => {
+  const bottlecontent = normalizeListBottleSchemaVersion(rawInput);
+  if (bottlecontent?.schemaVersion === STORE_SCHEMA_VERSION) {
+    return executeBlobStoreBottle(bottlecontent, executionContext);
   }
-  if (content?.schemaVersion === FETCH_SCHEMA_VERSION) {
-    return executeBlobFetchBottle(content, executionContext);
+  if (bottlecontent?.schemaVersion === FETCH_SCHEMA_VERSION) {
+    return executeBlobFetchBottle(bottlecontent, executionContext);
   }
-  if (content?.schemaVersion === LIST_SCHEMA_VERSION) {
-    return executeBlobListBottle(bottle, executionContext);
+  if (bottlecontent?.schemaVersion === LIST_SCHEMA_VERSION) {
+    return executeBlobListBottle(bottlecontent, executionContext);
   }
   return createBlobFailure("invalid_blob_bottle", {
     correlationId: executionContext?.correlationId,
@@ -831,18 +868,18 @@ const executeBlobBottle = async (bottle, executionContext) => {
 
 const executeElementBlobBottle = async (rawBottle, executionContext, blobElementId) => {
   try {
-    const bottle = unwrapBottle(rawBottle);
+    const bottlecontent = unbottleContent(rawBottle);
     if (
-      !isPlainObject(bottle) ||
+      !isPlainObject(bottlecontent) ||
       typeof blobElementId !== "string" ||
       blobElementId.trim() === ""
     ) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
-    if (bottle.blobElementId !== undefined && bottle.blobElementId !== blobElementId) {
+    if (bottlecontent.blobElementId !== undefined && bottlecontent.blobElementId !== blobElementId) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
-    return executeBlobBottle({ ...bottle, blobElementId }, executionContext);
+    return executeBlobBottle({ ...bottlecontent, blobElementId }, executionContext);
   } catch (error) {
     return failureFromError(error, executionContext?.correlationId);
   }
