@@ -389,32 +389,41 @@ const _leafspell = {
                 console.log("spell stream: subscribing spell, ", spellname);
                 if (!spellname)
                   console.error("undefined spellname: ", JSON.stringify(node_context));
-                _executeSpell(spellprom, relay_ctrl$, relay_data$).then((spell_output$) => {
-                  if (spell_output$ === undefined) {
-                    // fail-open passthrough: keep downstream graph execution alive even when
-                    // a spell cannot be resolved at runtime.
+                _executeSpell(spellprom, relay_ctrl$, relay_data$)
+                  .then((spell_output$) => {
+                    if (spell_output$ === undefined) {
+                      // fail-open passthrough: keep downstream graph execution alive even when
+                      // a spell cannot be resolved at runtime.
+                      spell_output_relay$.next(_combined_in);
+                    } else {
+                      spell_subscription = spell_output$.subscribe({
+                        next: (_next_out) => {
+                          console.log(`leafspell ${spellname} output: ${_next_out}`);
+                          spell_output_relay$.next(_next_out);
+                        },
+                        error: (emsg) => {
+                          console.error(
+                            `leafspell ${spellname} had an error in the subscription stream: ${emsg}`,
+                          );
+                          spell_subscription = undefined;
+                          spell_output_relay$.next(_combined_in);
+                        },
+                        complete: () => {
+                          console.log(`leafspell ${spellname} subscription completed.`);
+                          spell_subscription = undefined;
+                        },
+                      });
+                      setTimeout(() => {
+                        relay_data$.next(_combined_in[1]);
+                        relay_ctrl$.next(_combined_in[0]);
+                      }, 1);
+                    }
+                  })
+                  .catch((error) => {
+                    console.error(`leafspell ${spellname} execution failed:`, error);
+                    spell_subscription = undefined;
                     spell_output_relay$.next(_combined_in);
-                  } else {
-                    spell_subscription = spell_output$.subscribe({
-                      next: (_next_out) => {
-                        console.log(`leafspell ${spellname} output: ${_next_out}`);
-                        spell_output_relay$.next(_next_out);
-                      },
-                      error: (emsg) => {
-                        console.error(
-                          `leafspell ${spellname} had an error in the subscription stream: ${emsg}`,
-                        );
-                      },
-                      complete: () => {
-                        console.log(`leafspell ${spellname} subscription completed.`);
-                      },
-                    });
-                    setTimeout(() => {
-                      relay_data$.next(_combined_in[1]);
-                      relay_ctrl$.next(_combined_in[0]);
-                    }, 1);
-                  }
-                });
+                  });
               } else {
                 relay_data$.next(_combined_in[1]);
                 relay_ctrl$.next(_combined_in[0]);
@@ -504,32 +513,41 @@ const _leafspell = {
                   spellprom = lambdactrl.gos.etaTree.lookupLEAFNodeMethods(spell_nodeuuid);
                   console.log("spell stream: subscribing runtime spell, ", runtime_spellname);
 
-                  _executeSpell(spellprom, relay_ctrl$, relay_data$).then((spell_output$) => {
-                    if (spell_output$ === undefined) {
-                      // fail-open passthrough for unresolved runtime spell references.
+                  _executeSpell(spellprom, relay_ctrl$, relay_data$)
+                    .then((spell_output$) => {
+                      if (spell_output$ === undefined) {
+                        // fail-open passthrough for unresolved runtime spell references.
+                        spell_output_relay$.next(_combined_in);
+                      } else {
+                        spell_subscription = spell_output$.subscribe({
+                          next: (_next_out) => {
+                            console.log(`leafspell ${spellname} output: ${_next_out}`);
+                            spell_output_relay$.next(_next_out);
+                          },
+                          error: (emsg) => {
+                            console.error(
+                              `leafspell ${spellname} had an error in the subscription stream: ${emsg}`,
+                            );
+                            spell_subscription = undefined;
+                            spell_output_relay$.next(_combined_in);
+                          },
+                          complete: () => {
+                            console.log(`leafspell ${spellname} subscription completed.`);
+                            spell_subscription = undefined;
+                          },
+                        });
+                        setTimeout(() => {
+                          //relay_data$.next(_combined_in[1]);
+                          relay_data$.next(spell_input);
+                          relay_ctrl$.next(_combined_in[0]);
+                        }, 1);
+                      }
+                    })
+                    .catch((error) => {
+                      console.error(`leafspell ${spellname} execution failed:`, error);
+                      spell_subscription = undefined;
                       spell_output_relay$.next(_combined_in);
-                    } else {
-                      spell_subscription = spell_output$.subscribe({
-                        next: (_next_out) => {
-                          console.log(`leafspell ${spellname} output: ${_next_out}`);
-                          spell_output_relay$.next(_next_out);
-                        },
-                        error: (emsg) => {
-                          console.error(
-                            `leafspell ${spellname} had an error in the subscription stream: ${emsg}`,
-                          );
-                        },
-                        complete: () => {
-                          console.log(`leafspell ${spellname} subscription completed.`);
-                        },
-                      });
-                      setTimeout(() => {
-                        //relay_data$.next(_combined_in[1]);
-                        relay_data$.next(spell_input);
-                        relay_ctrl$.next(_combined_in[0]);
-                      }, 1);
-                    }
-                  });
+                    });
                 } else {
                   relay_data$.next(_combined_in[1]);
                   relay_ctrl$.next(_combined_in[0]);
