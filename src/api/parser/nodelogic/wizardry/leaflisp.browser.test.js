@@ -1,4 +1,6 @@
-import { createLEAFlispRuntime, executeLEAFlisp, runLEAFlispcode } from "./leaflisp.js";
+import { BehaviorSubject, firstValueFrom } from "rxjs";
+
+import { _leaflisp, createLEAFlispRuntime, executeLEAFlisp, runLEAFlispcode } from "./leaflisp.js";
 
 describe("executeLEAFlisp", () => {
   it("executes leaflisp code with input data bound as inport", () => {
@@ -110,5 +112,61 @@ describe("runLEAFlispcode", () => {
       0,
       { count: 2, nested: { ratio: 1.5 } },
     ]);
+  });
+});
+
+describe("leaflisp lambda scope", () => {
+  it("exposes runtimeconfig and blobexecutioncontext bindings for lambda-scoped eval", async () => {
+    const lambdactrl = {
+      gos: {
+        etaTree: {
+          domain: "breezyforest",
+          appid: "guides",
+          gRuntimeLEAFlisp: createLEAFlispRuntime(),
+        },
+      },
+    };
+    const lambdaFactory = _leaflisp.lambda(lambdactrl);
+    const lambdaLUT = await lambdaFactory({
+      refnode: "leaflisp-lambda-node",
+      refnodedata: {
+        leaf: {
+          logic: {
+            type: "leaflisp",
+            args: {
+              lispexpression:
+                "(return {:tenant (get blobexecutioncontext :tenantId) :idx loopyindex :club clubref})",
+            },
+          },
+        },
+      },
+      nodelambda: [],
+      contextuallambda: [],
+    });
+
+    const input$ = new BehaviorSubject({});
+    const ctrl$ = new BehaviorSubject({ _bname: "accio" });
+    const output$obj = lambdaLUT._default([{ _stream: input$ }], {
+      _stream: ctrl$,
+      _config: {
+        loopidx: 2,
+        clubrefnode: "blob-config",
+        blobExecutionContext: {
+          tenantId: "tenant-a",
+        },
+      },
+    });
+
+    const outputPromise = firstValueFrom(output$obj._stream);
+    const controlSubscription = output$obj._control._stream.subscribe();
+
+    const output = await outputPromise;
+    controlSubscription.unsubscribe();
+
+    expect(output).toEqual({
+      tenant: "tenant-a",
+      idx: 2,
+      club: "blob-config",
+    });
   });
 });

@@ -1,7 +1,6 @@
 //import { processLEAFlisp } from '../../leaflisp';
 import { map, withLatestFrom, filter, share, switchMap } from "rxjs/operators";
 import { BehaviorSubject, Subject, combineLatest } from "rxjs";
-import { combineDataflows } from "../../../utils/leafdataflow.js";
 import { v4 as uuid4, v5 as uuid5 } from "uuid";
 
 import { PocketLisp } from "../../../parser/leaflisp/plispdist/index.js"; //'../../../parser/leaflisp/pocket-lisp'; //
@@ -546,6 +545,63 @@ const buildLEAFlispPreamble = (inputData, { inputBinding = "inport", bindings = 
   return preambleParts.join("");
 };
 
+const isPlainObject = (value) => {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    value.constructor === Object
+  );
+};
+
+const resolveLeaflispRuntimeContext = (runtimeconfig = {}) => {
+  if (!isPlainObject(runtimeconfig)) {
+    return undefined;
+  }
+  return (
+    runtimeconfig.runtimeContext ??
+    runtimeconfig.ghostRuntimeOptions?.runtimeContext ??
+    runtimeconfig.runtimeOptions?.runtimeContext ??
+    runtimeconfig.ghostosRuntimeOptions?.runtimeContext
+  );
+};
+
+const resolveLeaflispBlobExecutionContext = (runtimeconfig = {}, runtimecontext = undefined) => {
+  if (!isPlainObject(runtimeconfig)) {
+    return undefined;
+  }
+  return (
+    runtimeconfig.blobExecutionContext ??
+    runtimeconfig.runtimeContext?.blobExecutionContext ??
+    runtimeconfig.ghostRuntimeOptions?.blobExecutionContext ??
+    runtimeconfig.ghostRuntimeOptions?.runtimeContext?.blobExecutionContext ??
+    runtimeconfig.runtimeOptions?.blobExecutionContext ??
+    runtimeconfig.runtimeOptions?.runtimeContext?.blobExecutionContext ??
+    runtimeconfig.ghostosRuntimeOptions?.blobExecutionContext ??
+    runtimeconfig.ghostosRuntimeOptions?.runtimeContext?.blobExecutionContext ??
+    runtimecontext?.blobExecutionContext
+  );
+};
+
+const buildLeaflispRuntimeBindings = (runtimeconfig = undefined) => {
+  const normalizedConfig = isPlainObject(runtimeconfig) ? runtimeconfig : {};
+  const runtimecontext = resolveLeaflispRuntimeContext(normalizedConfig);
+  const blobexecutioncontext = resolveLeaflispBlobExecutionContext(
+    normalizedConfig,
+    runtimecontext,
+  );
+  const loopidx = normalizedConfig.loopidx;
+  const clubrefnode = normalizedConfig.clubrefnode;
+
+  return {
+    runtimeconfig: normalizedConfig,
+    runtimecontext: runtimecontext ?? null,
+    blobexecutioncontext: blobexecutioncontext ?? null,
+    ...(Number.isSafeInteger(loopidx) && loopidx >= 0 ? { loopyindex: loopidx } : {}),
+    ...(typeof clubrefnode === "string" && clubrefnode.length > 0 ? { clubref: clubrefnode } : {}),
+  };
+};
+
 const executeLEAFlisp = (inputData, leaflispCode, options = {}) => {
   const {
     runtimeLEAFlisp = createLEAFlispRuntime(options),
@@ -959,8 +1015,6 @@ const _leaflisp = {
         if (refnode.slice(0, 4) == "59fe") {
           console.log("start debugging.");
         }
-        const loopidx = controlflow$obj?._config?.loopidx;
-        const clubrefnode = controlflow$obj?._config?.clubrefnode;
 
         const preprocessfunc = (_data_in) => {
           //const _data_out = doUnbottle(undefined, _data_in); // unbottle all bottles
@@ -994,14 +1048,11 @@ const _leaflisp = {
           // once leaflisp code changes is applied, make sure to revert back undefined:nil conversion
           //
           //const lispinput = parseJsonToLEAFlisp(_payload);
-          const lispinput = parseJsonToLEAFlisp(_payload == undefined ? [] : _payload);
-          //const wiredlispcode = `(def stdin ${lispinput})${lispcode}`;
-          //console.log(controlflow$obj);
-          let wiredlispcode = `(def inport ${lispinput})`;
-          if (loopidx >= 0) wiredlispcode += `(def loopyindex ${loopidx})`;
-          if (clubrefnode) wiredlispcode += `(def clubref "${clubrefnode}")`;
-          const preamble_len = wiredlispcode.split(/\r\n|\r|\n/).length; // count the length of lines in string
-          wiredlispcode += `${_lispcode}`;
+          const preamble = buildLEAFlispPreamble(_payload == undefined ? [] : _payload, {
+            bindings: buildLeaflispRuntimeBindings(controlflow$obj?._config),
+          });
+          const preamble_len = preamble.split(/\r\n|\r|\n/).length; // count the length of lines in string
+          const wiredlispcode = `${preamble}${_lispcode}`;
 
           try {
             const [errcode, lispresult] = runLEAFlispcode(
@@ -1353,21 +1404,66 @@ const _leaflisp = {
   lambda:
     (lambdactrl) =>
     async ({ refnode, refnodedata, nodelambda, contextuallambda } = {}) => {
-      //const refnode_logic = runtimeEtaTree.leafgraph.graph.dataflow.getNodeAttributes(refnode).leafnode.data.leaf.logic;
-      console.error(
-        `LEAF error: the logical construct built using the ${refnodedata.leaf.logic.type} node ` +
-          `(${refnode}) called with args (${JSON.stringify(refnodedata.leaf.logic.args)}) cannot ` +
-          "be defined as a lambda-scoped node.",
-      );
-      return (input$Arr, controlflow$obj) => {
-        //const input$obj = combineDataflows(refnode, input$Arr);
-        const input$obj = combineDataflows(refnode, input$Arr, false, false, false, {
-          provenance: "leaflisp.js lambda",
-          refnode,
-          etaTree: lambdactrl.gos.etaTree,
-        }); // default to merging multiple streams
-        return { ...input$obj, _control: controlflow$obj };
+      const reduced_lambda_obj = await etaReduceLambdaGraphs({
+        refnode,
+        nodelambda,
+        contextuallambda,
+        etaTree: lambdactrl.gos.etaTree,
+      });
+      const lispcode =
+        leafgon_env_type === "development"
+          ? hijackTestURL(refnodedata.leaf.logic.args.lispexpression)
+          : refnodedata.leaf.logic.args.lispexpression;
+
+      const runtimeLEAFlisp =
+        "global" in reduced_lambda_obj
+          ? lambdactrl.gos.etaTree.gRuntimeLEAFlisp
+          : createLEAFlispRuntime();
+
+      const leafaddress = `${lambdactrl.gos.etaTree.domain}/${lambdactrl.gos.etaTree.appid}`;
+
+      const lambda_lut = {
+        _default: (input$objArr, controlflow$obj) => {
+          const _outflow_data$ = new Subject();
+          const inputStreams =
+            input$objArr.length === 0
+              ? [new BehaviorSubject(undefined)]
+              : input$objArr.map((_) => _._stream);
+          const _outflow_ctrl$ = controlflow$obj._stream.pipe(
+            withLatestFrom(...inputStreams),
+            map((_combined_in) => {
+              const _next_data = _combined_in[1];
+              const preamble = buildLEAFlispPreamble(_next_data == undefined ? [] : _next_data, {
+                bindings: buildLeaflispRuntimeBindings(controlflow$obj?._config),
+              });
+              const preamble_len = preamble.split(/\r\n|\r|\n/).length;
+              const [errcode, lispresult] = runLEAFlispcode(
+                `${preamble}${lispcode}`,
+                refnode,
+                runtimeLEAFlisp,
+                leafaddress,
+                preamble_len,
+              );
+              if (errcode === -1) {
+                runtimeLogger.error("LEAFlisp lambda execution error", lispresult);
+              }
+              _outflow_data$.next(lispresult);
+              return _combined_in[0];
+            }),
+            share(),
+          );
+
+          return {
+            _stream: _outflow_data$,
+            _control: {
+              ...controlflow$obj,
+              _stream: _outflow_ctrl$,
+            },
+          };
+        },
       };
+
+      return lambda_lut;
     },
   methods:
     (lambdactrl) =>
