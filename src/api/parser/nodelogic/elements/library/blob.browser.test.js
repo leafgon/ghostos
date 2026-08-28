@@ -157,6 +157,56 @@ describe("leafelement:blob contract helpers", () => {
     expect(context.blobStorageAdapter.getExecutionCounts()).toMatchObject({ listObjects: 2 });
   });
 
+  it("preserves enriched blob-list metadata fields", async () => {
+    const adapter = createInMemoryBlobStorageAdapter();
+    adapter.listObjects = async () => ({
+      schemaVersion: "ghostos.blob_data_file_page.v1",
+      items: [
+        {
+          schemaVersion: "ghostos.blob_data_file.v1",
+          blobElementId: "blob-node-uuid",
+          objectId: "logo",
+          objectType: "file",
+          contentType: "image/png",
+          contentLength: 123,
+          contentHash: HASH_A,
+          etag: "etag-1",
+          assetRevision: 1,
+          lastModifiedAt: "2026-08-25T00:00:00Z",
+          assetUrls: [
+            "https://assets.leafgon.com/_leafgon/api/v1/page-assets/@page/storage/logo",
+            null,
+          ],
+          objectMetadata: {
+            schemaVersion: "leafgon.blob_asset_object_metadata.v1",
+            objectId: "logo",
+            spellName: "storage",
+          },
+        },
+      ],
+      nextCursor: null,
+    });
+    const context = createContext({
+      blobStorageAdapter: adapter,
+    });
+
+    await expect(executeBlobListBottle(listBottle(), context)).resolves.toMatchObject({
+      schemaVersion: "ghostos.blob_data_file_page.v1",
+      items: [
+        {
+          objectId: "logo",
+          assetUrls: ["https://assets.leafgon.com/_leafgon/api/v1/page-assets/@page/storage/logo"],
+          objectMetadata: {
+            schemaVersion: "leafgon.blob_asset_object_metadata.v1",
+            objectId: "logo",
+            spellName: "storage",
+          },
+        },
+      ],
+      nextCursor: null,
+    });
+  });
+
   it("defaults blob-list schemaVersion and blobElementId from GhostOS context", async () => {
     const context = createContext();
     await executeBlobStoreBottle(storeBottle({ requestedObjectId: "alpha" }), context);
@@ -708,31 +758,130 @@ describe("leafelement:blob contract helpers", () => {
     });
   });
 
-  it("requests leaf-server blob collection pages without client-owned scope", async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse({
+  it("requests list pages then enriches items through the contract list route", async () => {
+    const fetchImpl = vi.fn(async (_url, request) => {
+      if (request.method === "GET") {
+        return jsonResponse({
+          body: {
+            schemaVersion: "ghostos.blob_data_file_page.v1",
+            items: [
+              {
+                schemaVersion: "ghostos.blob_data_file.v1",
+                blobElementId: "blob-node-uuid",
+                objectId: "logo",
+                objectType: "file",
+                contentType: "image/png",
+                contentLength: 123,
+                contentHash: HASH_A,
+              },
+            ],
+            nextCursor: null,
+          },
+        });
+      }
+      return jsonResponse({
         body: {
-          schemaVersion: "ghostos.blob_data_file_page.v1",
-          items: [],
-          nextCursor: null,
+          schemaVersion: "ghostos.blob_list_file.v1",
+          blobElementId: "blob-node-uuid",
+          items: [
+            {
+              objectId: "logo",
+              assetUrls: [
+                "https://assets.leafgon.com/_leafgon/api/v1/page-assets/@page/storage/logo",
+              ],
+              objectMetadata: {
+                schemaVersion: "leafgon.blob_asset_object_metadata.v1",
+                objectId: "logo",
+              },
+            },
+          ],
         },
-      }),
-    );
+      });
+    });
     const adapter = createLeafServerBlobStorageAdapter({ fetchImpl });
 
-    await adapter.listObjects({
+    const page = await adapter.listObjects({
       tenantId: "tenant-a",
       graphDomainId: "domain-a",
       graphAppId: "app-a",
       blobElementId: "blob-node-uuid",
       limit: 25,
       cursor: "opaque+cursor",
+      correlationId: "corr-a",
+    });
+
+    expect(page).toMatchObject({
+      schemaVersion: "ghostos.blob_data_file_page.v1",
+      items: [
+        {
+          objectId: "logo",
+          assetUrls: ["https://assets.leafgon.com/_leafgon/api/v1/page-assets/@page/storage/logo"],
+          objectMetadata: {
+            schemaVersion: "leafgon.blob_asset_object_metadata.v1",
+            objectId: "logo",
+          },
+        },
+      ],
+      nextCursor: null,
     });
 
     expect(fetchImpl).toHaveBeenCalledWith(
       "/api/v1/blob-storage/objects/domain-a/app-a/blob-node-uuid?limit=25&cursor=opaque%2Bcursor",
       { method: "GET", credentials: "include" },
     );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/v1/blob-storage/objects/domain-a/app-a/blob-node-uuid:list",
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          schemaVersion: "ghostos.blob_list_bottle.v1",
+          objectIds: ["logo"],
+          correlationId: "corr-a",
+        }),
+      },
+    );
+  });
+
+  it("falls back to plain list pages when list contract enrichment fails", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          body: {
+            schemaVersion: "ghostos.blob_data_file_page.v1",
+            items: [{ objectId: "logo", contentHash: HASH_A }],
+            nextCursor: null,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          status: 404,
+          body: {
+            schemaVersion: "ghostos.blob_failure.v1",
+            code: "missing_object",
+            retryable: false,
+            safeMessage: "Missing object.",
+          },
+        }),
+      );
+    const adapter = createLeafServerBlobStorageAdapter({ fetchImpl });
+
+    await expect(
+      adapter.listObjects({
+        tenantId: "tenant-a",
+        graphDomainId: "domain-a",
+        graphAppId: "app-a",
+        blobElementId: "blob-node-uuid",
+        limit: 10,
+      }),
+    ).resolves.toMatchObject({
+      schemaVersion: "ghostos.blob_data_file_page.v1",
+      items: [{ objectId: "logo", contentHash: HASH_A }],
+      nextCursor: null,
+    });
   });
 
   it("returns metadata for leaf-server HEAD responses and typed failures for denied responses", async () => {
