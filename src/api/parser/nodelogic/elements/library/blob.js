@@ -418,6 +418,12 @@ const normalizeBlobMetadata = (metadata, { blobElementId, objectId }) => {
   if (isPlainObject(metadata.objectMetadata)) {
     normalized.objectMetadata = { ...metadata.objectMetadata };
   }
+  if (typeof metadata.description === "string" && metadata.description.trim() !== "") {
+    normalized.description = metadata.description;
+  }
+  if (isPlainObject(metadata.annotations)) {
+    normalized.annotations = { ...metadata.annotations };
+  }
   return normalized;
 };
 
@@ -454,6 +460,22 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       bottlecontent.contentLength,
       resolveMaxObjectBytes(executionContext),
     );
+    const description =
+      bottlecontent.description === undefined
+        ? undefined
+        : typeof bottlecontent.description === "string"
+          ? bottlecontent.description.trim() || undefined
+          : (() => {
+              throw new BlobRuntimeError("invalid_blob_bottle");
+            })();
+    const annotations =
+      bottlecontent.annotations === undefined
+        ? undefined
+        : isPlainObject(bottlecontent.annotations)
+          ? bottlecontent.annotations
+          : (() => {
+              throw new BlobRuntimeError("invalid_blob_bottle");
+            })();
     if (!isPlainObject(bottlecontent.payloadRef) || !bottlecontent.payloadRef.kind) {
       throw new BlobRuntimeError("invalid_payload_ref");
     }
@@ -523,6 +545,8 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       operation,
       idempotencyKey,
       expectedAssetRevision: bottlecontent.expectedAssetRevision,
+      description,
+      annotations,
     });
     if (stored.contentHash && stored.contentHash !== contentHash) {
       throw new BlobRuntimeError("hash_mismatch");
@@ -822,6 +846,21 @@ const createLeafServerBlobStorageAdapter = ({
     },
     putObject: async (input) => {
       const idempotencyKey = resolveMutationId(input);
+      const body = {
+        contentType: input.contentType,
+        contentLength: input.contentLength,
+        contentHash: input.contentHash,
+        payloadRef: input.payloadRef,
+        operation: input.operation,
+        expectedAssetRevision: input.expectedAssetRevision,
+        correlationId: input.correlationId,
+      };
+      if (input.description !== undefined) {
+        body.description = input.description;
+      }
+      if (input.annotations !== undefined) {
+        body.annotations = input.annotations;
+      }
       const response = await requestLeafServerBlobStorage({
         baseUrl,
         credentials,
@@ -829,15 +868,7 @@ const createLeafServerBlobStorageAdapter = ({
         method: "PUT",
         path: leafServerObjectPath(input),
         headers: { "Idempotency-Key": idempotencyKey },
-        body: {
-          contentType: input.contentType,
-          contentLength: input.contentLength,
-          contentHash: input.contentHash,
-          payloadRef: input.payloadRef,
-          operation: input.operation,
-          expectedAssetRevision: input.expectedAssetRevision,
-          correlationId: input.correlationId,
-        },
+        body,
       });
       return readLeafServerBlobJson(response);
     },
@@ -975,23 +1006,32 @@ const executeElementBlobBottle = async (rawBottle, executionContext, blobElement
   }
 };
 
-const createMetadata = (input, revision) => ({
-  schemaVersion: DATA_FILE_SCHEMA_VERSION,
-  blobElementId: input.blobElementId,
-  objectId: input.objectId,
-  objectType: "file",
-  contentType: input.contentType,
-  contentLength: input.contentLength,
-  contentHash: input.contentHash,
-  storage: {
-    accountName: input.accountName,
-    containerName: input.containerName,
-    blobName: input.blobName,
-  },
-  etag: `etag-${revision}`,
-  assetRevision: revision,
-  lastModifiedAt: new Date(revision * 1000).toISOString(),
-});
+const createMetadata = (input, revision) => {
+  const metadata = {
+    schemaVersion: DATA_FILE_SCHEMA_VERSION,
+    blobElementId: input.blobElementId,
+    objectId: input.objectId,
+    objectType: "file",
+    contentType: input.contentType,
+    contentLength: input.contentLength,
+    contentHash: input.contentHash,
+    storage: {
+      accountName: input.accountName,
+      containerName: input.containerName,
+      blobName: input.blobName,
+    },
+    etag: `etag-${revision}`,
+    assetRevision: revision,
+    lastModifiedAt: new Date(revision * 1000).toISOString(),
+  };
+  if (typeof input.description === "string" && input.description.trim() !== "") {
+    metadata.description = input.description;
+  }
+  if (isPlainObject(input.annotations)) {
+    metadata.annotations = JSON.parse(JSON.stringify(input.annotations));
+  }
+  return metadata;
+};
 
 const createInMemoryBlobStorageAdapter = ({
   accountName = "test-account",
@@ -1074,9 +1114,15 @@ const createInMemoryBlobStorageAdapter = ({
         throw new BlobRuntimeError("asset_revision_mismatch");
       }
       const revision = existing ? existing.assetRevision + 1 : 1;
+      const description =
+        input.description === undefined ? existing?.description : input.description;
+      const annotations =
+        input.annotations === undefined ? existing?.annotations : input.annotations;
       const metadata = createMetadata(
         {
           ...input,
+          description,
+          annotations,
           accountName,
           containerName,
           blobName: blobNameFor(input),

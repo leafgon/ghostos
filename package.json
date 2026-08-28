@@ -1,6 +1,6 @@
 {
   "name": "ghostos",
-  "version": "0.2.29",
+  "version": "0.2.30",
   "description": "A reference LEAF graph parser implementation used by leafgon.com",
   "main": "lib/index.esm.js",
   "module": "lib/index.esm.js",
@@ -43,9 +43,11 @@
     "build:dev": "webpack --config webpack.browser.dev.config.mjs",
     "build:cjs": "node ./scripts/build-cjs.mjs",
     "build:types": "tsc --project tsconfig.json --declaration --allowJs --emitDeclarationOnly --outDir lib",
+    "clean:lib": "node ./scripts/clean-lib.mjs",
     "build": "npm run build:web && npm run build:node && npm run build:cjs && npm run build:types",
     "verify:package-artifacts": "node ./scripts/verify-package-artifacts.mjs",
-    "prepack": "npm run build && npm run verify:package-artifacts"
+    "rebuild:package-artifacts": "npm run clean:lib && npm run build && npm run verify:package-artifacts",
+    "prepack": "npm run verify:package-artifacts"
   },
   "repository": {
     "type": "git",
