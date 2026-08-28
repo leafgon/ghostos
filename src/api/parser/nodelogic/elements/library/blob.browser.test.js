@@ -131,6 +131,24 @@ describe("leafelement:blob contract helpers", () => {
     });
   });
 
+  it("stores optional description and annotations metadata", async () => {
+    const context = createContext();
+    const stored = await executeBlobStoreBottle(
+      storeBottle({
+        description: "  lifecycle diagram  ",
+        annotations: { topic: "guides", source: "editor" },
+      }),
+      context,
+    );
+
+    expect(stored.description).toBe("lifecycle diagram");
+    expect(stored.annotations).toEqual({ topic: "guides", source: "editor" });
+
+    const fetched = await executeBlobFetchBottle(fetchBottle("logo"), context);
+    expect(fetched.description).toBe("lifecycle diagram");
+    expect(fetched.annotations).toEqual({ topic: "guides", source: "editor" });
+  });
+
   it("lists scoped blob objects in stable cursor pages", async () => {
     const context = createContext();
     for (const objectId of ["charlie", "alpha", "bravo"]) {
@@ -670,6 +688,8 @@ describe("leafelement:blob contract helpers", () => {
           kind: "runtime-file-ref",
           ref: "runtime-ref-a",
         },
+        description: "diagram",
+        annotations: { topic: "guides" },
       }),
       context,
     );
@@ -709,6 +729,8 @@ describe("leafelement:blob contract helpers", () => {
       contentHash: HASH_A,
       operation: "create",
       correlationId: "corr-a",
+      description: "diagram",
+      annotations: { topic: "guides" },
     });
     expect(putBody).not.toHaveProperty("tenantId");
     expect(putBody).not.toHaveProperty("actorRef");
