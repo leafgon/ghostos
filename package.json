@@ -46,7 +46,8 @@
     "clean:lib": "node ./scripts/clean-lib.mjs",
     "build": "npm run build:web && npm run build:node && npm run build:cjs && npm run build:types",
     "verify:package-artifacts": "node ./scripts/verify-package-artifacts.mjs",
-    "prepack": "npm run clean:lib && npm run build && npm run verify:package-artifacts"
+    "rebuild:package-artifacts": "npm run clean:lib && npm run build && npm run verify:package-artifacts",
+    "prepack": "npm run verify:package-artifacts"
   },
   "repository": {
     "type": "git",
