@@ -397,7 +397,7 @@ const normalizeBlobMetadata = (metadata, { blobElementId, objectId }) => {
       retryable: true,
     });
   }
-  return {
+  const normalized = {
     schemaVersion: DATA_FILE_SCHEMA_VERSION,
     blobElementId: metadata.blobElementId ?? blobElementId,
     objectId: metadata.objectId ?? objectId,
@@ -410,6 +410,15 @@ const normalizeBlobMetadata = (metadata, { blobElementId, objectId }) => {
     assetRevision: metadata.assetRevision,
     lastModifiedAt: metadata.lastModifiedAt,
   };
+  if (Array.isArray(metadata.assetUrls)) {
+    normalized.assetUrls = metadata.assetUrls.filter(
+      (assetUrl) => typeof assetUrl === "string" && assetUrl.trim() !== "",
+    );
+  }
+  if (isPlainObject(metadata.objectMetadata)) {
+    normalized.objectMetadata = { ...metadata.objectMetadata };
+  }
+  return normalized;
 };
 
 const commonStorageInput = (executionContext, bottlecontent, objectId) => ({
@@ -847,14 +856,64 @@ const createLeafServerBlobStorageAdapter = ({
       if (input.cursor) {
         query.push(`cursor=${encodeURIComponent(input.cursor)}`);
       }
-      const response = await requestLeafServerBlobStorage({
+      const pageResponse = await requestLeafServerBlobStorage({
         baseUrl,
         credentials,
         fetchImpl: resolvedFetch,
         method: "GET",
         path: `${leafServerObjectCollectionPath(input)}?${query.join("&")}`,
       });
-      return readLeafServerBlobJson(response);
+      const page = await readLeafServerBlobJson(pageResponse);
+      if (!isPlainObject(page) || !Array.isArray(page.items) || page.items.length === 0) {
+        return page;
+      }
+      const objectIds = page.items
+        .map((item) => (typeof item?.objectId === "string" ? item.objectId.trim() : ""))
+        .filter((objectId) => objectId.length > 0);
+      if (objectIds.length === 0) {
+        return page;
+      }
+      try {
+        const contractResponse = await requestLeafServerBlobStorage({
+          baseUrl,
+          credentials,
+          fetchImpl: resolvedFetch,
+          method: "POST",
+          path: `${leafServerObjectCollectionPath(input)}:list`,
+          body: {
+            schemaVersion: LIST_SCHEMA_VERSION,
+            objectIds,
+            correlationId: input.correlationId,
+          },
+        });
+        const contractResult = await readLeafServerBlobJson(contractResponse);
+        if (!isPlainObject(contractResult) || !Array.isArray(contractResult.items)) {
+          return page;
+        }
+        const byObjectId = new Map(
+          contractResult.items
+            .filter(
+              (item) =>
+                isPlainObject(item) && typeof item.objectId === "string" && item.objectId !== "",
+            )
+            .map((item) => [item.objectId, item]),
+        );
+        if (byObjectId.size === 0) {
+          return page;
+        }
+        return {
+          ...page,
+          items: page.items.map((item) => {
+            if (!isPlainObject(item) || typeof item.objectId !== "string") {
+              return item;
+            }
+            const contractItem = byObjectId.get(item.objectId);
+            return isPlainObject(contractItem) ? { ...item, ...contractItem } : item;
+          }),
+        };
+      } catch (_error) {
+        return page;
+      }
     },
     deleteObject: async (input) => {
       if (!Number.isSafeInteger(input?.expectedAssetRevision) || input.expectedAssetRevision < 1) {
