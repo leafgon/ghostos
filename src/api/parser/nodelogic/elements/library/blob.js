@@ -1114,8 +1114,10 @@ const createInMemoryBlobStorageAdapter = ({
         throw new BlobRuntimeError("asset_revision_mismatch");
       }
       const revision = existing ? existing.assetRevision + 1 : 1;
-      const description = input.description === undefined ? existing?.description : input.description;
-      const annotations = input.annotations === undefined ? existing?.annotations : input.annotations;
+      const description =
+        input.description === undefined ? existing?.description : input.description;
+      const annotations =
+        input.annotations === undefined ? existing?.annotations : input.annotations;
       const metadata = createMetadata(
         {
           ...input,
