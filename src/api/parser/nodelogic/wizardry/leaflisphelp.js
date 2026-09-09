@@ -43,6 +43,18 @@ shuffle:    generates a randomly shuffled list of an input list v \n\
             usage: (shuffle <v:list>)\n\
 \n\
 --------------------------------------------------------------------------\n\
+- time functions: \n\
+-------------------\n\
+now-ms:    returns the current unix time in milliseconds.\n\
+           usage: (now-ms)\n\
+------- \n\
+- async/control functions: \n\
+-------------------\n\
+sleep-ms:  suspends only the current LEAFlisp node execution for the given\n\
+           duration in milliseconds; other nodes continue running.\n\
+           usage: (sleep-ms <duration-ms:number> [result:any])\n\
+           ; resolves with result when provided, otherwise nil\n\
+------- \n\
 - list functions: \n\
 -------------------\n\
 range0:     generates a list comprising a range of integers of a specified\n\
