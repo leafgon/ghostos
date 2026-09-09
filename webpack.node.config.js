@@ -23,7 +23,14 @@ export default {
       "quickjs-emscripten": false,
     },
   },
-  externals: [nodeExternals()], // Exclude node_modules
+  // Resolve externals from package.json rather than local node_modules lookup.
+  // This keeps node bundling behavior consistent in git worktrees where
+  // dependencies may be hoisted in an ancestor directory.
+  externals: [
+    nodeExternals({
+      modulesFromFile: true,
+    }),
+  ],
   module: {
     rules: [
       {

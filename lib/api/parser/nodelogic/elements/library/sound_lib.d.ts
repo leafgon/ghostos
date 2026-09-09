@@ -1,9 +1,9 @@
-export function doConfigureInstrument(refnode: any, _config: any, is_reset?: boolean): any;
+export function doConfigureInstrument(refnode: any, _config: any, is_reset?: boolean): Promise<any>;
 export function doConfigureSource(_config: any): undefined;
 export function doConfigureTarget(nodeuuid: any): undefined;
-export function doConfigureEffect(refnode: any, _config: any, is_reset?: boolean): any;
+export function doConfigureEffect(refnode: any, _config: any, is_reset?: boolean): Promise<any>;
 export function initializeSoundStage(): void;
-export function initializeToneState(): void;
+export function initializeToneState(): Promise<void>;
 export function cacheSoundStageNode(nodeuuid: any, _soundnode: any): void;
 export function destroySoundStageNode(nodeuuid: any): void;
 export function connectCachedSoundStageNodes(nodeuuid1: any, nodeuuid2: any): void;
