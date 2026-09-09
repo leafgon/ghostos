@@ -15,7 +15,7 @@ const keepConsole = process.env.KEEP_CONSOLE === "true";
 export default {
   target: "web", // browser build
   mode,
-  devtool: isProd ? false : "eval-cheap-module-source-map",
+  devtool: isProd ? "hidden-source-map" : "eval-cheap-module-source-map",
 
   entry: {
     index: path.resolve(__dirname, "src/index.browser.js"), // Web-only entry point

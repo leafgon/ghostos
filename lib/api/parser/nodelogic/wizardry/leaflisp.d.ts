@@ -23,7 +23,7 @@ export function createLEAFlispRuntime({ globals, _probefunc, _tracefunc }?: {
 }): PocketLisp;
 export function executeLEAFlisp(inputData: any, leaflispCode: any, options?: {}): any;
 export function parseJsonToLEAFlisp(x: any, depth?: number, isdictval?: boolean): any;
-export function runLEAFlispcode(_lispcode: any, refnode: any, _runtimeLEAFlisp: any, _leafaddress: any, _preamble_len?: number): any[];
+export function runLEAFlispcode(_lispcode: any, refnode: any, _runtimeLEAFlisp: any, _leafaddress: any, _preamble_len?: number): any;
 export function init_gRuntimeLEAFlisp(_etaTree: any, accio_bottles: any): PocketLisp;
 import { Subject } from "rxjs";
 import { PocketLisp } from "../../../parser/leaflisp/plispdist/index.js";

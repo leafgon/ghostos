@@ -12,7 +12,7 @@ const keepConsole = process.env.KEEP_CONSOLE === "true";
 export default {
   target: "node", // Node.js build
   mode,
-  devtool: isProd ? false : "eval-cheap-module-source-map",
+  devtool: isProd ? "hidden-source-map" : "eval-cheap-module-source-map",
   entry: "./src/index.core.js", // Node-only entry point
   output: {
     path: path.resolve(__dirname, "lib"),
