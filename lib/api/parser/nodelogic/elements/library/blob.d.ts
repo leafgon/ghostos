@@ -108,7 +108,30 @@ export function createLeafServerBlobStorageAdapter({ baseUrl, fetchImpl, credent
     listObjects: (input: any) => Promise<any>;
     deleteObject: (input: any) => Promise<any>;
 };
-export function executeBlobBottle(bottle: any, executionContext: any): Promise<{
+export function executeBlobBottle(rawInput: any, executionContext: any): Promise<{
+    schemaVersion: string;
+    code: any;
+    retryable: boolean;
+    safeMessage: any;
+    correlationId: any;
+} | {
+    schemaVersion: string;
+    blobElementId: any;
+    objectId: any;
+    objectType: any;
+    contentType: any;
+    contentLength: any;
+    contentHash: any;
+    storage: any;
+    etag: any;
+    assetRevision: any;
+    lastModifiedAt: any;
+} | {
+    schemaVersion: string;
+    items: any;
+    nextCursor: any;
+}>;
+export function executeElementBlobBottle(rawBottle: any, executionContext: any, blobElementId: any): Promise<{
     schemaVersion: string;
     code: any;
     retryable: boolean;

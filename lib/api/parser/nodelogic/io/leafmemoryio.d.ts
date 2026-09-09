@@ -1,3 +1,8 @@
+export class MemoryRuntimePolicyError extends Error {
+    constructor(message: any, details?: {});
+    code: string;
+    details: {};
+}
 export namespace _leafmemoryio {
     function dataflow(lambdactrl: any): ({ refnode, refnodedata, nodelambda, contextuallambda }?: {}) => Promise<(input$objArr: any, controlflow$obj: any) => {
         _stream: import("rxjs").Observable<any>;
@@ -51,3 +56,49 @@ export namespace _leafmemoryio {
         };
     };
 }
+export function assertLeafMemoryPersistencePolicy({ persistenceMode }?: {
+    persistenceMode?: string | undefined;
+}): string;
+export function createLeafMemoryCheckpoint({ state, checkpointId }?: {
+    checkpointId?: string | undefined;
+}): Readonly<{
+    checkpointId: string;
+    stateVersion: any;
+    snapshot: Readonly<{
+        current: any;
+        history: any;
+    }>;
+}>;
+export function driveLeafMemoryByRuntimePolicy({ memoryname, memoryKey, persistenceMode, inflowCtrlObj, dataInflowObjArr, metaCtrl$, context, observability, }?: {
+    memoryKey?: any;
+    persistenceMode?: string | undefined;
+    dataInflowObjArr?: never[] | undefined;
+    context?: {} | undefined;
+    observability?: {} | undefined;
+}): Readonly<{
+    memory: Readonly<{
+        checkpoint: (checkpointId: any) => Readonly<{
+            checkpointId: string;
+            stateVersion: any;
+            snapshot: Readonly<{
+                current: any;
+                history: any;
+            }>;
+        }>;
+        snapshot: () => Readonly<{
+            current: any;
+            history: any;
+        }>;
+        validateReplay: ({ targetEventId, checkpoint }?: {}) => any;
+    }>;
+    _stream: import("rxjs").Observable<any>;
+    _control: Readonly<{
+        _stream: import("rxjs").Observable<any>;
+        _config: any;
+    }>;
+}>;
+export function snapshotLeafMemoryState(state: any): Readonly<{
+    current: any;
+    history: any;
+}>;
+export function validateLeafMemoryReplay({ state, targetEventId, checkpoint }?: {}): any;
