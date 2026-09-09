@@ -1,3 +1,237 @@
+export const LEAFELEMENT_ADAPTER_REGISTRY: Readonly<{
+    mediaplayer: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").BehaviorSubject<{
+                _bname: any;
+                _content: any;
+                _label: {};
+            }>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    http: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<any>;
+            _control: {
+                _stream: import("rxjs").Observable<any>;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    gnav: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Subject<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (_data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    popup: (_stream_cache: any) => {
+        elementio$: import("rxjs").Subject<any>;
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    image: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Subject<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    editor: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").BehaviorSubject<{
+                _bname: any;
+                _content: any;
+                _label: {};
+            }>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    text: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Subject<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    prompt: (_stream_cache: any) => {
+        elementio$: import("rxjs").Subject<any>;
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    mediainput: (_stream_cache: any) => {
+        elementio$: import("rxjs").Subject<any>;
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    midi: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Subject<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => {
+                _bname: any;
+                _content: any;
+                _label: {};
+            };
+            post: (data_in: any) => any;
+        };
+    };
+    sound: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<undefined>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    html: (_stream_cache: any) => {
+        elementio$: import("rxjs").Subject<any>;
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Subject<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    href: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+        };
+    };
+    form: (_stream_cache: any) => {
+        elementio$: import("rxjs").Subject<any>;
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Subject<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    directus: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<any>;
+            _control: {
+                _stream: import("rxjs").Observable<any>;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    hermes: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<any>;
+            _control: {
+                _stream: import("rxjs").Observable<any>;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    cortex: (_stream_cache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<any>;
+            _control: {
+                _stream: import("rxjs").Observable<any>;
+            };
+        };
+        datalogic: {
+            pre: (data_in: any) => any;
+            post: (data_in: any) => any;
+        };
+    };
+    blob: (streamCache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (dataIn: any) => any;
+            post: (dataIn: any) => any;
+        };
+    };
+}>;
 export function initStdElementProps(_cache: any, elementname: any): any;
 export function formatElementFlowdata(data: any, datakey?: string, iselementio?: boolean): any;
 export namespace ElemCacheKeyLUT {
@@ -18,6 +252,7 @@ export namespace ElemCacheKeyLUT {
     export { _hermes_cachekeys as hermes };
     export { _cortex_cachekeys as cortex };
 }
+export function listWiredLeafElementNames(): string[];
 import { cachekeys as _http_cachekeys } from "./http.js";
 import { cachekeys as _href_cachekeys } from "./href.js";
 import { cachekeys as _gnav_cachekeys } from "./gnav.js";

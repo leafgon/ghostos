@@ -13,5 +13,6 @@ export function props(_stream_cache: any): {
 export namespace cachekeys {
     let CONFIG: string;
     let SOUNDSTAGE: string;
+    let CONFIG_PROMISE: string;
 }
 export function midi_notenum2pitchname(_notenum: any, nameidx?: number): string;
