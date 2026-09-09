@@ -1,5 +1,5 @@
 //import { processLEAFlisp } from '../../leaflisp';
-import { map, withLatestFrom, filter, share, switchMap } from "rxjs/operators";
+import { map, withLatestFrom, filter, share, switchMap, concatMap } from "rxjs/operators";
 import { BehaviorSubject, Subject, combineLatest } from "rxjs";
 import { v4 as uuid4, v5 as uuid5 } from "uuid";
 
@@ -56,6 +56,14 @@ const formatJSONParseFailure = (error) => {
   return details.length > 0
     ? `Invalid JSON string (${details.join(", ")}).`
     : "Invalid JSON string.";
+};
+
+const isPromiseLike = (value) => {
+  return (
+    value !== null &&
+    (typeof value === "object" || typeof value === "function") &&
+    typeof value.then === "function"
+  );
 };
 
 const debuggerGlobal = {
@@ -208,6 +216,38 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = {}) => {
     },
     outport: (val) => {
       return val;
+    },
+    "now-ms": () => {
+      return plNumber(Date.now());
+    },
+    "sleep-ms": {
+      arity: -1,
+      call: (interpreter, env, args) => {
+        if (args.length < 1 || args.length > 2) {
+          throw new StdRuntimeError(`Expected 1 or 2 arguments, but got ${args.length}.`);
+        }
+
+        const durationMs = interpreter.execLiteral(args[0], env);
+        const valueLiteral = args.length === 2 ? args[1] : undefined;
+        const parsedDuration = Number(durationMs?.toJSON ? durationMs.toJSON() : durationMs);
+
+        if (!Number.isFinite(parsedDuration) || parsedDuration < 0) {
+          throw new StdRuntimeError("sleep-ms expects a non-negative duration in milliseconds.");
+        }
+
+        return new Promise((resolve, reject) => {
+          setTimeout(() => {
+            try {
+              resolve(valueLiteral ? interpreter.execLiteral(valueLiteral, env) : runtime.Nothing);
+            } catch (error) {
+              reject(error);
+            }
+          }, Math.round(parsedDuration));
+        });
+      },
+      toString: () => "<sleep-ms function>",
+      toJS: () => "<sleep-ms function>",
+      debugTypeOf: () => "Function",
     },
     undefined: runtime.Nothing,
     nil: runtime.Nothing,
@@ -627,7 +667,15 @@ const executeLEAFlisp = (inputData, leaflispCode, options = {}) => {
   const wiredlispcode = `${preamble}${leaflispCode}`;
 
   try {
-    return leaflispValueToJS(runtimeLEAFlisp.insituexecute(wiredlispcode));
+    const result = runtimeLEAFlisp.insituexecute(wiredlispcode);
+    if (isPromiseLike(result)) {
+      return result
+        .then((resolved) => leaflispValueToJS(resolved))
+        .catch((error) => {
+          throw new Error(formatLEAFlispInterpreterError(error, refnode, preamble_len));
+        });
+    }
+    return leaflispValueToJS(result);
   } catch (error) {
     throw new Error(formatLEAFlispInterpreterError(error, refnode, preamble_len));
   }
@@ -739,25 +787,18 @@ const init_gRuntimeLEAFlisp = (_etaTree, accio_bottles) => {
 };
 
 const runLEAFlispcode = (_lispcode, refnode, _runtimeLEAFlisp, _leafaddress, _preamble_len = 0) => {
-  try {
-    if (refnode?.slice(0, 4) === "1f5b") console.log("start debugging");
-    const result = _runtimeLEAFlisp.insituexecute(_lispcode);
-    //return result;
-    //if (result instanceof PLHashMap || result instanceof PLVector || result instanceof PLBool ||
-    //    result instanceof PLFractionNumber || result instanceof PLNumber || result instanceof PLString)
+  const handleSuccess = (result) => {
     try {
-      //    return (result instanceof PLHashMap) ? result.toJSON() : result.toJS();
       const jsonized_result = leaflispValueToJS(result);
-      //lisp_assert(jsonized_result == undefined);
       return [0, jsonized_result];
     } catch {
-      //lisp_assert(result != undefined);
-      //return [0, "LEAFlisp error: result undefined"];
       return [0, null]; // null is JSON compliant, undefined isn't
     }
-  } catch (e) {
-    let errlist = [];
-    if ("errors" in e) {
+  };
+
+  const handleFailure = (e) => {
+    const errlist = [];
+    if (e && typeof e === "object" && "errors" in e && Array.isArray(e.errors)) {
       for (let err of e.errors) {
         const msg = formatLEAFlispError(e.type, err, _preamble_len);
         const leaflisp_errmsg = `LEAFlisp error: {refnode: ${refnode}}: ${msg}`;
@@ -773,10 +814,21 @@ const runLEAFlispcode = (_lispcode, refnode, _runtimeLEAFlisp, _leafaddress, _pr
       }
     } else {
       errlist.push(
-        `LEAFlisp error: ${refnode}: unidentified execution failure. please check your leaflisp code for anomalies. exception: ${e.message}`,
+        `LEAFlisp error: ${refnode}: unidentified execution failure. please check your leaflisp code for anomalies. exception: ${e?.message ?? String(e)}`,
       );
     }
     return [-1, errlist];
+  };
+
+  try {
+    if (refnode?.slice(0, 4) === "1f5b") console.log("start debugging");
+    const result = _runtimeLEAFlisp.insituexecute(_lispcode);
+    if (isPromiseLike(result)) {
+      return result.then(handleSuccess).catch(handleFailure);
+    }
+    return handleSuccess(result);
+  } catch (e) {
+    return handleFailure(e);
   }
 };
 
@@ -1033,7 +1085,7 @@ const _leaflisp = {
           return _data_out;
         };
 
-        const doleaflisp = (node_input, _lispcode = lispcode) => {
+        const doleaflisp = async (node_input, _lispcode = lispcode) => {
           // node_input is expected to be an array, the calling function, parseLEAFNode (leaf.js) ensures this
           //const lispinput = parseJsonToLEAFlisp(JSON.parse(node_input));
           //const lispinput = parseJsonToLEAFlisp(typeof node_input === 'string' ? JSON.parse(node_input) : node_input);
@@ -1064,12 +1116,14 @@ const _leaflisp = {
           const wiredlispcode = `${preamble}${_lispcode}`;
 
           try {
-            const [errcode, lispresult] = runLEAFlispcode(
-              wiredlispcode,
-              refnode,
-              runtimeLEAFlisp,
-              node_context.leafaddress,
-              preamble_len,
+            const [errcode, lispresult] = await Promise.resolve(
+              runLEAFlispcode(
+                wiredlispcode,
+                refnode,
+                runtimeLEAFlisp,
+                node_context.leafaddress,
+                preamble_len,
+              ),
             );
 
             if (errcode === -1) {
@@ -1095,7 +1149,7 @@ const _leaflisp = {
                   return _ctrl_in;
                 }),
                 withLatestFrom(..._input$objArr.map((_) => _._stream)),
-                map((_combined_in) => {
+                concatMap(async (_combined_in) => {
                   //const _next_data = _combined_in.slice(1).filter(_data=>_data!==undefined);
                   let _next_data = _combined_in[1];
 
@@ -1129,7 +1183,7 @@ const _leaflisp = {
 
                   if (_next_data != undefined) {
                     traffic_semaphore = true;
-                    const dolispresult = doleaflisp(_next_data);
+                    const dolispresult = await doleaflisp(_next_data);
                     _outflow_data$.next(dolispresult); // publish the next available post-processed data via the data flow subject channel
 
                     //if (_next_data.length > 1) {
@@ -1158,7 +1212,7 @@ const _leaflisp = {
                     return _ctrl_in;
                   }),
                   withLatestFrom(..._input$objArr.map((_) => _._stream)),
-                  map((_combined_in) => {
+                  concatMap(async (_combined_in) => {
                     //const _next_data = _combined_in.slice(1).filter(_data=>_data!==undefined);
                     const _next_data = _combined_in[1];
 
@@ -1170,7 +1224,7 @@ const _leaflisp = {
                       traffic_semaphore = true;
                       const _bottle_data = _codebottle["data"];
                       const _bottle_code = _codebottle["code"];
-                      const dolispresult = doleaflisp(_bottle_data, _bottle_code);
+                      const dolispresult = await doleaflisp(_bottle_data, _bottle_code);
                       _outflow_data$.next(dolispresult); // publish the next available post-processed data via the data flow subject channel
                       //if (_next_data.length > 1) {
                       //    const dolispresult = doleaflisp(_next_data);
@@ -1196,7 +1250,7 @@ const _leaflisp = {
                     return _ctrl_in;
                   }),
                   withLatestFrom(..._input$objArr.map((_) => _._stream)),
-                  map((_combined_in) => {
+                  concatMap(async (_combined_in) => {
                     //const _next_data = _combined_in.slice(1).filter(_data=>_data!==undefined);
                     const _next_data = _combined_in[1];
 
@@ -1209,7 +1263,7 @@ const _leaflisp = {
                     )
                       console.log("start debugging");
                     traffic_semaphore = true;
-                    const dolispresult = doleaflisp(_next_data);
+                    const dolispresult = await doleaflisp(_next_data);
                     _outflow_data$.next(dolispresult); // publish the next available post-processed data via the data flow subject channel
                     //if (_next_data.length > 1) {
                     //    const dolispresult = doleaflisp(_next_data);
@@ -1441,18 +1495,20 @@ const _leaflisp = {
               : input$objArr.map((_) => _._stream);
           const _outflow_ctrl$ = controlflow$obj._stream.pipe(
             withLatestFrom(...inputStreams),
-            map((_combined_in) => {
+            concatMap(async (_combined_in) => {
               const _next_data = _combined_in[1];
               const preamble = buildLEAFlispPreamble(_next_data == undefined ? [] : _next_data, {
                 bindings: buildLeaflispRuntimeBindings(controlflow$obj?._config),
               });
               const preamble_len = preamble.split(/\r\n|\r|\n/).length;
-              const [errcode, lispresult] = runLEAFlispcode(
-                `${preamble}${lispcode}`,
-                refnode,
-                runtimeLEAFlisp,
-                leafaddress,
-                preamble_len,
+              const [errcode, lispresult] = await Promise.resolve(
+                runLEAFlispcode(
+                  `${preamble}${lispcode}`,
+                  refnode,
+                  runtimeLEAFlisp,
+                  leafaddress,
+                  preamble_len,
+                ),
               );
               if (errcode === -1) {
                 runtimeLogger.error("LEAFlisp lambda execution error", lispresult);

@@ -99,6 +99,25 @@ describe("executeLEAFlisp", () => {
   it("throws execution errors with leaflisp context", () => {
     expect(() => executeLEAFlisp(1, "(return (+ inport missing-value))")).toThrow(/LEAFlisp error/);
   });
+
+  it("supports now-ms for current timestamp retrieval", () => {
+    const before = Date.now();
+    const now = executeLEAFlisp([], "(return (now-ms))");
+    const after = Date.now();
+
+    expect(typeof now).toBe("number");
+    expect(Number.isFinite(now)).toBe(true);
+    expect(now).toBeGreaterThanOrEqual(before);
+    expect(now).toBeLessThanOrEqual(after);
+  });
+
+  it("supports sleep-ms in expressions", async () => {
+    const result = await Promise.resolve(
+      executeLEAFlisp(2, "(return (sleep-ms 5 (+ inport 3)))"),
+    );
+
+    expect(result).toBe(5);
+  });
 });
 
 describe("runLEAFlispcode", () => {
@@ -112,6 +131,15 @@ describe("runLEAFlispcode", () => {
       0,
       { count: 2, nested: { ratio: 1.5 } },
     ]);
+  });
+
+  it("handles async leaflisp execution results", async () => {
+    const runtimeLEAFlisp = createLEAFlispRuntime();
+    const result = await Promise.resolve(
+      runLEAFlispcode("(return (sleep-ms 5 42))", "number-output", runtimeLEAFlisp, "local", 0),
+    );
+
+    expect(result).toEqual([0, 42]);
   });
 });
 
@@ -211,5 +239,85 @@ describe("leaflisp lambda scope", () => {
     controlSubscription.unsubscribe();
 
     expect(output).toEqual({ hello: "world" });
+  });
+
+  it("sleep-ms suspends only the invoking node", async () => {
+    const lambdactrl = {
+      gos: {
+        etaTree: {
+          domain: "breezyforest",
+          appid: "guides",
+          gRuntimeLEAFlisp: createLEAFlispRuntime(),
+        },
+      },
+    };
+    const lambdaFactory = _leaflisp.lambda(lambdactrl);
+
+    const slowLambdaLUT = await lambdaFactory({
+      refnode: "leaflisp-slow-node",
+      refnodedata: {
+        leaf: {
+          logic: {
+            type: "leaflisp",
+            args: {
+              lispexpression:
+                '(return (sleep-ms 30 {:node "slow" :value (get inport :value)}))',
+            },
+          },
+        },
+      },
+      nodelambda: [],
+      contextuallambda: [],
+    });
+
+    const fastLambdaLUT = await lambdaFactory({
+      refnode: "leaflisp-fast-node",
+      refnodedata: {
+        leaf: {
+          logic: {
+            type: "leaflisp",
+            args: {
+              lispexpression: '(return {:node "fast" :value (get inport :value)})',
+            },
+          },
+        },
+      },
+      nodelambda: [],
+      contextuallambda: [],
+    });
+
+    const slowInput$ = new BehaviorSubject({ value: 1 });
+    const fastInput$ = new BehaviorSubject({ value: 2 });
+    const slowCtrl$ = new BehaviorSubject({ _bname: "accio" });
+    const fastCtrl$ = new BehaviorSubject({ _bname: "accio" });
+
+    const slowOutputObj = slowLambdaLUT._default([{ _stream: slowInput$ }], {
+      _stream: slowCtrl$,
+      _config: {},
+    });
+    const fastOutputObj = fastLambdaLUT._default([{ _stream: fastInput$ }], {
+      _stream: fastCtrl$,
+      _config: {},
+    });
+
+    const slowOutputPromise = firstValueFrom(slowOutputObj._stream);
+    const fastOutputPromise = firstValueFrom(fastOutputObj._stream);
+    const slowControlSubscription = slowOutputObj._control._stream.subscribe();
+    const fastControlSubscription = fastOutputObj._control._stream.subscribe();
+
+    const firstResolved = await Promise.race([
+      fastOutputPromise.then(() => "fast"),
+      slowOutputPromise.then(() => "slow"),
+    ]);
+    expect(firstResolved).toBe("fast");
+
+    const fastOutput = await fastOutputPromise;
+    const slowOutput = await slowOutputPromise;
+
+    slowControlSubscription.unsubscribe();
+    fastControlSubscription.unsubscribe();
+
+    expect(fastOutput).toEqual({ node: "fast", value: 2 });
+    expect(slowOutput).toEqual({ node: "slow", value: 1 });
   });
 });

@@ -2,13 +2,17 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import nodeExternals from "webpack-node-externals";
+import TerserPlugin from "terser-webpack-plugin";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const mode = process.env.NODE_ENV === "development" ? "development" : "production";
+const isProd = mode === "production";
+const keepConsole = process.env.KEEP_CONSOLE === "true";
 
 export default {
   target: "node", // Node.js build
-  mode: "production", // Production mode for optimizations
-  devtool: "source-map", // Generate source maps for debugging
+  mode,
+  devtool: isProd ? "hidden-source-map" : "eval-cheap-module-source-map",
   entry: "./src/index.core.js", // Node-only entry point
   output: {
     path: path.resolve(__dirname, "lib"),
@@ -31,6 +35,25 @@ export default {
       modulesFromFile: true,
     }),
   ],
+  optimization: {
+    minimize: isProd,
+    minimizer: [
+      new TerserPlugin({
+        extractComments: false,
+        terserOptions: {
+          compress: {
+            drop_console: isProd && !keepConsole,
+            drop_debugger: isProd,
+            passes: 2,
+          },
+          mangle: true,
+          output: {
+            comments: false,
+          },
+        },
+      }),
+    ],
+  },
   module: {
     rules: [
       {

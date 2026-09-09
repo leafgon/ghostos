@@ -8,12 +8,14 @@ import TerserPlugin from "terser-webpack-plugin";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const isProd = true; //process.env.NODE_ENV === 'production';
+const mode = process.env.NODE_ENV === "development" ? "development" : "production";
+const isProd = mode === "production";
+const keepConsole = process.env.KEEP_CONSOLE === "true";
 
 export default {
   target: "web", // browser build
-  mode: isProd ? "production" : "development",
-  devtool: isProd ? "source-map" : "eval-cheap-module-source-map",
+  mode,
+  devtool: isProd ? "hidden-source-map" : "eval-cheap-module-source-map",
 
   entry: {
     index: path.resolve(__dirname, "src/index.browser.js"), // Web-only entry point
@@ -46,9 +48,12 @@ export default {
     minimize: isProd,
     minimizer: [
       new TerserPlugin({
+        extractComments: false,
         terserOptions: {
           compress: {
-            drop_console: false,
+            drop_console: isProd && !keepConsole,
+            drop_debugger: isProd,
+            passes: 2,
           },
           mangle: true,
           output: {
