@@ -18,6 +18,29 @@ describe("executeLEAFlisp", () => {
     expect(result).toEqual({ count: 5, label: "leaf" });
   });
 
+  it("preserves numbers when bottling nested http request payloads", () => {
+    const result = executeLEAFlisp(
+      [],
+      '(bottle "http-request" {:uri "http://localhost:8080/v1/operations" :header {:content-type "application/json"} :mode "post" :data {:profile "profile-001" :operationId "op-01" :operation "add" :operands [1 2]}})',
+    );
+
+    expect(result).toEqual({
+      _bname: "http-request",
+      _content: {
+        uri: "http://localhost:8080/v1/operations",
+        header: { "content-type": "application/json" },
+        mode: "post",
+        data: {
+          profile: "profile-001",
+          operationId: "op-01",
+          operation: "add",
+          operands: [1, 2],
+        },
+      },
+      _label: {},
+    });
+  });
+
   it("supports a custom input binding and extra bindings", () => {
     const result = executeLEAFlisp("leaf", "(return (+ prefix input))", {
       inputBinding: "input",
