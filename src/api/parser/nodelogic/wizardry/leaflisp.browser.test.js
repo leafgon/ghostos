@@ -135,9 +135,7 @@ describe("executeLEAFlisp", () => {
   });
 
   it("supports sleep-ms in expressions", async () => {
-    const result = await Promise.resolve(
-      executeLEAFlisp(2, "(return (sleep-ms 5 (+ inport 3)))"),
-    );
+    const result = await Promise.resolve(executeLEAFlisp(2, "(return (sleep-ms 5 (+ inport 3)))"));
 
     expect(result).toBe(5);
   });
@@ -283,8 +281,7 @@ describe("leaflisp lambda scope", () => {
           logic: {
             type: "leaflisp",
             args: {
-              lispexpression:
-                '(return (sleep-ms 30 {:node "slow" :value (get inport :value)}))',
+              lispexpression: '(return (sleep-ms 30 {:node "slow" :value (get inport :value)}))',
             },
           },
         },
