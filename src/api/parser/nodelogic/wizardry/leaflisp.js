@@ -335,7 +335,7 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = {}) => {
           `Expected '${PLString.kind ?? PLString.name}', but got '${getObjectName(bkey.value)}'.`,
         );
       const _bkey = bkey.toJSON();
-      const _bdata = bdata.toJSON();
+      const _bdata = leaflispValueToJS(bdata);
 
       const bottled_data =
         typeof _bdata === "object" &&

@@ -18,6 +18,29 @@ describe("executeLEAFlisp", () => {
     expect(result).toEqual({ count: 5, label: "leaf" });
   });
 
+  it("preserves numbers when bottling nested http request payloads", () => {
+    const result = executeLEAFlisp(
+      [],
+      '(bottle "http-request" {:uri "http://localhost:8080/v1/operations" :header {:content-type "application/json"} :mode "post" :data {:profile "profile-001" :operationId "op-01" :operation "add" :operands [1 2]}})',
+    );
+
+    expect(result).toEqual({
+      _bname: "http-request",
+      _content: {
+        uri: "http://localhost:8080/v1/operations",
+        header: { "content-type": "application/json" },
+        mode: "post",
+        data: {
+          profile: "profile-001",
+          operationId: "op-01",
+          operation: "add",
+          operands: [1, 2],
+        },
+      },
+      _label: {},
+    });
+  });
+
   it("supports a custom input binding and extra bindings", () => {
     const result = executeLEAFlisp("leaf", "(return (+ prefix input))", {
       inputBinding: "input",
@@ -112,9 +135,7 @@ describe("executeLEAFlisp", () => {
   });
 
   it("supports sleep-ms in expressions", async () => {
-    const result = await Promise.resolve(
-      executeLEAFlisp(2, "(return (sleep-ms 5 (+ inport 3)))"),
-    );
+    const result = await Promise.resolve(executeLEAFlisp(2, "(return (sleep-ms 5 (+ inport 3)))"));
 
     expect(result).toBe(5);
   });
@@ -260,8 +281,7 @@ describe("leaflisp lambda scope", () => {
           logic: {
             type: "leaflisp",
             args: {
-              lispexpression:
-                '(return (sleep-ms 30 {:node "slow" :value (get inport :value)}))',
+              lispexpression: '(return (sleep-ms 30 {:node "slow" :value (get inport :value)}))',
             },
           },
         },
