@@ -915,7 +915,8 @@ const _leaflisp = {
       const cur_address = lambdactrl.gos.etaTree.domain + "/" + lambdactrl.gos.etaTree.appid;
       const popupDebuggerTraceWindow = (_tracedata, _refnode = refnode, tracemax = 0) => {
         probeGraph().then((_probegraph) => {
-          if (Object.entries(_probegraph).length > 0) {
+          const probeDefaultLogic = _probegraph?.probe?._default;
+          if (Object.entries(_probegraph ?? {}).length > 0 && probeDefaultLogic) {
             if (tracemax > 0 && debuggerGlobal.trace.length === tracemax) {
               debuggerGlobal.trace.shift();
             }
@@ -925,11 +926,20 @@ const _leaflisp = {
               refnode: refnode,
               trace: _tracedata,
             });
-            executeLEAFLogic(_probegraph.probe._default, debuggerGlobal.trace, {}, _refnode).then(
-              (_ret) => {
+            executeLEAFLogic(probeDefaultLogic, debuggerGlobal.trace, {}, _refnode)
+              .then((_ret) => {
                 //debuggerGlobal.trace = doUnbottle("screenio", _ret);
                 console.log("LEAFlisp debug: a debugger probe launched with traces: ", _ret);
-              },
+              })
+              .catch((error) => {
+                console.error(
+                  "LEAFlisp warning: debugger trace probe execution failed:",
+                  error?.message ?? error,
+                );
+              });
+          } else if (Object.entries(_probegraph ?? {}).length > 0) {
+            console.log(
+              "LEAFlisp warning: probe graph loaded but probe._default is missing; trace window skipped.",
             );
           } else {
             // spark_dev_note: 4/July/2023
@@ -944,7 +954,8 @@ const _leaflisp = {
 
       const popupDebuggerProbeWindow = (_tracedata, _refnode = refnode, probemax = 1) => {
         probeGraph().then((_probegraph) => {
-          if (Object.entries(_probegraph).length > 0) {
+          const probeDefaultLogic = _probegraph?.probe?._default;
+          if (Object.entries(_probegraph ?? {}).length > 0 && probeDefaultLogic) {
             if (probemax > 0 && debuggerGlobal.probe.length === probemax) {
               debuggerGlobal.probe.shift();
             }
@@ -954,11 +965,20 @@ const _leaflisp = {
               refnode: refnode,
               trace: _tracedata,
             });
-            executeLEAFLogic(_probegraph.probe._default, debuggerGlobal.probe, {}, _refnode).then(
-              (_ret) => {
+            executeLEAFLogic(probeDefaultLogic, debuggerGlobal.probe, {}, _refnode)
+              .then((_ret) => {
                 //debuggerGlobal.trace = doUnbottle("screenio", _ret);
                 console.log("LEAFlisp debug: a debugger probe launched with traces: ", _ret);
-              },
+              })
+              .catch((error) => {
+                console.error(
+                  "LEAFlisp warning: debugger probe execution failed:",
+                  error?.message ?? error,
+                );
+              });
+          } else if (Object.entries(_probegraph ?? {}).length > 0) {
+            console.log(
+              "LEAFlisp warning: probe graph loaded but probe._default is missing; probe window skipped.",
             );
           } else {
             // spark_dev_note: 4/July/2023
