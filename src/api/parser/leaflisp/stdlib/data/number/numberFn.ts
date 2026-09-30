@@ -92,7 +92,23 @@ export function expandDecimals(
 }
 
 export function getDecimalString(intValue: number, decimals: number): string {
-  return (intValue / Math.pow(10, decimals)).toFixed(decimals);
+  if (decimals >= 0 && decimals <= 100) {
+    return (intValue / Math.pow(10, decimals)).toFixed(decimals);
+  }
+
+  const sign = intValue < 0 ? "-" : "";
+  const absDigits = Math.abs(intValue).toString();
+
+  if (decimals < 0) {
+    return `${sign}${absDigits}${"0".repeat(-decimals)}`;
+  }
+
+  const splitAt = absDigits.length - decimals;
+  if (splitAt > 0) {
+    return `${sign}${absDigits.slice(0, splitAt)}.${absDigits.slice(splitAt)}`;
+  }
+
+  return `${sign}0.${"0".repeat(-splitAt)}${absDigits}`;
 }
 
 export function modulo(dividend: PLNumber, divisor: PLNumber): PLNumber {

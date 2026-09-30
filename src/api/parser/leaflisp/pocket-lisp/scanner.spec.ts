@@ -143,6 +143,20 @@ describe("Scanner", () => {
       expect(actual).toEqual(expected);
     });
 
+    it("scientific float", () => {
+      const source = "1e+28";
+      const actual = new Scanner(source).scanToken();
+      const expected = new Token(TokenType.Float, "1e+28", new SnippetPosition(source, 0, 5, 1));
+      expect(actual).toEqual(expected);
+    });
+
+    it("negative scientific float", () => {
+      const source = "-2.5e-8";
+      const actual = new Scanner(source).scanToken();
+      const expected = new Token(TokenType.Float, "-2.5e-8", new SnippetPosition(source, 0, 7, 1));
+      expect(actual).toEqual(expected);
+    });
+
     it("fraction number", () => {
       const source = "1/2";
       const actual = new Scanner(source).scanToken();

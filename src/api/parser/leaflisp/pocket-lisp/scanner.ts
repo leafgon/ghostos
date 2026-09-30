@@ -84,12 +84,14 @@ export class Scanner {
   }
 
   private number(): Token {
+    let tokenType = TokenType.Integer;
+
     while (isDigit(this.peek())) this.advance();
 
     if (this.peek() === "." && isDigit(this.peekNext())) {
       this.advance();
       while (isDigit(this.peek())) this.advance();
-      return this.makeToken(TokenType.Float);
+      tokenType = TokenType.Float;
     } else if (this.peek() === "/") {
       if (!isDigit(this.peekNext())) {
         return this.errorToken("Unterminated fraction number");
@@ -99,7 +101,20 @@ export class Scanner {
       return this.makeToken(TokenType.FractionNumber);
     }
 
-    return this.makeToken(TokenType.Integer);
+    if (this.peek() === "e" || this.peek() === "E") {
+      const exponentStart = this.current;
+      this.advance();
+      if (this.peek() === "+" || this.peek() === "-") this.advance();
+
+      if (!isDigit(this.peek())) {
+        this.current = exponentStart;
+      } else {
+        while (isDigit(this.peek())) this.advance();
+        tokenType = TokenType.Float;
+      }
+    }
+
+    return this.makeToken(tokenType);
   }
 
   private string(): Token {
