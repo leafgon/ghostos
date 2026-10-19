@@ -55,8 +55,10 @@ expression when the node has no incoming data-edge connection.
 ## Getting graph data from leafgon.com
 
 ```bash
-gq https://www.leafgon.com/qmgraphql -q 'query {graph: getGraph(domain: "breezyforest", appid: "tests/<example-graph>", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges { uuid source {uuid} target {uuid} } }}' > ./tests/breezyforest-tests-example.json
+gq https://www.leafgon.com/qmgraphql -q 'query {graph: getGraph(domain: "breezyforest", appid: "tests", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges { uuid source {uuid} target {uuid} } }}' > ./tests/breezyforest-tests-example.json
 ```
+
+For this namespace, `tests` is the app id shown in `/editor/breezyforest/tests`.
 
 ## GitHub-hosted leafgraphs
 
