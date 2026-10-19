@@ -5,6 +5,7 @@ Use this page as a quick entry point to the most important docs.
 ## Start here
 
 - LEAF intro + local Node.js tutorial: `leaf-intro-nodejs.md`
+- `/editor/breezyforest/tests` example graph tutorial: `breezyforest-tests-tutorial.md`
 - LEAFlisp reference and usage guidance: `leaflisp.md`
 - Runtime wrapper guide (`reducedLEAFGraph`, `executeLEAFGraph`): `leafgraph-runtime-wrappers.md`
 

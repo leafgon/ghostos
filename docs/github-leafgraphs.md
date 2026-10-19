@@ -14,16 +14,16 @@ The `.json` extension is optional; it will be appended if missing.
 
 ## Examples
 
-- `github/leafgon/leafgraphs/tests/breezyforest-testbed`
-- `github/leafgon/leafgraphs@dev/tests/breezyforest-testbed.json`
-- `github/leafgon/leafgraphs/tests/breezyforest-testbed?token=abc123`
+- `github/leafgon/leafgraphs/tests/example-learning-graph`
+- `github/leafgon/leafgraphs@dev/tests/example-learning-graph.json`
+- `github/leafgon/leafgraphs/tests/example-learning-graph?token=abc123`
 
 ## How it resolves
 
-Given `github/leafgon/leafgraphs/tests/breezyforest-testbed`, the runtime fetches:
+Given `github/leafgon/leafgraphs/tests/example-learning-graph`, the runtime fetches:
 
 ```
-https://raw.githubusercontent.com/leafgon/leafgraphs/refs/heads/main/tests/breezyforest-testbed.json
+https://raw.githubusercontent.com/leafgon/leafgraphs/refs/heads/main/tests/example-learning-graph.json
 ```
 
 If you supply `@ref`, it replaces `main` in the URL.

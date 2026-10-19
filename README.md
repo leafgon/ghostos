@@ -17,6 +17,7 @@ npm i ghostos
 
 - Docs map (start here): `docs/README.md`
 - LEAF intro + local Node.js tutorial: `docs/leaf-intro-nodejs.md`
+- Tutorial using `/editor/breezyforest/tests` example graphs: `docs/breezyforest-tests-tutorial.md`
 - LEAFlisp reference: `docs/leaflisp.md`
 - Runtime wrappers guide: `docs/leafgraph-runtime-wrappers.md`
 - Release notes: `docs/release-notes/`
@@ -51,7 +52,7 @@ expression when the node has no incoming data-edge connection.
 ## Getting graph data from leafgon.com
 
 ```bash
-gq https://www.leafgon.com/qmgraphql -q 'query {graph: getGraph(domain: "breezyforest", appid: "testbed", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges { uuid source {uuid} target {uuid} } }}' > ./tests/breezyforest-testbed.json
+gq https://www.leafgon.com/qmgraphql -q 'query {graph: getGraph(domain: "breezyforest", appid: "tests/<example-graph>", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges { uuid source {uuid} target {uuid} } }}' > ./tests/breezyforest-tests-example.json
 ```
 
 ## GitHub-hosted leafgraphs
@@ -66,9 +67,9 @@ Format:
 
 Examples:
 
-- `github/leafgon/leafgraphs/tests/breezyforest-testbed`
-- `github/leafgon/leafgraphs@dev/tests/breezyforest-testbed`
-- `github/leafgon/leafgraphs/tests/breezyforest-testbed?token=abc123`
+- `github/leafgon/leafgraphs/tests/example-learning-graph`
+- `github/leafgon/leafgraphs@dev/tests/example-learning-graph`
+- `github/leafgon/leafgraphs/tests/example-learning-graph?token=abc123`
 
 See `docs/github-leafgraphs.md` for end-user documentation.
 
@@ -79,7 +80,9 @@ See `docs/leafgon-leafgraphs.md` for end-user documentation.
 ## Learn LEAF locally
 
 - Editor intro/tutorial: `https://www.leafgon.com/editor/breezyforest/guides?topic=top`
+- Editor example graph namespace: `https://www.leafgon.com/editor/breezyforest/tests`
 - Local Node.js parser tutorial: `docs/leaf-intro-nodejs.md`
+- `/editor/breezyforest/tests` tutorial: `docs/breezyforest-tests-tutorial.md`
 
 ## Release and security docs
 
