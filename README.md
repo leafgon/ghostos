@@ -29,16 +29,16 @@ npm i ghostos
 import { setLEAFgqlEndpoints, initializeLEAFlakeGQLClient } from "ghostos";
 
 setLEAFgqlEndpoints({
-  endpoint_subs: "https://example.com/sgraphql",
-  websocket_subs: "wss://example.com/sgraphql",
-  endpoint_qm: "https://example.com/qmgraphql",
+  endpoint_subs: "https://www.leafgon.com/sgraphql",
+  websocket_subs: "wss://www.leafgon.com/sgraphql",
+  endpoint_qm: "https://www.leafgon.com/qmgraphql",
 });
 
 initializeLEAFlakeGQLClient({
   _clientConfig: {
-    dburi_subs: "https://example.com/sgraphql",
-    dburi_subs_ws: "wss://example.com/sgraphql",
-    dburi_qm: "https://example.com/qmgraphql",
+    dburi_subs: "https://www.leafgon.com/sgraphql",
+    dburi_subs_ws: "wss://www.leafgon.com/sgraphql",
+    dburi_qm: "https://www.leafgon.com/qmgraphql",
   },
 });
 ```
