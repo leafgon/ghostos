@@ -23,10 +23,12 @@
 .env.test
 .env.production
 .codex
+.codex-worktrees
 
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.tgz
 
 imported
 .swp
