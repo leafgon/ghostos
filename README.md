@@ -25,7 +25,7 @@ npm i ghostos
 ## Core usage
 
 ```js
-import { setLEAFgqlEndpoints, initializeLEAFlakeGQLClient } from "ghostos/core";
+import { setLEAFgqlEndpoints, initializeLEAFlakeGQLClient } from "ghostos";
 
 setLEAFgqlEndpoints({
   endpoint_subs: "https://example.com/sgraphql",

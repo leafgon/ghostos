@@ -34,7 +34,7 @@ npm i ghostos
 Create `run-leaflisp.mjs`:
 
 ```js
-import { executeLEAFlisp } from "ghostos/core";
+import { executeLEAFlisp } from "ghostos";
 
 const input = { name: "LEAF", count: 2 };
 const code = `
@@ -64,7 +64,7 @@ Create `run-graph.mjs`:
 
 ```js
 import { readFile } from "node:fs/promises";
-import { executeLEAFGraph } from "ghostos/core";
+import { executeLEAFGraph } from "ghostos";
 
 const graph = JSON.parse(await readFile("./graph.json", "utf8"));
 
@@ -93,7 +93,7 @@ Accepted graph input shapes include raw `nodes[]`, `{nodes:[...]}`, `{graph:{nod
 Use `reducedLEAFGraph` when you want to inspect/select a component before execution:
 
 ```js
-import { reducedLEAFGraph } from "ghostos/core";
+import { reducedLEAFGraph } from "ghostos";
 
 const leaflogic = await reducedLEAFGraph(graph, {
   domain: "breezyforest",
@@ -110,7 +110,7 @@ Then execute with `executeLEAFLogic` or keep using `executeLEAFGraph` for the si
 If you connect to non-default backends, override endpoints explicitly:
 
 ```js
-import { setLEAFgqlEndpoints, initializeLEAFlakeGQLClient } from "ghostos/core";
+import { setLEAFgqlEndpoints, initializeLEAFlakeGQLClient } from "ghostos";
 
 setLEAFgqlEndpoints({
   endpoint_subs: "https://example.com/sgraphql",

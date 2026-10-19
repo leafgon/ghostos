@@ -33,7 +33,7 @@ Create `run-tests-graph.mjs`:
 
 ```js
 import { readFile } from "node:fs/promises";
-import { executeLEAFGraph } from "ghostos/core";
+import { executeLEAFGraph } from "ghostos";
 
 const graph = JSON.parse(await readFile("./graphs/tests-example.json", "utf8"));
 
@@ -68,7 +68,7 @@ Repeat steps 1-3 with multiple test graphs and compare behavior:
 If you want to inspect component selection first:
 
 ```js
-import { reducedLEAFGraph } from "ghostos/core";
+import { reducedLEAFGraph } from "ghostos";
 
 const leaflogic = await reducedLEAFGraph(graph, {
   domain: "breezyforest",
