@@ -18,6 +18,7 @@ npm i ghostos
 - Docs map (start here): `docs/README.md`
 - LEAF intro + local Node.js tutorial: `docs/leaf-intro-nodejs.md`
 - Tutorial using `/editor/breezyforest/tests` example graphs: `docs/breezyforest-tests-tutorial.md`
+- Spell validation report for `/editor/breezyforest/tests`: `docs/breezyforest-tests-validation.md`
 - LEAFlisp reference: `docs/leaflisp.md`
 - Runtime wrappers guide: `docs/leafgraph-runtime-wrappers.md`
 - Release notes: `docs/release-notes/`
@@ -41,6 +42,8 @@ initializeLEAFlakeGQLClient({
   },
 });
 ```
+
+Use the package entrypoint import path (`"ghostos"`) for runtime examples.
 
 ## Canonical LEAFlisp node data
 
@@ -79,10 +82,11 @@ See `docs/leafgon-leafgraphs.md` for end-user documentation.
 
 ## Learn LEAF locally
 
-- Editor intro/tutorial: `https://www.leafgon.com/editor/breezyforest/guides?topic=top`
+- Editor intro/tutorial: `https://www.leafgon.com/editor/breezyforest/guides?topic=start`
 - Editor example graph namespace: `https://www.leafgon.com/editor/breezyforest/tests`
 - Local Node.js parser tutorial: `docs/leaf-intro-nodejs.md`
 - `/editor/breezyforest/tests` tutorial: `docs/breezyforest-tests-tutorial.md`
+- Spell validation report + command: `docs/breezyforest-tests-validation.md`
 
 ## Release and security docs
 

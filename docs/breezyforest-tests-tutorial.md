@@ -7,6 +7,20 @@ This tutorial uses example graphs from the LEAF editor tests namespace:
 These graphs are useful for learning usage patterns and can be downloaded and
 run locally with Node.js.
 
+## 0) Prerequisites
+
+- Node.js `>=24`
+- `ghostos` installed in your project
+- `gq` CLI available for GraphQL fetch examples
+- Network access to `https://www.leafgon.com/qmgraphql`
+- `LEAFGON_CLIENT_AUTH_KEY` exported if your GraphQL endpoint requires API-key auth
+
+Install package if needed:
+
+```bash
+npm i ghostos
+```
+
 ## 1) Choose a graph from the tests namespace
 
 Open the tests namespace in the editor and pick a graph that matches your
@@ -63,7 +77,18 @@ Repeat steps 1-3 with multiple test graphs and compare behavior:
 - which node types are active in each flow
 - where side effects are introduced vs pure transforms
 
-## 5) Optional: inspect reduction before execution
+## 5) Validate all defined spells in this namespace
+
+Run the built-in validation harness:
+
+```bash
+npm run validate:breezyforest-tests
+```
+
+The command produces a per-spell pass/fail report and exits non-zero when any
+spell fails.
+
+## 6) Optional: inspect reduction before execution
 
 If you want to inspect component selection first:
 
@@ -80,3 +105,10 @@ const leaflogic = await reducedLEAFGraph(graph, {
 
 Then execute reduced logic with your own runtime flow, or continue using
 `executeLEAFGraph` for one-call execution.
+
+## 7) Native vs synthetic caller caveat
+
+Some `leafspelldef` nodes in `breezyforest/tests` may not have a dedicated
+caller node wired in the graph at all times. The validation harness generates
+temporary in-memory caller wiring for uncoupled spell definitions so every
+defined spell can be executed in Node.js.

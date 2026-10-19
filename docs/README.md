@@ -6,6 +6,7 @@ Use this page as a quick entry point to the most important docs.
 
 - LEAF intro + local Node.js tutorial: `leaf-intro-nodejs.md`
 - `/editor/breezyforest/tests` example graph tutorial: `breezyforest-tests-tutorial.md`
+- `/editor/breezyforest/tests` spell validation report: `breezyforest-tests-validation.md`
 - LEAFlisp reference and usage guidance: `leaflisp.md`
 - Runtime wrapper guide (`reducedLEAFGraph`, `executeLEAFGraph`): `leafgraph-runtime-wrappers.md`
 
