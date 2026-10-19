@@ -16,6 +16,7 @@ npm i ghostos
 ## Documentation
 
 - Docs map (start here): [Documentation index](https://github.com/leafgon/ghostos/blob/main/docs/README.md)
+- Leafgon editor intro/tutorial: [leafgon.com editor guide](https://www.leafgon.com/editor/breezyforest/guides?topic=start)
 - LEAF intro + local Node.js tutorial: [LEAF Intro (Node.js)](https://github.com/leafgon/ghostos/blob/main/docs/leaf-intro-nodejs.md)
 - Tutorial using `/editor/breezyforest/tests` example graphs: [Breezyforest Tests Tutorial](https://github.com/leafgon/ghostos/blob/main/docs/breezyforest-tests-tutorial.md)
 - Spell validation report for `/editor/breezyforest/tests`: [Breezyforest Tests Validation](https://github.com/leafgon/ghostos/blob/main/docs/breezyforest-tests-validation.md)

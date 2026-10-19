@@ -6,7 +6,7 @@ This guide connects the LEAF editor intro/tutorial path to local execution with 
 
 If you are coming from the editor, start at:
 
-- `https://www.leafgon.com/editor/breezyforest/guides?topic=start`
+- [Leafgon editor guide](https://www.leafgon.com/editor/breezyforest/guides?topic=start)
 
 Then keep this mental model while coding locally:
 
