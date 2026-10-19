@@ -15,13 +15,13 @@ npm i ghostos
 
 ## Documentation
 
-- Docs map (start here): [docs/README.md](docs/README.md)
-- LEAF intro + local Node.js tutorial: [docs/leaf-intro-nodejs.md](docs/leaf-intro-nodejs.md)
-- Tutorial using `/editor/breezyforest/tests` example graphs: [docs/breezyforest-tests-tutorial.md](docs/breezyforest-tests-tutorial.md)
-- Spell validation report for `/editor/breezyforest/tests`: [docs/breezyforest-tests-validation.md](docs/breezyforest-tests-validation.md)
-- LEAFlisp reference: [docs/leaflisp.md](docs/leaflisp.md)
-- Runtime wrappers guide: [docs/leafgraph-runtime-wrappers.md](docs/leafgraph-runtime-wrappers.md)
-- Release notes: [docs/release-notes/](docs/release-notes/)
+- Docs map (start here): [Documentation index](https://github.com/leafgon/ghostos/blob/main/docs/README.md)
+- LEAF intro + local Node.js tutorial: [LEAF Intro (Node.js)](https://github.com/leafgon/ghostos/blob/main/docs/leaf-intro-nodejs.md)
+- Tutorial using `/editor/breezyforest/tests` example graphs: [Breezyforest Tests Tutorial](https://github.com/leafgon/ghostos/blob/main/docs/breezyforest-tests-tutorial.md)
+- Spell validation report for `/editor/breezyforest/tests`: [Breezyforest Tests Validation](https://github.com/leafgon/ghostos/blob/main/docs/breezyforest-tests-validation.md)
+- LEAFlisp reference: [LEAFlisp Reference](https://github.com/leafgon/ghostos/blob/main/docs/leaflisp.md)
+- Runtime wrappers guide: [Runtime Wrappers Guide](https://github.com/leafgon/ghostos/blob/main/docs/leafgraph-runtime-wrappers.md)
+- Release notes: [Release Notes](https://github.com/leafgon/ghostos/tree/main/docs/release-notes)
 
 ## Core usage
 
@@ -109,22 +109,22 @@ Examples:
 - `github/leafgon/leafgraphs@dev/tests/example-learning-graph`
 - `github/leafgon/leafgraphs/tests/example-learning-graph?token=abc123`
 
-See [docs/github-leafgraphs.md](docs/github-leafgraphs.md) for end-user documentation.
+See [GitHub-Hosted Leafgraphs guide](https://github.com/leafgon/ghostos/blob/main/docs/github-leafgraphs.md) for end-user documentation.
 
 ## Leafgon-hosted leafgraphs
 
-See [docs/leafgon-leafgraphs.md](docs/leafgon-leafgraphs.md) for end-user documentation.
+See [Leafgon-Hosted Leafgraphs guide](https://github.com/leafgon/ghostos/blob/main/docs/leafgon-leafgraphs.md) for end-user documentation.
 
 ## Learn LEAF locally
 
 - Editor intro/tutorial: [leafgon.com editor guide](https://www.leafgon.com/editor/breezyforest/guides?topic=start)
 - Editor example graph namespace: [leafgon.com `/editor/breezyforest/tests`](https://www.leafgon.com/editor/breezyforest/tests)
-- Local Node.js parser tutorial: [docs/leaf-intro-nodejs.md](docs/leaf-intro-nodejs.md)
-- `/editor/breezyforest/tests` tutorial: [docs/breezyforest-tests-tutorial.md](docs/breezyforest-tests-tutorial.md)
-- Spell validation report + command: [docs/breezyforest-tests-validation.md](docs/breezyforest-tests-validation.md)
+- Local Node.js parser tutorial: [LEAF Intro (Node.js)](https://github.com/leafgon/ghostos/blob/main/docs/leaf-intro-nodejs.md)
+- `/editor/breezyforest/tests` tutorial: [Breezyforest Tests Tutorial](https://github.com/leafgon/ghostos/blob/main/docs/breezyforest-tests-tutorial.md)
+- Spell validation report + command: [Breezyforest Tests Validation](https://github.com/leafgon/ghostos/blob/main/docs/breezyforest-tests-validation.md)
 
 ## Release and security docs
 
-- Release process: [RELEASING.md](RELEASING.md)
-- Security policy: [SECURITY.md](SECURITY.md)
-- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Release process: [RELEASING.md](https://github.com/leafgon/ghostos/blob/main/RELEASING.md)
+- Security policy: [SECURITY.md](https://github.com/leafgon/ghostos/blob/main/SECURITY.md)
+- Contribution guide: [CONTRIBUTING.md](https://github.com/leafgon/ghostos/blob/main/CONTRIBUTING.md)
