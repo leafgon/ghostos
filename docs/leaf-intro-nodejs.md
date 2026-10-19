@@ -6,7 +6,7 @@ This guide connects the LEAF editor intro/tutorial path to local execution with 
 
 If you are coming from the editor, start at:
 
-- `https://www.leafgon.com/editor/breezyforest/guides?topic=top`
+- [Leafgon editor guide](https://www.leafgon.com/editor/breezyforest/guides?topic=start)
 
 Then keep this mental model while coding locally:
 
@@ -28,6 +28,8 @@ Install:
 ```bash
 npm i ghostos
 ```
+
+Use `import ... from "ghostos"` in Node.js examples.
 
 ## 3) Fastest local win: run LEAFlisp directly
 
