@@ -12,9 +12,9 @@ Use the graph domain and appid hosted by LEAFgon.
 
 ## Examples
 
-- `breezyforest/testbed`
+- `breezyforest/tests/example-learning-graph`
 - `breezyforest`
-- `/testbed`
+- `/tests/example-learning-graph`
 
 ## How it resolves
 

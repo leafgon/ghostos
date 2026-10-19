@@ -61,6 +61,10 @@
     "node": ">=24.0.0"
   },
   "private": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "type": "module",
   "scripts": {
     "fmt": "prettier --write .",
@@ -82,8 +86,11 @@
     "clean:lib": "node ./scripts/clean-lib.mjs",
     "build": "npm run build:web && npm run build:node && npm run build:cjs && npm run build:types",
     "verify:package-artifacts": "node ./scripts/verify-package-artifacts.mjs",
+    "scan:secrets": "./scripts/scan-secrets.sh",
+    "release:check": "npm run ci && npm run scan:secrets && npm pack --dry-run",
     "rebuild:package-artifacts": "npm run clean:lib && npm run build && npm run verify:package-artifacts",
-    "prepack": "npm run verify:package-artifacts"
+    "prepack": "npm run verify:package-artifacts",
+    "prepublishOnly": "npm run release:check"
   },
   "repository": {
     "type": "git",

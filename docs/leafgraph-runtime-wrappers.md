@@ -25,7 +25,7 @@ const output = await executeLEAFGraph(
   { hello: "world" },
   {
     domain: "breezyforest",
-    appid: "testbed",
+    appid: "tests/example-learning-graph",
   },
 );
 ```
@@ -40,7 +40,7 @@ import { executeLEAFLogic, reducedLEAFGraph } from "ghostos";
 
 const leaflogic = await reducedLEAFGraph(graphJson, {
   domain: "breezyforest",
-  appid: "testbed",
+  appid: "tests/example-learning-graph",
 });
 
 const output = await executeLEAFLogic(leaflogic, { hello: "world" });
@@ -68,7 +68,7 @@ import { readFile } from "node:fs/promises";
 import { executeLEAFGraph } from "ghostos";
 
 const graphJson = JSON.parse(
-  await readFile(new URL("./breezyforest-testbed.json", import.meta.url), "utf-8"),
+  await readFile(new URL("./breezyforest-tests-example.json", import.meta.url), "utf-8"),
 );
 
 const output = await executeLEAFGraph(
@@ -76,7 +76,7 @@ const output = await executeLEAFGraph(
   { hello: "world" },
   {
     domain: "breezyforest",
-    appid: "testbed",
+    appid: "tests/example-learning-graph",
   },
 );
 

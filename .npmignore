@@ -1,6 +1,0 @@
-src/
-webpack.*
-*.config.js
-node_modules/
-.eslintrc
-.git
