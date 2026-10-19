@@ -58,6 +58,39 @@ expression when the node has no incoming data-edge connection.
 gq https://www.leafgon.com/qmgraphql -q 'query {graph: getGraph(domain: "breezyforest", appid: "tests", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges { uuid source {uuid} target {uuid} } }}' > ./tests/breezyforest-tests-example.json
 ```
 
+Equivalent `curl` command:
+
+```bash
+curl -sS https://www.leafgon.com/qmgraphql \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json' \
+  --data '{"query":"query {graph: getGraph(domain: \"breezyforest\", appid: \"tests\", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges { uuid source {uuid} target {uuid} } }}"}' \
+  > ./tests/breezyforest-tests-example.json
+```
+
+Equivalent Node.js command:
+
+```bash
+node --input-type=module <<'EOF'
+import { writeFile } from "node:fs/promises";
+
+const endpoint = "https://www.leafgon.com/qmgraphql";
+const query = `query {graph: getGraph(domain: "breezyforest", appid: "tests", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges { uuid source {uuid} target {uuid} } }}`;
+
+const response = await fetch(endpoint, {
+  method: "POST",
+  headers: {
+    "content-type": "application/json",
+    accept: "application/json",
+  },
+  body: JSON.stringify({ query }),
+});
+
+const payload = await response.json();
+await writeFile("./tests/breezyforest-tests-example.json", JSON.stringify(payload, null, 2));
+EOF
+```
+
 For this namespace, `tests` is the app id shown in `/editor/breezyforest/tests`.
 
 ## GitHub-hosted leafgraphs

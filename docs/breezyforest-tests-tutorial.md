@@ -41,6 +41,41 @@ mkdir -p ./graphs
 gq https://www.leafgon.com/qmgraphql -q 'query {graph: getGraph(domain: "breezyforest", appid: "tests/<example-graph>", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges {uuid source {uuid} target {uuid}}}}' > ./graphs/tests-example.json
 ```
 
+Equivalent `curl` command:
+
+```bash
+mkdir -p ./graphs
+curl -sS https://www.leafgon.com/qmgraphql \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json' \
+  --data '{"query":"query {graph: getGraph(domain: \"breezyforest\", appid: \"tests/<example-graph>\", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges {uuid source {uuid} target {uuid}}}}"}' \
+  > ./graphs/tests-example.json
+```
+
+Equivalent Node.js command:
+
+```bash
+node --input-type=module <<'EOF'
+import { mkdir, writeFile } from "node:fs/promises";
+
+const endpoint = "https://www.leafgon.com/qmgraphql";
+const query = `query {graph: getGraph(domain: "breezyforest", appid: "tests/<example-graph>", filter: {}) {domain appid nodes {uuid leafnodetype out_edges {uuid source {uuid} target {uuid} data} data} edges {uuid source {uuid} target {uuid}}}}`;
+
+const response = await fetch(endpoint, {
+  method: "POST",
+  headers: {
+    "content-type": "application/json",
+    accept: "application/json",
+  },
+  body: JSON.stringify({ query }),
+});
+
+const payload = await response.json();
+await mkdir("./graphs", { recursive: true });
+await writeFile("./graphs/tests-example.json", JSON.stringify(payload, null, 2));
+EOF
+```
+
 ## 3) Run locally with Node.js
 
 Create `run-tests-graph.mjs`:
