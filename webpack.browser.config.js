@@ -10,7 +10,6 @@ const __dirname = path.dirname(__filename);
 
 const mode = process.env.NODE_ENV === "development" ? "development" : "production";
 const isProd = mode === "production";
-const keepConsole = process.env.KEEP_CONSOLE === "true";
 
 export default {
   target: "web", // browser build
@@ -51,7 +50,7 @@ export default {
         extractComments: false,
         terserOptions: {
           compress: {
-            drop_console: isProd && !keepConsole,
+            drop_console: isProd,
             drop_debugger: isProd,
             passes: 2,
           },
