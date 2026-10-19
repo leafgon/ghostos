@@ -13,6 +13,14 @@ npm i ghostos
 - Node.js `>=24.0.0`
 - ESM environment (package `type: module`)
 
+## Documentation
+
+- Docs map (start here): `docs/README.md`
+- LEAF intro + local Node.js tutorial: `docs/leaf-intro-nodejs.md`
+- LEAFlisp reference: `docs/leaflisp.md`
+- Runtime wrappers guide: `docs/leafgraph-runtime-wrappers.md`
+- Release notes: `docs/release-notes/`
+
 ## Core usage
 
 ```js
