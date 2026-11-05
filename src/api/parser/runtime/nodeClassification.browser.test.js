@@ -107,7 +107,6 @@ describe("node runtime classification inventory", () => {
         ["node:leafspelldef", "declaration-only"],
         ["node:leafsyncflow", "metadata-only"],
         ["leafelement:token", "blocked"],
-        ["leafelement:hippocampus", "blocked"],
       ]),
     );
   });
@@ -167,6 +166,7 @@ describe("node runtime classification inventory", () => {
         "directus",
         "hermes",
         "cortex",
+        "hippocampus",
         "gnav",
         "popup",
         "blob",
@@ -174,7 +174,35 @@ describe("node runtime classification inventory", () => {
     );
     expect(wiredNames).not.toContain("rancher");
     expect(wiredNames).not.toContain("token");
-    expect(wiredNames).not.toContain("hippocampus");
+  });
+
+  it("classifies hippocampus as a wired side-effecting adapter", () => {
+    const classification = resolveLeafElementRuntimeClassification("hippocampus");
+
+    expect(classification).toMatchObject({
+      runtimeTargetKey: "leafelement:hippocampus",
+      runtimeClass: "side_effecting_action",
+      trigger: "data",
+      priority: "P0",
+      status: "supported",
+      wired: true,
+      rejectForNewGraphs: false,
+      idempotency: { required: true },
+      inventory: { state: "explicitly-wired", runtimeExecution: "modeled" },
+    });
+    expect(() => assertLeafElementAdapterSupported("hippocampus")).not.toThrow();
+    expect(() =>
+      assertNodeAllowedForNewGraphs({
+        type: "leafelement",
+        args: { elementname: "hippocampus" },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertRuntimeExecutionModeled({
+        type: "leafelement",
+        args: { elementname: "hippocampus" },
+      }),
+    ).not.toThrow();
   });
 
   it("keeps the Rancher adapter source present but unreachable until migrated", () => {
@@ -226,7 +254,6 @@ describe("node runtime classification inventory", () => {
       { type: "leafspelldef" },
       { type: "leafsyncflow" },
       { type: "leafelement", args: { elementname: "token" } },
-      { type: "leafelement", args: { elementname: "hippocampus" } },
     ].forEach((target) => {
       expect(() => assertRuntimeExecutionModeled(target)).toThrow(NodeClassificationError);
     });
@@ -278,7 +305,7 @@ describe("node runtime classification inventory", () => {
   });
 
   it("fails fast for allowed leafelement names without wired adapters", () => {
-    ["token", "rancher", "hippocampus"].forEach((elementname) => {
+    ["token", "rancher"].forEach((elementname) => {
       const classification = resolveLeafElementRuntimeClassification(elementname);
       expect(classification.rejectForNewGraphs).toBe(true);
       expect(classification.wired).toBe(false);
@@ -306,18 +333,20 @@ describe("node runtime classification inventory", () => {
   });
 
   it("flags P0 adapters until idempotency, retry, replay, and redaction metadata are present", () => {
-    ["http", "href", "directus", "hermes", "cortex", "rancher", "blob"].forEach((elementname) => {
-      const classification = resolveLeafElementRuntimeClassification(elementname);
+    ["http", "href", "directus", "hermes", "cortex", "hippocampus", "rancher", "blob"].forEach(
+      (elementname) => {
+        const classification = resolveLeafElementRuntimeClassification(elementname);
 
-      expect(classification.priority).toBe("P0");
-      expect(classification.migrationGate).toMatchObject({
-        requiresMigrationBeforeDataTrigger: true,
-        idempotency: { required: true },
-        retry: { required: true },
-        replay: { required: true },
-        redaction: { required: true },
-      });
-    });
+        expect(classification.priority).toBe("P0");
+        expect(classification.migrationGate).toMatchObject({
+          requiresMigrationBeforeDataTrigger: true,
+          idempotency: { required: true },
+          retry: { required: true },
+          replay: { required: true },
+          redaction: { required: true },
+        });
+      },
+    );
   });
 
   it("rejects unknown trigger policies and malformed target keys", () => {
