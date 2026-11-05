@@ -51,13 +51,8 @@ export function parseScientificString(strValue: string): DecimalResult {
   assert(!isScientific(strValue), `Input is not in scientific form: "${strValue}"`);
   const parts = strValue.split(/[eE]/);
   const decimalObject = parseDecimalString(parts[0]);
-  const exponential = parseInt(parts[1]);
-  if (decimalObject.decimals > exponential) {
-    decimalObject.decimals -= exponential;
-  } else {
-    decimalObject.intValue *= Math.pow(10, exponential - decimalObject.decimals);
-    decimalObject.decimals = 0;
-  }
+  const exponential = parseInt(parts[1], 10);
+  decimalObject.decimals -= exponential;
   return decimalObject;
 }
 
@@ -73,9 +68,22 @@ export function simplifyDecimal(intValueOld: number, decimalsOld: number): Decim
   if (intValueOld === 0) {
     return { intValue: 0, decimals: 0 };
   }
-  while (intValueOld > Number.MAX_SAFE_INTEGER || (intValueOld % 10 === 0 && decimalsOld > 0)) {
+  while (
+    Math.abs(intValueOld) > Number.MAX_SAFE_INTEGER ||
+    (intValueOld % 10 === 0 && decimalsOld > 0)
+  ) {
     const str = intValueOld.toString();
-    intValueOld = parseInt(str.substring(0, str.length - 1));
+    if (/[eE]/.test(str)) {
+      const [coefficient, exponentToken] = str.split(/[eE]/);
+      const exponent = parseInt(exponentToken, 10);
+      const isNegative = coefficient.startsWith("-");
+      const unsignedCoefficient = isNegative ? coefficient.substring(1) : coefficient;
+      const [integerPart, fractionPart = ""] = unsignedCoefficient.split(".");
+      intValueOld = parseInt(`${isNegative ? "-" : ""}${integerPart}${fractionPart}`, 10);
+      decimalsOld -= exponent - fractionPart.length;
+      continue;
+    }
+    intValueOld = parseInt(str.substring(0, str.length - 1), 10);
     decimalsOld -= 1;
   }
   return { intValue: intValueOld, decimals: decimalsOld };
