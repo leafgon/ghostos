@@ -71,6 +71,13 @@ const debuggerGlobal = {
   probe: [],
 };
 
+const formatFiniteNumberLiteral = (value) => {
+  if (!Number.isFinite(value)) return "null";
+  const numericString = String(value);
+  if (!/[eE]/.test(numericString)) return numericString;
+  return eToNumber(value).replace(/,/g, ".");
+};
+
 // leaflisp textual representation is generated using a pretty formatter logic
 const parseJsonToLEAFlisp = (x, depth = 0, isdictval = false) => {
   const inputtype = typeof x; // type of the value
@@ -104,7 +111,7 @@ const parseJsonToLEAFlisp = (x, depth = 0, isdictval = false) => {
         : inputtype === "boolean"
           ? (isdictval ? "" : curindentstr) + (x ? "true\n" : "false\n")
           : inputtype === "number"
-            ? (isdictval ? "" : curindentstr) + String(x) + "\n"
+            ? (isdictval ? "" : curindentstr) + formatFiniteNumberLiteral(x) + "\n"
             : (isdictval ? "" : curindentstr) + "null\n" // a catch-all js to leaflisp conversion including undefined types
   );
   //  (
@@ -494,7 +501,15 @@ const leafLISPStdLib = ({ _probefunc, _tracefunc } = {}) => {
       return plNumber(arg1 - arg2);
     },
     tofixed: (arg1, arg2) => {
-      return plString(Number(arg1).toFixed(arg2));
+      const digits = Number(arg2?.value ?? arg2);
+      if (!Number.isInteger(digits) || digits < 0 || digits > 100) {
+        throw new StdRuntimeError("tofixed digits must be an integer in range [0, 100].");
+      }
+      const value = Number(arg1?.value ?? arg1);
+      if (!Number.isFinite(value)) {
+        throw new StdRuntimeError("tofixed value must be a finite number.");
+      }
+      return plString(value.toFixed(digits));
       //const target_str = arg1.toJSON();
       //const target_str = Number(arg1).toFixed(arg2);
       //assertNumeric(target_str);

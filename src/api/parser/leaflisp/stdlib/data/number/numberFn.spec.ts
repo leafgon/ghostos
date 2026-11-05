@@ -197,6 +197,17 @@ describe("stdlib/data/number/numberFn", () => {
       expect(fn(120, 2)).toBe("1.20");
       expect(fn(-3400, 5)).toBe("-0.03400");
     });
+
+    it("should support negative decimals without throwing", () => {
+      expect(fn(1, -1)).toBe("10");
+      expect(fn(123, -2)).toBe("12300");
+      expect(fn(-45, -3)).toBe("-45000");
+    });
+
+    it("should support decimals larger than 100 without throwing", () => {
+      expect(fn(1, 101)).toBe(`0.${"0".repeat(100)}1`);
+      expect(fn(-12, 102)).toBe(`-0.${"0".repeat(100)}12`);
+    });
   });
 
   describe("modulo", () => {

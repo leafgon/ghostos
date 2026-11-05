@@ -102,7 +102,7 @@ export class PLNumber
   }
 
   public toJS(): number {
-    return this.intValue / 10 ** this.decimals;
+    return Number(this.toString());
   }
 
   public toString(): string {

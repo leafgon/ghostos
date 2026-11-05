@@ -286,13 +286,8 @@ function parseScientificString(strValue) {
   assert(!isScientific(strValue), `Input is not in scientific form: "${strValue}"`);
   const parts = strValue.split(/[eE]/);
   const decimalObject = parseDecimalString(parts[0]);
-  const exponential = parseInt(parts[1]);
-  if (decimalObject.decimals > exponential) {
-    decimalObject.decimals -= exponential;
-  } else {
-    decimalObject.intValue *= Math.pow(10, exponential - decimalObject.decimals);
-    decimalObject.decimals = 0;
-  }
+  const exponential = parseInt(parts[1], 10);
+  decimalObject.decimals -= exponential;
   return decimalObject;
 }
 function parseDecimalString(strValue) {
@@ -311,9 +306,22 @@ function simplifyDecimal(intValueOld, decimalsOld) {
   if (intValueOld === 0) {
     return { intValue: 0, decimals: 0 };
   }
-  while (intValueOld > Number.MAX_SAFE_INTEGER || (intValueOld % 10 === 0 && decimalsOld > 0)) {
+  while (
+    Math.abs(intValueOld) > Number.MAX_SAFE_INTEGER ||
+    (intValueOld % 10 === 0 && decimalsOld > 0)
+  ) {
     const str = intValueOld.toString();
-    intValueOld = parseInt(str.substring(0, str.length - 1));
+    if (/[eE]/.test(str)) {
+      const [coefficient, exponentToken] = str.split(/[eE]/);
+      const exponent = parseInt(exponentToken, 10);
+      const isNegative = coefficient.startsWith("-");
+      const unsignedCoefficient = isNegative ? coefficient.substring(1) : coefficient;
+      const [integerPart, fractionPart = ""] = unsignedCoefficient.split(".");
+      intValueOld = parseInt(`${isNegative ? "-" : ""}${integerPart}${fractionPart}`, 10);
+      decimalsOld -= exponent - fractionPart.length;
+      continue;
+    }
+    intValueOld = parseInt(str.substring(0, str.length - 1), 10);
     decimalsOld -= 1;
   }
   return { intValue: intValueOld, decimals: decimalsOld };
@@ -325,7 +333,23 @@ function expandDecimals(d1, d2) {
   return { maxDecimal, intValue1, intValue2 };
 }
 function getDecimalString(intValue, decimals) {
-  return (intValue / Math.pow(10, decimals)).toFixed(decimals);
+  if (decimals >= 0 && decimals <= 100) {
+    return (intValue / Math.pow(10, decimals)).toFixed(decimals);
+  }
+
+  const sign = intValue < 0 ? "-" : "";
+  const absDigits = Math.abs(intValue).toString();
+
+  if (decimals < 0) {
+    return `${sign}${absDigits}${"0".repeat(-decimals)}`;
+  }
+
+  const splitAt = absDigits.length - decimals;
+  if (splitAt > 0) {
+    return `${sign}${absDigits.slice(0, splitAt)}.${absDigits.slice(splitAt)}`;
+  }
+
+  return `${sign}0.${"0".repeat(-splitAt)}${absDigits}`;
 }
 function modulo(dividend, divisor) {
   const num = dividend.value;
@@ -407,7 +431,7 @@ class PLNumber {
     return Ordering.Equal;
   }
   toJS() {
-    return this.intValue / Math.pow(10, this.decimals);
+    return Number(this.toString());
   }
   toString() {
     return `${getDecimalString(this.intValue, this.decimals)}`;

@@ -139,6 +139,27 @@ describe("executeLEAFlisp", () => {
 
     expect(result).toBe(5);
   });
+
+  it("preserves large scientific numbers passed through inport", () => {
+    const result = executeLEAFlisp({ value: 1e28 }, "(return (get inport :value))");
+
+    expect(result).toBe(1e28);
+  });
+
+  it("preserves 1e+21 magnitude passed through inport", () => {
+    expect(executeLEAFlisp({ value: 1e21 }, "(return (get inport :value))")).toBe(1e21);
+    expect(executeLEAFlisp({ value: -1e21 }, "(return (get inport :value))")).toBe(-1e21);
+  });
+
+  it("parses large scientific literals without magnitude loss", () => {
+    expect(executeLEAFlisp([], "(return 1e+28)")).toBe(1e28);
+    expect(executeLEAFlisp([], "(return -1e+28)")).toBe(-1e28);
+  });
+
+  it("parses 1e+21 literals without rounding drift", () => {
+    expect(executeLEAFlisp([], "(return 1e+21)")).toBe(1e21);
+    expect(executeLEAFlisp([], "(return -1e+21)")).toBe(-1e21);
+  });
 });
 
 describe("runLEAFlispcode", () => {

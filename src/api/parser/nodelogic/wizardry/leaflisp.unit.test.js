@@ -13,12 +13,57 @@ import {
 import { Parser } from "../../../parser/leaflisp/plispdist";
 import { Scanner } from "../../../parser/leaflisp/plispdist";
 import { Interpreter } from "../../../parser/leaflisp/plispdist";
+import { createLEAFlispRuntime, executeLEAFlisp, parseJsonToLEAFlisp } from "./leaflisp";
 //import { InterpreterOptions } from '../../../parser/leaflisp/plispdist'
 
 const interpret = (src, options) =>
   new Interpreter(options).interpret(new Parser(new Scanner(src)).parse().program);
 
 describe("leaflisp", () => {
+  describe("scientific number handling", () => {
+    it("should not emit scientific notation in preamble serialization", () => {
+      const serialized = parseJsonToLEAFlisp({
+        huge: 1e28,
+        tiny: 2.5e-8,
+        invalid: Number.POSITIVE_INFINITY,
+      });
+
+      expect(serialized).toContain("10000000000000000000000000000");
+      expect(serialized).toContain("0.000000025");
+      expect(serialized).toContain(":invalid null");
+      expect(serialized).not.toContain("e+");
+      expect(serialized).not.toContain("e-");
+    });
+
+    it("should execute with scientific-notation JS inputs", () => {
+      const result = executeLEAFlisp({ value: 1e28 }, "(get inport :value)");
+
+      expect(typeof result).toBe("number");
+      expect(Number.isFinite(result)).toBe(true);
+    });
+
+    it("should guard tofixed digits range and type", () => {
+      const runtimeLEAFlisp = createLEAFlispRuntime();
+
+      const messageFrom = (expr) => {
+        try {
+          runtimeLEAFlisp.insituexecute(expr);
+          return null;
+        } catch (error) {
+          return error?.errors?.[0]?.message ?? null;
+        }
+      };
+
+      expect(messageFrom("(tofixed 1 2.2)")).toBe(
+        "tofixed digits must be an integer in range [0, 100].",
+      );
+      expect(messageFrom("(tofixed 1 101)")).toBe(
+        "tofixed digits must be an integer in range [0, 100].",
+      );
+      expect(runtimeLEAFlisp.insituexecute("(tofixed 1 2)").toJSON()).toBe("1.00");
+    });
+  });
+
   describe("test out the concept of using stdin/stdout", () => {
     const fakejsinput = { hello: "world" };
     const fakeplinput = new PLHashMap([new PLString("hello"), "world"]);
