@@ -22,3 +22,16 @@ Cortex submission; callers that need intentional repeats should provide a distin
 
 Outcomes are constructed from an allow-listed schema only. Raw Cortex API response envelopes and
 unrecognized response fields are not passed through to downstream nodes.
+
+## `hippocampus`
+
+The `hippocampus` leafelement is wired as a side-effecting adapter and consumes bottles named
+`intent` with schema `hippocampus-element-intent.v1`.
+
+The adapter rejects unsupported schema versions, malformed operation contracts, missing idempotency
+metadata for `configure` and `command`, and forbidden transport or SQL-like fields from graph input.
+Execution must be host-mediated via an injected adapter function rather than caller-selected URLs.
+
+Adapter outcomes are validated for contract version and basic request/response correlation (operation
+reference, configuration digest, optional element-node binding). Correlation mismatches fail closed
+with `result-correlation-mismatch`.

@@ -819,16 +819,13 @@ const LEAFELEMENT_RUNTIME_CLASSIFICATIONS = Object.freeze({
   }),
   hippocampus: elementMetadata({
     elementname: "hippocampus",
-    runtimeClass: RUNTIME_CLASSES.BLOCKED,
-    trigger: "none",
-    priority: "P4",
-    wired: false,
-    status: "blocked",
-    rejectForNewGraphs: true,
-    inventory: inventory({
-      state: "blocked",
-      reason: "Hippocampus adapter requires persistence and security contracts.",
-    }),
+    runtimeClass: RUNTIME_CLASSES.SIDE_EFFECTING_ACTION,
+    trigger: "data",
+    priority: "P0",
+    wired: true,
+    idempotency: { required: true },
+    migrationGate: sideEffectGate,
+    config: sideEffectConfigPolicy,
   }),
   blob: elementMetadata({
     elementname: "blob",
