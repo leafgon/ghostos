@@ -7,7 +7,6 @@ import TerserPlugin from "terser-webpack-plugin";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mode = process.env.NODE_ENV === "development" ? "development" : "production";
 const isProd = mode === "production";
-const keepConsole = process.env.KEEP_CONSOLE === "true";
 
 export default {
   target: "node", // Node.js build
@@ -42,7 +41,7 @@ export default {
         extractComments: false,
         terserOptions: {
           compress: {
-            drop_console: isProd && !keepConsole,
+            drop_console: isProd,
             drop_debugger: isProd,
             passes: 2,
           },
