@@ -431,7 +431,7 @@ class PLNumber {
     return Ordering.Equal;
   }
   toJS() {
-    return this.intValue / Math.pow(10, this.decimals);
+    return Number(this.toString());
   }
   toString() {
     return `${getDecimalString(this.intValue, this.decimals)}`;
