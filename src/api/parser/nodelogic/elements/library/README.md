@@ -32,6 +32,7 @@ The adapter rejects unsupported schema versions, malformed operation contracts, 
 metadata for `configure` and `command`, and forbidden transport or SQL-like fields from graph input.
 Execution must be host-mediated via an injected adapter function rather than caller-selected URLs.
 
-Adapter outcomes are validated for contract version and basic request/response correlation (operation
-reference, configuration digest, optional element-node binding). Correlation mismatches fail closed
-with `result-correlation-mismatch`.
+Adapter outcomes require full contract bindings and are correlated against the command plus host
+execution context (`tenant`, `deployment`, `graph`, `spell`, `element`, `profile`,
+`configurationDigest`, `operationRef`, `requestId`). Correlation mismatches fail closed with
+`result-correlation-mismatch`.

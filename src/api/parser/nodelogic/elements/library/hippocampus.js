@@ -63,6 +63,14 @@ const OPERATION_TO_FIELDS = Object.freeze({
   ]),
 });
 
+const OPERATION_TO_ALLOWED_OPERATION_REFS = Object.freeze({
+  configure: new Set(["hippocampus-configure.v1"]),
+  get: new Set(["hippocampus-get.v1", "hippocampus-read.v1"]),
+  query: new Set(["hippocampus-query.v1"]),
+  "semantic-search": new Set(["hippocampus-semantic-search.v1"]),
+  command: new Set(["hippocampus-command.v1"]),
+});
+
 const SAFE_ERROR_MESSAGES = Object.freeze({
   "malformed-intent": "Intent is malformed.",
   "unsupported-version": "Contract version is not supported.",
@@ -269,12 +277,18 @@ const normalizeHippocampusIntentCommand = (input = {}) => {
     operationRef: assertContractName(raw.operationRef, "operationRef"),
   };
 
+  const allowedOperationRefs = OPERATION_TO_ALLOWED_OPERATION_REFS[operation];
+  if (!allowedOperationRefs?.has(normalized.operationRef)) {
+    throw new HippocampusRuntimeError("unsupported-version", undefined, {
+      details: {
+        field: "operationRef",
+        value: normalized.operationRef,
+        operation,
+      },
+    });
+  }
+
   if (operation === "configure") {
-    if (raw.operationRef !== "hippocampus-configure.v1") {
-      throw new HippocampusRuntimeError("malformed-intent", undefined, {
-        details: { field: "operationRef", value: raw.operationRef },
-      });
-    }
     normalized.expectedAppliedConfigurationDigest =
       raw.expectedAppliedConfigurationDigest === null
         ? null
@@ -398,41 +412,70 @@ const normalizeTransportOutcome = (outcome, command, executionContext = {}) => {
   }
 
   const bindings = isPlainObject(outcome.bindings) ? outcome.bindings : undefined;
-  if (bindings) {
-    const bindingOperationRef = maybeTrimString(bindings.operationRef);
-    if (bindingOperationRef && bindingOperationRef !== command.operationRef) {
-      throw new HippocampusRuntimeError("result-correlation-mismatch", undefined, {
-        details: {
-          field: "bindings.operationRef",
-          expected: command.operationRef,
-          actual: bindings.operationRef,
-        },
-      });
-    }
-    const bindingConfigurationDigest = maybeTrimString(bindings.configurationDigest);
-    if (bindingConfigurationDigest && bindingConfigurationDigest !== command.configurationDigest) {
-      throw new HippocampusRuntimeError("result-correlation-mismatch", undefined, {
-        details: {
-          field: "bindings.configurationDigest",
-          expected: command.configurationDigest,
-          actual: bindings.configurationDigest,
-        },
-      });
-    }
-    if (
-      maybeTrimString(executionContext.elementNodeId) &&
-      maybeTrimString(bindings.elementNodeId) &&
-      `${bindings.elementNodeId}` !== `${executionContext.elementNodeId}`
-    ) {
-      throw new HippocampusRuntimeError("result-correlation-mismatch", undefined, {
-        details: {
-          field: "bindings.elementNodeId",
-          expected: executionContext.elementNodeId,
-          actual: bindings.elementNodeId,
-        },
-      });
-    }
+  if (!bindings) {
+    throw new HippocampusRuntimeError("result-correlation-mismatch", undefined, {
+      details: {
+        field: "bindings",
+        reason: "missing_bindings",
+      },
+    });
   }
+
+  const expectedBindings = normalizeOutcomeBindings({ command, executionContext });
+  [
+    "tenantId",
+    "deploymentId",
+    "graphDomain",
+    "graphApp",
+    "spellRef",
+    "elementNodeId",
+    "configurationDigest",
+    "operationRef",
+    "requestId",
+  ].forEach((field) => {
+    const actual = maybeTrimString(bindings[field]);
+    const expected = maybeTrimString(expectedBindings[field]);
+    if (!actual || !expected || actual !== expected) {
+      throw new HippocampusRuntimeError("result-correlation-mismatch", undefined, {
+        details: {
+          field: `bindings.${field}`,
+          expected,
+          actual: bindings[field],
+        },
+      });
+    }
+  });
+
+  if (!isPlainObject(bindings.profile)) {
+    throw new HippocampusRuntimeError("result-correlation-mismatch", undefined, {
+      details: {
+        field: "bindings.profile",
+        reason: "missing_profile",
+      },
+    });
+  }
+
+  [
+    "profileSpellRef",
+    "profileId",
+    "profileVersion",
+    "profileDigest",
+    "allowlistReleaseId",
+    "allowlistManifestDigest",
+    "allowlistEntryDigest",
+  ].forEach((field) => {
+    const actual = maybeTrimString(bindings.profile[field]);
+    const expected = maybeTrimString(expectedBindings.profile[field]);
+    if (!actual || !expected || actual !== expected) {
+      throw new HippocampusRuntimeError("result-correlation-mismatch", undefined, {
+        details: {
+          field: `bindings.profile.${field}`,
+          expected,
+          actual: bindings.profile[field],
+        },
+      });
+    }
+  });
 
   const error = isPlainObject(outcome.error) ? outcome.error : undefined;
   if (outcome.ok === false || outcome.status === "failed" || error) {
@@ -554,6 +597,37 @@ const defaultProfile = () => ({
   allowlistEntryDigest: defaultDigest(),
 });
 
+const normalizeProfileBinding = (profile = {}) => {
+  const fallback = defaultProfile();
+  return {
+    profileSpellRef: assertBoundedId(
+      profile.profileSpellRef ?? fallback.profileSpellRef,
+      "profile.profileSpellRef",
+    ),
+    profileId: assertBoundedId(profile.profileId ?? fallback.profileId, "profile.profileId"),
+    profileVersion: assertBoundedId(
+      profile.profileVersion ?? fallback.profileVersion,
+      "profile.profileVersion",
+    ),
+    profileDigest: assertDigest(
+      profile.profileDigest ?? fallback.profileDigest,
+      "profile.profileDigest",
+    ),
+    allowlistReleaseId: assertBoundedId(
+      profile.allowlistReleaseId ?? fallback.allowlistReleaseId,
+      "profile.allowlistReleaseId",
+    ),
+    allowlistManifestDigest: assertDigest(
+      profile.allowlistManifestDigest ?? fallback.allowlistManifestDigest,
+      "profile.allowlistManifestDigest",
+    ),
+    allowlistEntryDigest: assertDigest(
+      profile.allowlistEntryDigest ?? fallback.allowlistEntryDigest,
+      "profile.allowlistEntryDigest",
+    ),
+  };
+};
+
 const normalizeOutcomeBindings = ({ command, executionContext = {} }) => {
   const elementNodeId = maybeTrimString(executionContext.elementNodeId);
   const bindings = {
@@ -569,7 +643,7 @@ const normalizeOutcomeBindings = ({ command, executionContext = {} }) => {
     graphApp: assertBoundedId(executionContext.graphApp ?? "graph-app-unknown", "graphApp"),
     spellRef: assertBoundedId(executionContext.spellRef ?? "spell-unknown", "spellRef"),
     elementNodeId: elementNodeId && UUID_RE.test(elementNodeId) ? elementNodeId : defaultUuid(),
-    profile: defaultProfile(),
+    profile: normalizeProfileBinding(executionContext.profile),
     configurationDigest: command.configurationDigest ?? defaultDigest(),
     operationRef: command.operationRef ?? "hippocampus-configure.v1",
     requestId: assertBoundedId(executionContext.requestId ?? "request-unknown", "requestId"),
@@ -609,6 +683,7 @@ const resolveHippocampusExecutionContext = (streamCache, controlflowObj = {}) =>
     elementNodeId: runtimeContext.elementNodeId ?? streamCache?.[ElemCacheKeyLUT.REFNODE],
     deploymentId: runtimeContext.deploymentId,
     requestId: runtimeContext.requestId,
+    profile: runtimeContext.profile ?? runtimeContext.hippocampusProfile,
     adapter: runtimeContext.hippocampusAdapter ?? runtimeContext.hippocampus?.adapter,
     host: runtimeContext.host,
     executeIntent: runtimeContext.executeHippocampusIntent,

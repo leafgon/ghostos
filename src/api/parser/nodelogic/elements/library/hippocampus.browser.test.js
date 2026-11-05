@@ -20,6 +20,16 @@ const DEPLOYMENT_ID = "22222222-2222-4222-8222-222222222222";
 
 const digest = (char) => `sha256:${char.repeat(64)}`;
 
+const PROFILE_BINDING = {
+  profileSpellRef: "breezyforest/hippocampus-profiles#standard",
+  profileId: "standard",
+  profileVersion: "v1",
+  profileDigest: digest("f"),
+  allowlistReleaseId: "allowlist-v1",
+  allowlistManifestDigest: digest("e"),
+  allowlistEntryDigest: digest("d"),
+};
+
 const baseBindings = (intent, overrides = {}) => ({
   tenantId: TENANT_ID,
   deploymentId: DEPLOYMENT_ID,
@@ -27,15 +37,7 @@ const baseBindings = (intent, overrides = {}) => ({
   graphApp: GRAPH_APP,
   spellRef: SPELL_REF,
   elementNodeId: ELEMENT_NODE_ID,
-  profile: {
-    profileSpellRef: "breezyforest/hippocampus-profiles#standard",
-    profileId: "standard",
-    profileVersion: "v1",
-    profileDigest: digest("f"),
-    allowlistReleaseId: "allowlist-v1",
-    allowlistManifestDigest: digest("e"),
-    allowlistEntryDigest: digest("d"),
-  },
+  profile: PROFILE_BINDING,
   configurationDigest: intent.configurationDigest,
   operationRef: intent.operationRef,
   requestId: "request-1",
@@ -128,6 +130,7 @@ const createHippocampusHarness = ({ transport, config = {}, idempotencyStore } =
           elementNodeId: ELEMENT_NODE_ID,
           deploymentId: DEPLOYMENT_ID,
           requestId: "request-1",
+          profile: PROFILE_BINDING,
         },
       }),
     resolveCommand: ({ inputValues }) => normalizeHippocampusIntentCommand(inputValues[0]),
@@ -297,6 +300,14 @@ describe("leafelement:hippocampus adapter helpers", () => {
         }),
       ),
     ).toThrow(HippocampusRuntimeError);
+
+    expect(() =>
+      normalizeHippocampusIntentCommand(
+        commandIntent({
+          operationRef: "hippocampus-command.v999",
+        }),
+      ),
+    ).toThrow("Contract version is not supported.");
   });
 
   it("fails closed when returned outcome bindings do not correlate", async () => {
@@ -321,6 +332,65 @@ describe("leafelement:hippocampus adapter helpers", () => {
           elementNodeId: ELEMENT_NODE_ID,
           deploymentId: DEPLOYMENT_ID,
           requestId: "request-1",
+          profile: PROFILE_BINDING,
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "result-correlation-mismatch",
+    });
+
+    const mismatchedTenantTransport = vi.fn(async ({ intent: command }) =>
+      successfulOutcome(command, {
+        bindings: {
+          tenantId: "tenant-other",
+        },
+      }),
+    );
+
+    await expect(
+      executeHippocampusIntentCommand({
+        command: intent,
+        config: { transport: mismatchedTenantTransport },
+        executionContext: {
+          tenantId: TENANT_ID,
+          graphDomain: GRAPH_DOMAIN,
+          graphApp: GRAPH_APP,
+          spellRef: SPELL_REF,
+          elementNodeId: ELEMENT_NODE_ID,
+          deploymentId: DEPLOYMENT_ID,
+          requestId: "request-1",
+          profile: PROFILE_BINDING,
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "result-correlation-mismatch",
+    });
+  });
+
+  it("fails closed when successful outcomes omit bindings", async () => {
+    const intent = configureIntent();
+    const transport = vi.fn(async () => ({
+      schema: "hippocampus-element-outcome.v1",
+      ok: true,
+      status: "applied",
+      replayed: false,
+      versions: [],
+      result: {},
+    }));
+
+    await expect(
+      executeHippocampusIntentCommand({
+        command: intent,
+        config: { transport },
+        executionContext: {
+          tenantId: TENANT_ID,
+          graphDomain: GRAPH_DOMAIN,
+          graphApp: GRAPH_APP,
+          spellRef: SPELL_REF,
+          elementNodeId: ELEMENT_NODE_ID,
+          deploymentId: DEPLOYMENT_ID,
+          requestId: "request-1",
+          profile: PROFILE_BINDING,
         },
       }),
     ).rejects.toMatchObject({
