@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
+import { ReplaySubject, firstValueFrom } from "rxjs";
+import { startWith, take } from "rxjs/operators";
 
 import {
   HippocampusRuntimeError,
   executeHippocampusIntentCommand,
   normalizeHippocampusIntentCommand,
+  props as hippocampusElementProps,
   resolveHippocampusIntentIdempotency,
 } from "./hippocampus.js";
+import { driveDataflowByCtrlflow } from "../../../leaf.js";
+import { doBottle } from "../../datautils/bottling.js";
+import { ElemCacheKeyLUT, initStdElementProps } from "./index.js";
 import {
   createDeterministicIdFactory,
   createSideEffectAdapterMigrationHarness,
@@ -152,7 +158,108 @@ const assertNoSecretLeak = (value) => {
   expect(serialized).not.toContain("token=hippo-secret");
 };
 
+const initHippocampusFlow = ({ transport } = {}) => {
+  const streamCache = {
+    [ElemCacheKeyLUT.REFNODE]: ELEMENT_NODE_ID,
+    [ElemCacheKeyLUT.RTCONTEXT]: {
+      tenantId: TENANT_ID,
+      graphDomain: GRAPH_DOMAIN,
+      graphApp: GRAPH_APP,
+      spellRef: SPELL_REF,
+      elementNodeId: ELEMENT_NODE_ID,
+      deploymentId: DEPLOYMENT_ID,
+      requestId: "request-1",
+      profile: PROFILE_BINDING,
+      hippocampusConfig: {
+        timeoutMs: 5000,
+        transport,
+      },
+    },
+  };
+  const hippocampusProps =
+    initStdElementProps(streamCache, "hippocampus") ?? hippocampusElementProps(streamCache);
+  const datainput$ = new ReplaySubject(1);
+  const ctrlinput$ = new ReplaySubject(1);
+
+  const output$obj = driveDataflowByCtrlflow(
+    { _stream: ctrlinput$, _config: {} },
+    [{ _stream: datainput$.pipe(startWith(undefined)) }],
+    undefined,
+    {
+      codebase: "hippocampus.browser.test.js",
+      refnode: ELEMENT_NODE_ID,
+    },
+    {
+      leaflogic: hippocampusProps.leaflogic,
+      datalogic: hippocampusProps.datalogic,
+    },
+  );
+
+  return { output$obj, datainput$, ctrlinput$, hippocampusProps };
+};
+
+const runHippocampusTick = async ({ output$obj, datainput$, ctrlinput$, dataIn }) => {
+  const ctrlSub = output$obj._control._stream.subscribe(() => {});
+  try {
+    const outPromise = firstValueFrom(output$obj._stream.pipe(take(1)));
+    datainput$.next(dataIn);
+    ctrlinput$.next({ _bname: "accio" });
+    return await outPromise;
+  } finally {
+    ctrlSub.unsubscribe();
+  }
+};
+
 describe("leafelement:hippocampus adapter helpers", () => {
+  it("runs inport->outport through RxJS flow using driveDataflowByCtrlflow", async () => {
+    const transport = vi.fn(async ({ intent }) => successfulOutcome(intent));
+    const { output$obj, datainput$, ctrlinput$, hippocampusProps } = initHippocampusFlow({
+      transport,
+    });
+
+    expect(hippocampusProps).toBeDefined();
+    expect(typeof hippocampusProps.leaflogic).toBe("function");
+    expect(typeof hippocampusProps.datalogic.pre).toBe("function");
+    expect(typeof hippocampusProps.datalogic.post).toBe("function");
+
+    const output = await runHippocampusTick({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: doBottle("intent", commandIntent(), {
+        eventId: "hippo-rx-1",
+      }),
+    });
+
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport.mock.calls[0][0].intent).toMatchObject({
+      schema: "hippocampus-element-intent.v1",
+      operation: "command",
+      operationRef: "hippocampus-command.v1",
+      idempotencyKey: "idem-1",
+    });
+
+    expect(output).toMatchObject({
+      schema: "hippocampus-element-outcome.v1",
+      ok: true,
+      status: "committed",
+      replayed: false,
+      bindings: {
+        tenantId: TENANT_ID,
+        deploymentId: DEPLOYMENT_ID,
+        graphDomain: GRAPH_DOMAIN,
+        graphApp: GRAPH_APP,
+        spellRef: SPELL_REF,
+        elementNodeId: ELEMENT_NODE_ID,
+        operationRef: "hippocampus-command.v1",
+        requestId: "request-1",
+      },
+      result: {
+        operation: "command",
+      },
+    });
+  });
+
   it("executes data-triggered intents and suppresses control/config ticks", async () => {
     const transport = vi.fn(async ({ intent }) => successfulOutcome(intent));
     const harness = createHippocampusHarness({ transport });

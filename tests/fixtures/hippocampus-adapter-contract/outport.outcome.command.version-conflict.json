@@ -1,0 +1,31 @@
+{
+  "_bname": "outcome",
+  "_content": {
+    "schemaVersion": "hippocampus-outcome.v1alpha1",
+    "intentId": "intent-command-002",
+    "operation": "command",
+    "ok": false,
+    "status": "failed",
+    "deploymentId": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+    "requestId": "req-command-002",
+    "http": {
+      "status": 409,
+      "retryable": false
+    },
+    "error": {
+      "code": "VERSION_CONFLICT",
+      "message": "expected version did not match current version",
+      "retryable": false,
+      "details": {
+        "table": "documents",
+        "id": "1",
+        "expected": 0,
+        "current": 1
+      }
+    }
+  },
+  "_label": {
+    "eventId": "evt-103",
+    "parentEventId": "evt-004"
+  }
+}

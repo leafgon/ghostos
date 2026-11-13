@@ -1,0 +1,29 @@
+{
+  "httpStatus": 200,
+  "body": {
+    "command": "advance-document",
+    "entity": {
+      "table": "documents",
+      "id": "1",
+      "version": 1,
+      "record": {
+        "id": 1,
+        "title": "Draft",
+        "version": 1
+      }
+    },
+    "audit": {
+      "table": "audit_events",
+      "id": "audit-1"
+    },
+    "domain_event": {
+      "table": "domain_events",
+      "id": "domain-1"
+    },
+    "outbox": {
+      "table": "outbox_records",
+      "id": "outbox-1"
+    },
+    "request_id": "req-command-001"
+  }
+}

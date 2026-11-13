@@ -1,0 +1,12 @@
+{
+  "httpStatus": 409,
+  "body": {
+    "error": {
+      "code": "IDEMPOTENCY_CONFLICT",
+      "message": "idempotency key reused with different request",
+      "retryable": false,
+      "details": {}
+    },
+    "request_id": "req-idempotency-001"
+  }
+}

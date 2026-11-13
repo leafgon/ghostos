@@ -1,0 +1,49 @@
+{
+  "_bname": "intent",
+  "_content": {
+    "schemaVersion": "hippocampus-intent.v1alpha1",
+    "intentId": "intent-command-003",
+    "operation": "command",
+    "deploymentId": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+    "commandName": "advance-document",
+    "payload": {
+      "entity_record": {
+        "id": 1,
+        "title": "Draft Changed"
+      },
+      "audit_record": {
+        "id": "audit-3",
+        "entity_id": 1,
+        "version": 2,
+        "action": "advance"
+      },
+      "domain_event_record": {
+        "id": "domain-3",
+        "entity_id": 1,
+        "version": 2,
+        "event_type": "advanced"
+      },
+      "outbox_record": {
+        "id": "outbox-3",
+        "topic": "documents.events",
+        "payload": "{}"
+      },
+      "expected_versions": [
+        {
+          "table": "documents",
+          "id": "1",
+          "version": 1
+        }
+      ]
+    },
+    "options": {
+      "idempotencyKey": "idem-command-001",
+      "timeoutMs": 15000,
+      "maxAttempts": 1
+    }
+  },
+  "_label": {
+    "eventId": "evt-007",
+    "parentEventId": "evt-root-001"
+  }
+}

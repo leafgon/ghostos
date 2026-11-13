@@ -1,0 +1,45 @@
+{
+  "_bname": "outcome",
+  "_content": {
+    "schemaVersion": "hippocampus-outcome.v1alpha1",
+    "intentId": "intent-command-001",
+    "operation": "command",
+    "ok": true,
+    "status": "succeeded",
+    "deploymentId": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+    "requestId": "req-command-001",
+    "http": {
+      "status": 200,
+      "retryable": false
+    },
+    "result": {
+      "command": "advance-document",
+      "entity": {
+        "table": "documents",
+        "id": "1",
+        "version": 1,
+        "record": {
+          "id": 1,
+          "title": "Draft",
+          "version": 1
+        }
+      },
+      "audit": {
+        "table": "audit_events",
+        "id": "audit-1"
+      },
+      "domain_event": {
+        "table": "domain_events",
+        "id": "domain-1"
+      },
+      "outbox": {
+        "table": "outbox_records",
+        "id": "outbox-1"
+      }
+    }
+  },
+  "_label": {
+    "eventId": "evt-102",
+    "parentEventId": "evt-003"
+  }
+}

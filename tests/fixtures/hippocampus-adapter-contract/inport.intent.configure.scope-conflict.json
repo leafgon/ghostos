@@ -1,0 +1,36 @@
+{
+  "_bname": "intent",
+  "_content": {
+    "schemaVersion": "hippocampus-intent.v1alpha1",
+    "intentId": "intent-configure-002",
+    "operation": "configure",
+    "deploymentId": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+    "payload": {
+      "deployment_id": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+      "tenant_id": "tenant-a",
+      "binding": {
+        "graph_domain": "cdi",
+        "graph_app": "other-app",
+        "spell_id": "spell-v1",
+        "node_id": "node-a"
+      },
+      "configuration": {
+        "entity_registry": {},
+        "safe_disabled": false
+      },
+      "configuration_digest": "sha256:37f2f9466186ecdd89d09b829f801f4ea0ad8a78edfa4ff9a4938baecf8c74fc",
+      "expected_applied_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dbml_compiler_identity": "dbml-postgres-v1",
+      "migration_checksum": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "options": {
+      "idempotencyKey": "idem-configure-002",
+      "timeoutMs": 20000,
+      "maxAttempts": 1
+    }
+  },
+  "_label": {
+    "eventId": "evt-006",
+    "parentEventId": "evt-root-001"
+  }
+}

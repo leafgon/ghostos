@@ -1,0 +1,47 @@
+{
+  "_bname": "intent",
+  "_content": {
+    "schemaVersion": "hippocampus-intent.v1alpha1",
+    "intentId": "intent-configure-001",
+    "operation": "configure",
+    "deploymentId": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+    "payload": {
+      "deployment_id": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+      "tenant_id": "tenant-a",
+      "binding": {
+        "graph_domain": "cdi",
+        "graph_app": "collective-intel",
+        "spell_id": "spell-v1",
+        "node_id": "node-a"
+      },
+      "configuration": {
+        "entity_registry": {
+          "analysis_run": {
+            "projection": "default",
+            "version": 1
+          }
+        },
+        "roles": {
+          "writer": ["analysis_run.write"]
+        },
+        "budgets": {
+          "max_records": 1000
+        },
+        "safe_disabled": false
+      },
+      "configuration_digest": "sha256:9d0d8652ddd96cb278844f8cb26f6e45ae3126f50493b31e01184f5f0f712e15",
+      "expected_applied_digest": "",
+      "dbml_compiler_identity": "dbml-postgres-v1",
+      "migration_checksum": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "options": {
+      "idempotencyKey": "idem-configure-001",
+      "timeoutMs": 20000,
+      "maxAttempts": 2
+    }
+  },
+  "_label": {
+    "eventId": "evt-005",
+    "parentEventId": "evt-root-001"
+  }
+}

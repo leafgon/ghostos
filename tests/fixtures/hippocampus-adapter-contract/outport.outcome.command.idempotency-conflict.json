@@ -1,0 +1,26 @@
+{
+  "_bname": "outcome",
+  "_content": {
+    "schemaVersion": "hippocampus-outcome.v1alpha1",
+    "intentId": "intent-command-003",
+    "operation": "command",
+    "ok": false,
+    "status": "failed",
+    "deploymentId": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+    "requestId": "req-idempotency-001",
+    "http": {
+      "status": 409,
+      "retryable": false
+    },
+    "error": {
+      "code": "IDEMPOTENCY_CONFLICT",
+      "message": "idempotency key reused with different request",
+      "retryable": false,
+      "details": {}
+    }
+  },
+  "_label": {
+    "eventId": "evt-107",
+    "parentEventId": "evt-007"
+  }
+}
