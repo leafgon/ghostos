@@ -1,0 +1,12 @@
+{
+  "httpStatus": 503,
+  "body": {
+    "error": {
+      "code": "DEPENDENCY_UNAVAILABLE",
+      "message": "transient data-plane storage contention",
+      "retryable": true,
+      "details": {}
+    },
+    "request_id": "req-query-002"
+  }
+}

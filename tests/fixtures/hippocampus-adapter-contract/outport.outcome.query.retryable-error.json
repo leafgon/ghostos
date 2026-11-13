@@ -1,0 +1,26 @@
+{
+  "_bname": "outcome",
+  "_content": {
+    "schemaVersion": "hippocampus-outcome.v1alpha1",
+    "intentId": "intent-query-002",
+    "operation": "query",
+    "ok": false,
+    "status": "error",
+    "deploymentId": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+    "requestId": "req-query-002",
+    "http": {
+      "status": 503,
+      "retryable": true
+    },
+    "error": {
+      "code": "DEPENDENCY_UNAVAILABLE",
+      "message": "transient data-plane storage contention",
+      "retryable": true,
+      "details": {}
+    }
+  },
+  "_label": {
+    "eventId": "evt-104",
+    "parentEventId": "evt-002"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "httpStatus": 409,
+  "body": {
+    "error": {
+      "code": "VERSION_CONFLICT",
+      "message": "expected version did not match current version",
+      "retryable": false,
+      "details": {
+        "table": "documents",
+        "id": "1",
+        "expected": 0,
+        "current": 1
+      }
+    },
+    "request_id": "req-command-002"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "httpStatus": 409,
+  "body": {
+    "error": {
+      "code": "CONFIGURATION_SCOPE_CONFLICT",
+      "message": "configuration binding must remain within deployment scope",
+      "retryable": false,
+      "details": {
+        "field": "binding.graph_app"
+      }
+    },
+    "request_id": "req-configure-002"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "_bname": "intent",
+  "_content": {
+    "schemaVersion": "hippocampus-intent.v1alpha1",
+    "intentId": "intent-query-001",
+    "operation": "query",
+    "deploymentId": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+    "table": "notes",
+    "payload": {
+      "filter": {
+        "status": {
+          "op": "eq",
+          "value": "active"
+        }
+      },
+      "order_by": [
+        {
+          "field": "id",
+          "direction": "asc"
+        }
+      ],
+      "limit": 20
+    },
+    "options": {
+      "idempotencyKey": "idem-query-001",
+      "timeoutMs": 15000,
+      "maxAttempts": 2
+    }
+  },
+  "_label": {
+    "eventId": "evt-001",
+    "parentEventId": "evt-root-001"
+  }
+}

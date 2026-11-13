@@ -1,0 +1,18 @@
+{
+  "httpStatus": 200,
+  "body": {
+    "records": [
+      {
+        "id": "1",
+        "record": {
+          "id": 1,
+          "title": "Hello",
+          "status": "active"
+        }
+      }
+    ],
+    "next_page_token": null,
+    "total": null,
+    "request_id": "req-query-001"
+  }
+}

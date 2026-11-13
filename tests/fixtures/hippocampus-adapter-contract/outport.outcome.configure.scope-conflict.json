@@ -1,0 +1,28 @@
+{
+  "_bname": "outcome",
+  "_content": {
+    "schemaVersion": "hippocampus-outcome.v1alpha1",
+    "intentId": "intent-configure-002",
+    "operation": "configure",
+    "ok": false,
+    "status": "failed",
+    "deploymentId": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+    "requestId": "req-configure-002",
+    "http": {
+      "status": 409,
+      "retryable": false
+    },
+    "error": {
+      "code": "CONFIGURATION_SCOPE_CONFLICT",
+      "message": "configuration binding must remain within deployment scope",
+      "retryable": false,
+      "details": {
+        "field": "binding.graph_app"
+      }
+    }
+  },
+  "_label": {
+    "eventId": "evt-106",
+    "parentEventId": "evt-006"
+  }
+}

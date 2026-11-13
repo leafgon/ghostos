@@ -1,0 +1,34 @@
+{
+  "_bname": "outcome",
+  "_content": {
+    "schemaVersion": "hippocampus-outcome.v1alpha1",
+    "intentId": "intent-query-001",
+    "operation": "query",
+    "ok": true,
+    "status": "succeeded",
+    "deploymentId": "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+    "requestId": "req-query-001",
+    "http": {
+      "status": 200,
+      "retryable": false
+    },
+    "result": {
+      "records": [
+        {
+          "id": "1",
+          "record": {
+            "id": 1,
+            "title": "Hello",
+            "status": "active"
+          }
+        }
+      ],
+      "next_page_token": null,
+      "total": null
+    }
+  },
+  "_label": {
+    "eventId": "evt-101",
+    "parentEventId": "evt-001"
+  }
+}
