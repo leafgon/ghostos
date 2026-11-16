@@ -26,7 +26,8 @@ unrecognized response fields are not passed through to downstream nodes.
 ## `hippocampus`
 
 The `hippocampus` leafelement is wired as a side-effecting adapter and consumes bottles named
-`intent` with schema `hippocampus-element-intent.v1`.
+`intent` with either legacy schema `hippocampus-element-intent.v1` or draft
+interoperability schema `hippocampus-intent.v1alpha1`.
 
 The adapter rejects unsupported schema versions, malformed operation contracts, missing idempotency
 metadata for `configure` and `command`, and forbidden transport or SQL-like fields from graph input.

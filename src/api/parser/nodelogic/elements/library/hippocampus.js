@@ -10,12 +10,109 @@ const runtimeLogger = createSafeLogger({ component: "leafelement.hippocampus" })
 
 const INTENT_SCHEMA = "hippocampus-element-intent.v1";
 const OUTCOME_SCHEMA = "hippocampus-element-outcome.v1";
+const INTENT_SCHEMA_ALPHA = "hippocampus-intent.v1alpha1";
+const OUTCOME_SCHEMA_ALPHA = "hippocampus-outcome.v1alpha1";
 const SAFE_ERROR_SCHEMA = "hippocampus-safe-error.v1";
 const DEFAULT_TIMEOUT_MS = 15000;
 const DIGEST_RE = /^sha256:[0-9a-f]{64}$/;
 const BOUNDED_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:/#-]*$/;
 const CONTRACT_NAME_RE = /^[a-z][a-z0-9-]*\.v[1-9][0-9]*$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const TABLE_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+const ALPHA_OPERATION_TO_FIELDS = Object.freeze({
+  configure: Object.freeze([
+    "schemaVersion",
+    "intentId",
+    "operation",
+    "deploymentId",
+    "payload",
+    "options",
+  ]),
+  get: Object.freeze([
+    "schemaVersion",
+    "intentId",
+    "operation",
+    "deploymentId",
+    "table",
+    "recordId",
+    "options",
+  ]),
+  query: Object.freeze([
+    "schemaVersion",
+    "intentId",
+    "operation",
+    "deploymentId",
+    "table",
+    "payload",
+    "options",
+  ]),
+  "semantic-search": Object.freeze([
+    "schemaVersion",
+    "intentId",
+    "operation",
+    "deploymentId",
+    "embeddingName",
+    "payload",
+    "options",
+  ]),
+  command: Object.freeze([
+    "schemaVersion",
+    "intentId",
+    "operation",
+    "deploymentId",
+    "commandName",
+    "payload",
+    "options",
+  ]),
+});
+
+const ALPHA_MUTATING_OPERATIONS = new Set(["configure", "command"]);
+
+const ALPHA_ERROR_CODE_BY_SAFE_CODE = Object.freeze({
+  "malformed-intent": "INVALID_REQUEST",
+  "unsupported-version": "UNSUPPORTED_VERSION",
+  "authorization-denied": "AUTHORIZATION_DENIED",
+  "scope-mismatch": "CONFIGURATION_SCOPE_CONFLICT",
+  "configuration-not-applied": "CONFIGURATION_NOT_APPLIED",
+  "configuration-conflict": "CONFIGURATION_CONFLICT",
+  "configuration-invalid": "INVALID_REQUEST",
+  "migration-rejected": "MIGRATION_REJECTED",
+  "lifecycle-conflict": "LIFECYCLE_CONFLICT",
+  "legal-hold-active": "LEGAL_HOLD_ACTIVE",
+  "operation-not-configured": "OPERATION_NOT_CONFIGURED",
+  "version-conflict": "VERSION_CONFLICT",
+  "idempotency-conflict": "IDEMPOTENCY_CONFLICT",
+  "budget-exceeded": "BUDGET_EXCEEDED",
+  "switch-disabled": "SWITCH_DISABLED",
+  "payload-too-large": "PAYLOAD_TOO_LARGE",
+  "dependency-unavailable": "DEPENDENCY_UNAVAILABLE",
+  timeout: "TIMEOUT",
+  "result-correlation-mismatch": "RESULT_CORRELATION_MISMATCH",
+  "internal-error": "INTERNAL_ERROR",
+});
+
+const SAFE_ERROR_CODE_ALIASES = Object.freeze({
+  INVALID_REQUEST: "malformed-intent",
+  UNSUPPORTED_VERSION: "unsupported-version",
+  AUTHORIZATION_DENIED: "authorization-denied",
+  CONFIGURATION_SCOPE_CONFLICT: "scope-mismatch",
+  CONFIGURATION_NOT_APPLIED: "configuration-not-applied",
+  CONFIGURATION_CONFLICT: "configuration-conflict",
+  MIGRATION_REJECTED: "migration-rejected",
+  LIFECYCLE_CONFLICT: "lifecycle-conflict",
+  LEGAL_HOLD_ACTIVE: "legal-hold-active",
+  OPERATION_NOT_CONFIGURED: "operation-not-configured",
+  VERSION_CONFLICT: "version-conflict",
+  IDEMPOTENCY_CONFLICT: "idempotency-conflict",
+  BUDGET_EXCEEDED: "budget-exceeded",
+  SWITCH_DISABLED: "switch-disabled",
+  PAYLOAD_TOO_LARGE: "payload-too-large",
+  DEPENDENCY_UNAVAILABLE: "dependency-unavailable",
+  TIMEOUT: "timeout",
+  RESULT_CORRELATION_MISMATCH: "result-correlation-mismatch",
+  INTERNAL_ERROR: "internal-error",
+});
 
 const OPERATION_TO_FIELDS = Object.freeze({
   configure: Object.freeze([
@@ -175,6 +272,41 @@ const assertContractName = (value, field) => {
   return normalized;
 };
 
+const assertUuid = (value, field) => {
+  const normalized = maybeTrimString(value);
+  if (!normalized || !UUID_RE.test(normalized)) {
+    throw new HippocampusRuntimeError("malformed-intent", undefined, {
+      details: { field, value },
+    });
+  }
+  return normalized;
+};
+
+const assertTableName = (value, field) => {
+  const normalized = maybeTrimString(value);
+  if (!normalized || normalized.length > 128 || !TABLE_NAME_RE.test(normalized)) {
+    throw new HippocampusRuntimeError("malformed-intent", undefined, {
+      details: { field, value },
+    });
+  }
+  return normalized;
+};
+
+const normalizeSafeErrorCode = (code) => {
+  const normalized = maybeTrimString(code);
+  if (!normalized) {
+    return undefined;
+  }
+  if (SAFE_ERROR_CODES.has(normalized)) {
+    return normalized;
+  }
+  const alias = SAFE_ERROR_CODE_ALIASES[normalized.toUpperCase()];
+  if (alias && SAFE_ERROR_CODES.has(alias)) {
+    return alias;
+  }
+  return undefined;
+};
+
 const assertNoForbiddenInputFields = (value, path = "input") => {
   if (Array.isArray(value)) {
     value.forEach((entry, index) => {
@@ -227,19 +359,51 @@ const normalizeExpectedVersion = (value, index) => {
   });
 };
 
-const unwrapCommandInput = (input) => {
+const unwrapCommandEnvelope = (input) => {
+  if (isPlainObject(input) && input._bname === "intent" && isPlainObject(input._content)) {
+    return {
+      raw: input._content,
+      label: isPlainObject(input._label) ? input._label : undefined,
+    };
+  }
+
   const intentBottle = doUnbottle("intent", input);
   if (intentBottle !== undefined) {
-    return intentBottle;
+    return {
+      raw: intentBottle,
+      label: isPlainObject(input?._label) ? input._label : undefined,
+    };
   }
+
   if (isPlainObject(input) && "_bname" in input && "_content" in input) {
-    return input._content;
+    return {
+      raw: input._content,
+      label: isPlainObject(input._label) ? input._label : undefined,
+    };
   }
-  return input;
+
+  return {
+    raw: input,
+    label: undefined,
+  };
 };
 
-const normalizeHippocampusIntentCommand = (input = {}) => {
-  const raw = unwrapCommandInput(input);
+const unwrapCommandInput = (input) => unwrapCommandEnvelope(input).raw;
+
+const normalizeAlphaOptionInteger = ({ value, field, min, max }) => {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  const parsed = Number.parseInt(`${value}`, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new HippocampusRuntimeError("malformed-intent", undefined, {
+      details: { field, value },
+    });
+  }
+  return parsed;
+};
+
+const normalizeLegacyIntentCommand = (raw = {}) => {
   if (!isPlainObject(raw)) {
     throw new HippocampusRuntimeError("malformed-intent", undefined, {
       details: { field: "intent", value: raw },
@@ -337,8 +501,172 @@ const normalizeHippocampusIntentCommand = (input = {}) => {
   return Object.freeze(normalized);
 };
 
+const normalizeAlphaIntentCommand = (raw = {}, { label } = {}) => {
+  if (!isPlainObject(raw)) {
+    throw new HippocampusRuntimeError("malformed-intent", undefined, {
+      details: { field: "intent", value: raw },
+    });
+  }
+
+  const schemaVersion = assertBoundedId(raw.schemaVersion, "schemaVersion");
+  if (schemaVersion !== INTENT_SCHEMA_ALPHA) {
+    throw new HippocampusRuntimeError("unsupported-version", undefined, {
+      details: { field: "schemaVersion", value: raw.schemaVersion },
+    });
+  }
+
+  const operation = maybeTrimString(raw.operation);
+  if (!operation || !(operation in ALPHA_OPERATION_TO_FIELDS)) {
+    throw new HippocampusRuntimeError("malformed-intent", undefined, {
+      details: { field: "operation", value: raw.operation },
+    });
+  }
+
+  const allowedFields = ALPHA_OPERATION_TO_FIELDS[operation];
+  Object.keys(raw).forEach((field) => {
+    if (!allowedFields.includes(field)) {
+      throw new HippocampusRuntimeError("malformed-intent", undefined, {
+        details: { field },
+      });
+    }
+  });
+
+  const options = raw.options ?? {};
+  if (!isPlainObject(options)) {
+    throw new HippocampusRuntimeError("malformed-intent", undefined, {
+      details: { field: "options", value: raw.options },
+    });
+  }
+
+  const optionsFields = new Set(["idempotencyKey", "timeoutMs", "maxAttempts"]);
+  Object.keys(options).forEach((field) => {
+    if (!optionsFields.has(field)) {
+      throw new HippocampusRuntimeError("malformed-intent", undefined, {
+        details: { field: `options.${field}` },
+      });
+    }
+  });
+
+  const normalized = {
+    schemaVersion,
+    intentId: assertBoundedId(raw.intentId, "intentId"),
+    operation,
+    deploymentId: assertUuid(raw.deploymentId, "deploymentId"),
+    options: {
+      idempotencyKey:
+        options.idempotencyKey === undefined
+          ? undefined
+          : assertBoundedId(options.idempotencyKey, "options.idempotencyKey"),
+      timeoutMs: normalizeAlphaOptionInteger({
+        value: options.timeoutMs,
+        field: "options.timeoutMs",
+        min: 1,
+        max: 120000,
+      }),
+      maxAttempts: normalizeAlphaOptionInteger({
+        value: options.maxAttempts,
+        field: "options.maxAttempts",
+        min: 1,
+        max: 10,
+      }),
+    },
+    inputLabel: isPlainObject(label)
+      ? {
+          eventId: maybeTrimString(label.eventId),
+          parentEventId: maybeTrimString(label.parentEventId),
+        }
+      : undefined,
+  };
+
+  if (operation === "configure") {
+    if (!isPlainObject(raw.payload)) {
+      throw new HippocampusRuntimeError("malformed-intent", undefined, {
+        details: { field: "payload", value: raw.payload },
+      });
+    }
+    assertNoForbiddenInputFields(raw.payload, "payload");
+    normalized.payload = JSON.parse(JSON.stringify(raw.payload));
+  }
+
+  if (operation === "get") {
+    normalized.table = assertTableName(raw.table, "table");
+    normalized.recordId = assertBoundedId(raw.recordId, "recordId");
+  }
+
+  if (operation === "query") {
+    normalized.table = assertTableName(raw.table, "table");
+    if (!isPlainObject(raw.payload)) {
+      throw new HippocampusRuntimeError("malformed-intent", undefined, {
+        details: { field: "payload", value: raw.payload },
+      });
+    }
+    assertNoForbiddenInputFields(raw.payload, "payload");
+    normalized.payload = JSON.parse(JSON.stringify(raw.payload));
+  }
+
+  if (operation === "semantic-search") {
+    normalized.embeddingName = assertTableName(raw.embeddingName, "embeddingName");
+    if (!isPlainObject(raw.payload)) {
+      throw new HippocampusRuntimeError("malformed-intent", undefined, {
+        details: { field: "payload", value: raw.payload },
+      });
+    }
+    assertNoForbiddenInputFields(raw.payload, "payload");
+    normalized.payload = JSON.parse(JSON.stringify(raw.payload));
+  }
+
+  if (operation === "command") {
+    normalized.commandName = assertBoundedId(raw.commandName, "commandName");
+    if (!isPlainObject(raw.payload)) {
+      throw new HippocampusRuntimeError("malformed-intent", undefined, {
+        details: { field: "payload", value: raw.payload },
+      });
+    }
+    assertNoForbiddenInputFields(raw.payload, "payload");
+    normalized.payload = JSON.parse(JSON.stringify(raw.payload));
+  }
+
+  if (ALPHA_MUTATING_OPERATIONS.has(operation) && !normalized.options.idempotencyKey) {
+    throw new HippocampusRuntimeError("malformed-intent", undefined, {
+      details: { field: "options.idempotencyKey", operation },
+    });
+  }
+
+  return Object.freeze(normalized);
+};
+
+const normalizeHippocampusIntentCommand = (input = {}) => {
+  const { raw, label } = unwrapCommandEnvelope(input);
+  if (isPlainObject(raw) && maybeTrimString(raw.schemaVersion) === INTENT_SCHEMA_ALPHA) {
+    return normalizeAlphaIntentCommand(raw, { label });
+  }
+  return normalizeLegacyIntentCommand(raw);
+};
+
+const isAlphaIntentCommand = (normalized = {}) => {
+  return isPlainObject(normalized) && normalized.schemaVersion === INTENT_SCHEMA_ALPHA;
+};
+
 const resolveHippocampusIntentIdempotency = (command) => {
   const normalized = normalizeHippocampusIntentCommand(command);
+  if (isAlphaIntentCommand(normalized)) {
+    if (!ALPHA_MUTATING_OPERATIONS.has(normalized.operation)) {
+      return {
+        required: false,
+      };
+    }
+    const scopeSuffix =
+      normalized.operation === "command"
+        ? `${normalized.operation}:${normalized.commandName}`
+        : normalized.operation;
+    return {
+      required: true,
+      key: normalized.options.idempotencyKey,
+      scope: `${normalized.deploymentId}:${scopeSuffix}`,
+      domainCommandId: normalized.intentId,
+    };
+  }
+
   if (!["configure", "command"].includes(normalized.operation)) {
     return {
       required: false,
@@ -395,6 +723,214 @@ const resolveTransport = ({ transport, config = {}, executionContext = {} } = {}
   throw new HippocampusRuntimeError("configuration-invalid", undefined, {
     details: { field: "transport" },
   });
+};
+
+const toAlphaErrorCode = (safeCode) => {
+  return ALPHA_ERROR_CODE_BY_SAFE_CODE[safeCode] ?? ALPHA_ERROR_CODE_BY_SAFE_CODE["internal-error"];
+};
+
+const toSafeCodeFromAlphaErrorCode = (value) => {
+  const normalized = normalizeSafeErrorCode(value);
+  return normalized ?? "internal-error";
+};
+
+const normalizeAlphaErrorEnvelope = ({ error = {}, fallbackSafeCode = "internal-error" } = {}) => {
+  const safeCode = toSafeCodeFromAlphaErrorCode(error?.code) ?? fallbackSafeCode;
+  const alphaCode = maybeTrimString(error?.code) ?? toAlphaErrorCode(safeCode);
+  return {
+    code: alphaCode,
+    message:
+      maybeTrimString(error?.message) ??
+      SAFE_ERROR_MESSAGES[safeCode] ??
+      SAFE_ERROR_MESSAGES["internal-error"],
+    retryable:
+      typeof error?.retryable === "boolean" ? error.retryable : RETRYABLE_CODES.has(safeCode),
+    details: isPlainObject(error?.details) ? error.details : {},
+  };
+};
+
+const deriveAlphaOutcomeStatus = ({ httpStatus, error }) => {
+  if (httpStatus >= 200 && httpStatus < 300) {
+    return "succeeded";
+  }
+  if (httpStatus === 503 && error?.code === "DEPENDENCY_UNAVAILABLE" && error?.retryable === true) {
+    return "error";
+  }
+  return "failed";
+};
+
+const deriveOutcomeEventId = (parentEventId, intentId) => {
+  const candidate = maybeTrimString(parentEventId) ?? maybeTrimString(intentId) ?? "unknown";
+  const normalized = `outcome-${candidate}`;
+  if (normalized.length <= 128 && BOUNDED_ID_RE.test(normalized)) {
+    return normalized;
+  }
+  return "outcome-unknown";
+};
+
+const toAlphaOutcomeLabel = (command) => {
+  const parentEventId = maybeTrimString(command?.inputLabel?.eventId);
+  return {
+    eventId: deriveOutcomeEventId(parentEventId, command?.intentId),
+    ...(parentEventId ? { parentEventId } : {}),
+  };
+};
+
+const withoutRequestId = (value = {}) => {
+  const clone = JSON.parse(JSON.stringify(value));
+  if (isPlainObject(clone)) {
+    delete clone.request_id;
+  }
+  return clone;
+};
+
+const normalizeAlphaTransportResponse = ({ response, jsonBody } = {}) => {
+  if (response && typeof response.status === "number") {
+    return {
+      httpStatus: response.status,
+      body: isPlainObject(jsonBody) ? jsonBody : {},
+    };
+  }
+  if (
+    isPlainObject(response) &&
+    Number.isInteger(response.httpStatus) &&
+    isPlainObject(response.body)
+  ) {
+    return {
+      httpStatus: response.httpStatus,
+      body: response.body,
+    };
+  }
+  throw new HippocampusRuntimeError("internal-error", undefined, {
+    details: {
+      field: "transportResponse",
+      value: response,
+    },
+  });
+};
+
+const toAlphaTransportIntent = (command) => {
+  const basePath = `/api/hippocampus/${encodeURIComponent(command.deploymentId)}`;
+
+  if (command.operation === "configure") {
+    return {
+      schemaVersion: command.schemaVersion,
+      intentId: command.intentId,
+      operation: command.operation,
+      deploymentId: command.deploymentId,
+      method: "PUT",
+      path: `/internal/v2/deployments/${encodeURIComponent(command.deploymentId)}/configuration`,
+      payload: command.payload,
+      options: command.options,
+    };
+  }
+
+  if (command.operation === "get") {
+    return {
+      schemaVersion: command.schemaVersion,
+      intentId: command.intentId,
+      operation: command.operation,
+      deploymentId: command.deploymentId,
+      method: "GET",
+      path: `${basePath}/records/${encodeURIComponent(command.table)}/${encodeURIComponent(command.recordId)}`,
+      options: command.options,
+    };
+  }
+
+  if (command.operation === "query") {
+    return {
+      schemaVersion: command.schemaVersion,
+      intentId: command.intentId,
+      operation: command.operation,
+      deploymentId: command.deploymentId,
+      method: "POST",
+      path: `${basePath}/records/${encodeURIComponent(command.table)}:query`,
+      payload: command.payload,
+      options: command.options,
+    };
+  }
+
+  if (command.operation === "semantic-search") {
+    return {
+      schemaVersion: command.schemaVersion,
+      intentId: command.intentId,
+      operation: command.operation,
+      deploymentId: command.deploymentId,
+      method: "POST",
+      path: `${basePath}/search/${encodeURIComponent(command.embeddingName)}`,
+      payload: command.payload,
+      options: command.options,
+    };
+  }
+
+  if (command.operation === "command") {
+    return {
+      schemaVersion: command.schemaVersion,
+      intentId: command.intentId,
+      operation: command.operation,
+      deploymentId: command.deploymentId,
+      method: "POST",
+      path: `${basePath}/commands/${encodeURIComponent(command.commandName)}:execute`,
+      payload: command.payload,
+      options: command.options,
+    };
+  }
+
+  throw new HippocampusRuntimeError("malformed-intent", undefined, {
+    details: { field: "operation", value: command.operation },
+  });
+};
+
+const normalizeAlphaTransportOutcome = ({
+  command,
+  response,
+  executionContext = {},
+  jsonBody,
+} = {}) => {
+  const { httpStatus, body } = normalizeAlphaTransportResponse({ response, jsonBody });
+  const success = httpStatus >= 200 && httpStatus < 300;
+
+  const requestId =
+    maybeTrimString(body.request_id) ??
+    assertBoundedId(executionContext.requestId ?? "request-unknown", "requestId");
+
+  const normalizedError = success
+    ? undefined
+    : normalizeAlphaErrorEnvelope({
+        error: body.error,
+        fallbackSafeCode:
+          httpStatus === 409
+            ? "version-conflict"
+            : httpStatus === 503
+              ? "dependency-unavailable"
+              : "internal-error",
+      });
+
+  const outcome = {
+    _bname: "outcome",
+    _content: {
+      schemaVersion: OUTCOME_SCHEMA_ALPHA,
+      intentId: command.intentId,
+      operation: command.operation,
+      ok: success,
+      status: deriveAlphaOutcomeStatus({ httpStatus, error: normalizedError }),
+      deploymentId: command.deploymentId,
+      requestId,
+      http: {
+        status: httpStatus,
+        retryable: success ? false : normalizedError.retryable,
+      },
+    },
+    _label: toAlphaOutcomeLabel(command),
+  };
+
+  if (success) {
+    outcome._content.result = withoutRequestId(body);
+  } else {
+    outcome._content.error = normalizedError;
+  }
+
+  return outcome;
 };
 
 const normalizeTransportOutcome = (outcome, command, executionContext = {}) => {
@@ -513,13 +1049,20 @@ const toRuntimeError = (error) => {
 
   const message = maybeTrimString(error?.message);
   const status = Number.parseInt(`${error?.status ?? error?.statusCode ?? ""}`, 10);
+  const normalizedErrorCode = normalizeSafeErrorCode(error?.code);
 
-  if (SAFE_ERROR_CODES.has(error?.code)) {
-    return new HippocampusRuntimeError(error.code, SAFE_ERROR_MESSAGES[error.code], {
-      retryable:
-        typeof error.retryable === "boolean" ? error.retryable : RETRYABLE_CODES.has(error.code),
-      details: { reason: message },
-    });
+  if (normalizedErrorCode) {
+    return new HippocampusRuntimeError(
+      normalizedErrorCode,
+      SAFE_ERROR_MESSAGES[normalizedErrorCode],
+      {
+        retryable:
+          typeof error.retryable === "boolean"
+            ? error.retryable
+            : RETRYABLE_CODES.has(normalizedErrorCode),
+        details: { reason: message },
+      },
+    );
   }
 
   if ([401, 403].includes(status)) {
@@ -557,22 +1100,48 @@ const executeHippocampusIntentCommand = async ({
 } = {}) => {
   const normalizedCommand = normalizeHippocampusIntentCommand(command);
   const executeIntent = resolveTransport({ transport, config, executionContext });
+  const timeoutOverride = isAlphaIntentCommand(normalizedCommand)
+    ? normalizedCommand.options.timeoutMs
+    : undefined;
   const timeoutMs = resolvePositiveInteger({
-    value: config.timeoutMs,
+    value: timeoutOverride ?? config.timeoutMs,
     field: "timeoutMs",
     fallback: DEFAULT_TIMEOUT_MS,
     min: 1,
     max: 120000,
   });
 
+  const transportIntent = isAlphaIntentCommand(normalizedCommand)
+    ? toAlphaTransportIntent(normalizedCommand)
+    : normalizedCommand;
+
   try {
     const response = await executeIntent({
-      intent: normalizedCommand,
-      command: normalizedCommand,
+      intent: transportIntent,
+      command: transportIntent,
+      normalizedIntent: normalizedCommand,
       timeoutMs,
       executionContext,
       config,
     });
+
+    if (isAlphaIntentCommand(normalizedCommand)) {
+      if (response && typeof response.json === "function") {
+        const jsonBody = await response.json();
+        return normalizeAlphaTransportOutcome({
+          command: normalizedCommand,
+          response,
+          executionContext,
+          jsonBody,
+        });
+      }
+      return normalizeAlphaTransportOutcome({
+        command: normalizedCommand,
+        response,
+        executionContext,
+      });
+    }
+
     if (response && typeof response.json === "function") {
       const jsonBody = await response.json();
       return normalizeTransportOutcome(jsonBody, normalizedCommand, executionContext);
@@ -651,8 +1220,73 @@ const normalizeOutcomeBindings = ({ command, executionContext = {} }) => {
   return bindings;
 };
 
+const runtimeErrorToHttpStatus = (runtimeError) => {
+  if (typeof runtimeError?.details?.status === "number") {
+    return runtimeError.details.status;
+  }
+  if (runtimeError.code === "authorization-denied") {
+    return 403;
+  }
+  if (runtimeError.code === "version-conflict" || runtimeError.code === "idempotency-conflict") {
+    return 409;
+  }
+  if (runtimeError.code === "timeout") {
+    return 408;
+  }
+  if (runtimeError.retryable === true || runtimeError.code === "dependency-unavailable") {
+    return 503;
+  }
+  if (runtimeError.code === "malformed-intent" || runtimeError.code === "unsupported-version") {
+    return 400;
+  }
+  return 500;
+};
+
+const failureOutcomeForAlphaError = ({ command, executionContext, runtimeError }) => {
+  const requestId = assertBoundedId(executionContext.requestId ?? "request-unknown", "requestId");
+  const httpStatus = runtimeErrorToHttpStatus(runtimeError);
+  const error = normalizeAlphaErrorEnvelope({
+    error: {
+      code: toAlphaErrorCode(runtimeError.code),
+      message: SAFE_ERROR_MESSAGES[runtimeError.code] ?? SAFE_ERROR_MESSAGES["internal-error"],
+      retryable: runtimeError.retryable === true,
+      details: {},
+    },
+    fallbackSafeCode: runtimeError.code,
+  });
+
+  return {
+    _bname: "outcome",
+    _content: {
+      schemaVersion: OUTCOME_SCHEMA_ALPHA,
+      intentId: command.intentId ?? "intent-unknown",
+      operation: command.operation ?? "command",
+      ok: false,
+      status: runtimeError.retryable === true ? "error" : "failed",
+      deploymentId:
+        maybeTrimString(command.deploymentId) && UUID_RE.test(command.deploymentId)
+          ? command.deploymentId
+          : defaultUuid(),
+      requestId,
+      http: {
+        status: httpStatus,
+        retryable: runtimeError.retryable === true,
+      },
+      error,
+    },
+    _label: toAlphaOutcomeLabel(command),
+  };
+};
+
 const failureOutcomeForError = ({ command, executionContext, error }) => {
   const runtimeError = toRuntimeError(error);
+  if (isAlphaIntentCommand(command)) {
+    return failureOutcomeForAlphaError({
+      command,
+      executionContext,
+      runtimeError,
+    });
+  }
   return {
     schema: OUTCOME_SCHEMA,
     ok: false,
@@ -701,6 +1335,32 @@ const resolveElementConfig = (streamCache, executionContext) => {
   return runtimeConfig;
 };
 
+const fallbackNormalizedCommandForError = (rawIntent) => {
+  const { raw, label } = unwrapCommandEnvelope(rawIntent);
+  if (isPlainObject(raw) && maybeTrimString(raw.schemaVersion) === INTENT_SCHEMA_ALPHA) {
+    return {
+      schemaVersion: INTENT_SCHEMA_ALPHA,
+      intentId: maybeTrimString(raw.intentId) ?? "intent-unknown",
+      operation: maybeTrimString(raw.operation) ?? "command",
+      deploymentId:
+        maybeTrimString(raw.deploymentId) && UUID_RE.test(raw.deploymentId)
+          ? raw.deploymentId
+          : defaultUuid(),
+      inputLabel: isPlainObject(label)
+        ? {
+            eventId: maybeTrimString(label.eventId),
+            parentEventId: maybeTrimString(label.parentEventId),
+          }
+        : undefined,
+    };
+  }
+
+  return {
+    configurationDigest: defaultDigest(),
+    operationRef: "hippocampus-configure.v1",
+  };
+};
+
 const executeElementHippocampusIntent = async (rawIntent, executionContext, config) => {
   try {
     return await executeHippocampusIntentCommand({
@@ -718,10 +1378,7 @@ const executeElementHippocampusIntent = async (rawIntent, executionContext, conf
       try {
         return normalizeHippocampusIntentCommand(rawIntent);
       } catch (_normalizeError) {
-        return {
-          configurationDigest: defaultDigest(),
-          operationRef: "hippocampus-configure.v1",
-        };
+        return fallbackNormalizedCommandForError(rawIntent);
       }
     })();
     return failureOutcomeForError({
