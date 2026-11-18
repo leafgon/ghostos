@@ -41,6 +41,20 @@ describe("executeLEAFlisp", () => {
     });
   });
 
+  it("keeps numeric hippocampus intent fields as JSON numbers during serialization", () => {
+    const runtimeLEAFlisp = createLEAFlispRuntime();
+    const intentLiteral = runtimeLEAFlisp.insituexecute(
+      '(bottle "intent" {:schema "hippocampus-element-intent.v1" :operation "query" :configurationId "cfg-manual-1" :configurationDigest "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" :operationRef "hippocampus-query.v1" :input {:entityRef "entity:note" :filter {:status "active"} :limit 20}})',
+    );
+
+    const serialized = JSON.stringify(intentLiteral);
+    const parsed = JSON.parse(serialized);
+
+    expect(parsed._content.input.limit).toBe(20);
+    expect(typeof parsed._content.input.limit).toBe("number");
+    expect(serialized).not.toContain('"limit":"20"');
+  });
+
   it("supports a custom input binding and extra bindings", () => {
     const result = executeLEAFlisp("leaf", "(return (+ prefix input))", {
       inputBinding: "input",

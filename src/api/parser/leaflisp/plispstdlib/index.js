@@ -452,7 +452,7 @@ class PLNumber {
   //  }
   //}
   toJSON() {
-    return this.toString(); // spark_dev_note: TBD: check if this would be the best resolution to js <-> leaflisp data conversion
+    return this.toJS();
   }
 }
 PLNumber.kind = "Number";
