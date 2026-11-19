@@ -1302,11 +1302,66 @@ const failureOutcomeForError = ({ command, executionContext, error }) => {
   };
 };
 
+const resolveGlobalHippocampusExecutionContext = ({ streamCache, controlflow } = {}) => {
+  let resolved;
+  if (typeof globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT_FACTORY__ === "function") {
+    try {
+      resolved = globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT_FACTORY__({
+        streamCache,
+        controlflow,
+      });
+    } catch (_error) {
+      resolved = undefined;
+    }
+  }
+  if (
+    !isPlainObject(resolved) &&
+    isPlainObject(globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT__)
+  ) {
+    resolved = globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT__;
+  }
+  return isPlainObject(resolved) ? resolved : undefined;
+};
+
 const resolveHippocampusExecutionContext = (streamCache, controlflowObj = {}) => {
-  const runtimeContext = {
+  const config = controlflowObj?._config ?? {};
+  const legacyRuntimeContext = {
     ...(streamCache?.[ElemCacheKeyLUT.RTCONTEXT] ?? {}),
-    ...(controlflowObj?._config ?? {}),
+    ...config,
   };
+  const configRuntimeContext =
+    config.runtimeContext ??
+    config.ghostRuntimeOptions?.runtimeContext ??
+    config.runtimeOptions?.runtimeContext ??
+    config.ghostosRuntimeOptions?.runtimeContext;
+  const configuredContext =
+    config.hippocampusExecutionContext ??
+    config.runtimeContext?.hippocampusExecutionContext ??
+    config.ghostRuntimeOptions?.hippocampusExecutionContext ??
+    config.ghostRuntimeOptions?.runtimeContext?.hippocampusExecutionContext ??
+    config.runtimeOptions?.hippocampusExecutionContext ??
+    config.runtimeOptions?.runtimeContext?.hippocampusExecutionContext ??
+    config.ghostosRuntimeOptions?.hippocampusExecutionContext ??
+    config.ghostosRuntimeOptions?.runtimeContext?.hippocampusExecutionContext ??
+    configRuntimeContext ??
+    controlflowObj?.runtimeContext ??
+    streamCache?.runtimeContext ??
+    streamCache?.hippocampusExecutionContext ??
+    legacyRuntimeContext;
+  const fallbackContext = resolveGlobalHippocampusExecutionContext({
+    streamCache,
+    controlflow: controlflowObj,
+  });
+  const context =
+    isPlainObject(fallbackContext) && isPlainObject(configuredContext)
+      ? { ...fallbackContext, ...configuredContext }
+      : isPlainObject(configuredContext)
+        ? configuredContext
+        : (fallbackContext ?? configuredContext);
+  const runtimeContext = isPlainObject(context) ? context : {};
+  const hippocampusContext = isPlainObject(runtimeContext.hippocampus)
+    ? runtimeContext.hippocampus
+    : {};
 
   return {
     runtimeContext,
@@ -1317,11 +1372,18 @@ const resolveHippocampusExecutionContext = (streamCache, controlflowObj = {}) =>
     elementNodeId: runtimeContext.elementNodeId ?? streamCache?.[ElemCacheKeyLUT.REFNODE],
     deploymentId: runtimeContext.deploymentId,
     requestId: runtimeContext.requestId,
-    profile: runtimeContext.profile ?? runtimeContext.hippocampusProfile,
-    adapter: runtimeContext.hippocampusAdapter ?? runtimeContext.hippocampus?.adapter,
-    host: runtimeContext.host,
-    executeIntent: runtimeContext.executeHippocampusIntent,
-    hippocampusAdapter: runtimeContext.hippocampusAdapter,
+    profile:
+      runtimeContext.profile ?? runtimeContext.hippocampusProfile ?? hippocampusContext.profile,
+    adapter:
+      runtimeContext.hippocampusAdapter ?? runtimeContext.adapter ?? hippocampusContext.adapter,
+    host: runtimeContext.host ?? hippocampusContext.host,
+    executeIntent:
+      runtimeContext.executeHippocampusIntent ??
+      runtimeContext.hippocampusExecuteIntent ??
+      runtimeContext.executeIntent ??
+      hippocampusContext.executeIntent,
+    hippocampusAdapter:
+      runtimeContext.hippocampusAdapter ?? runtimeContext.adapter ?? hippocampusContext.adapter,
   };
 };
 
