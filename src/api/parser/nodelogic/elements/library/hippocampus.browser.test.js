@@ -158,31 +158,38 @@ const assertNoSecretLeak = (value) => {
   expect(serialized).not.toContain("token=hippo-secret");
 };
 
-const initHippocampusFlow = ({ transport } = {}) => {
+const runtimeContextForTransport = (transport) => ({
+  tenantId: TENANT_ID,
+  graphDomain: GRAPH_DOMAIN,
+  graphApp: GRAPH_APP,
+  spellRef: SPELL_REF,
+  elementNodeId: ELEMENT_NODE_ID,
+  deploymentId: DEPLOYMENT_ID,
+  requestId: "request-1",
+  profile: PROFILE_BINDING,
+  hippocampusConfig: {
+    timeoutMs: 5000,
+    transport,
+  },
+  executeHippocampusIntent: transport,
+});
+
+const initHippocampusFlow = ({ transport, runtimeContext, controlConfig = {} } = {}) => {
   const streamCache = {
     [ElemCacheKeyLUT.REFNODE]: ELEMENT_NODE_ID,
-    [ElemCacheKeyLUT.RTCONTEXT]: {
-      tenantId: TENANT_ID,
-      graphDomain: GRAPH_DOMAIN,
-      graphApp: GRAPH_APP,
-      spellRef: SPELL_REF,
-      elementNodeId: ELEMENT_NODE_ID,
-      deploymentId: DEPLOYMENT_ID,
-      requestId: "request-1",
-      profile: PROFILE_BINDING,
-      hippocampusConfig: {
-        timeoutMs: 5000,
-        transport,
-      },
-    },
   };
+  const resolvedRuntimeContext =
+    runtimeContext === undefined ? runtimeContextForTransport(transport) : runtimeContext;
+  if (resolvedRuntimeContext !== null) {
+    streamCache[ElemCacheKeyLUT.RTCONTEXT] = resolvedRuntimeContext;
+  }
   const hippocampusProps =
     initStdElementProps(streamCache, "hippocampus") ?? hippocampusElementProps(streamCache);
   const datainput$ = new ReplaySubject(1);
   const ctrlinput$ = new ReplaySubject(1);
 
   const output$obj = driveDataflowByCtrlflow(
-    { _stream: ctrlinput$, _config: {} },
+    { _stream: ctrlinput$, _config: controlConfig },
     [{ _stream: datainput$.pipe(startWith(undefined)) }],
     undefined,
     {
@@ -258,6 +265,117 @@ describe("leafelement:hippocampus adapter helpers", () => {
         operation: "command",
       },
     });
+  });
+
+  it("resolves execution transport from controlflow runtimeContext wiring", async () => {
+    const transport = vi.fn(async ({ intent }) => successfulOutcome(intent));
+    const { output$obj, datainput$, ctrlinput$ } = initHippocampusFlow({
+      runtimeContext: null,
+      controlConfig: {
+        runtimeContext: runtimeContextForTransport(transport),
+      },
+    });
+
+    const output = await runHippocampusTick({
+      output$obj,
+      datainput$,
+      ctrlinput$,
+      dataIn: doBottle("intent", commandIntent(), {
+        eventId: "hippo-runtime-context-1",
+      }),
+    });
+
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(output).toMatchObject({
+      schema: "hippocampus-element-outcome.v1",
+      ok: true,
+      status: "committed",
+    });
+  });
+
+  it("falls back to a host-provided global hippocampus execution context factory", async () => {
+    const transport = vi.fn(async ({ intent }) => successfulOutcome(intent));
+    const globalFactory = vi.fn(() => runtimeContextForTransport(transport));
+    const previousFactory = globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT_FACTORY__;
+    const previousContext = globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT__;
+    globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT_FACTORY__ = globalFactory;
+    delete globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT__;
+    try {
+      const { output$obj, datainput$, ctrlinput$ } = initHippocampusFlow({
+        runtimeContext: null,
+      });
+
+      const output = await runHippocampusTick({
+        output$obj,
+        datainput$,
+        ctrlinput$,
+        dataIn: doBottle("intent", commandIntent(), {
+          eventId: "hippo-global-context-1",
+        }),
+      });
+
+      expect(globalFactory).toHaveBeenCalled();
+      expect(transport).toHaveBeenCalledTimes(1);
+      expect(output).toMatchObject({
+        schema: "hippocampus-element-outcome.v1",
+        ok: true,
+        status: "committed",
+      });
+    } finally {
+      if (previousFactory === undefined) {
+        delete globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT_FACTORY__;
+      } else {
+        globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT_FACTORY__ = previousFactory;
+      }
+      if (previousContext === undefined) {
+        delete globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT__;
+      } else {
+        globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT__ = previousContext;
+      }
+    }
+  });
+
+  it("prefers explicit execution context over global hippocampus fallback", async () => {
+    const configuredTransport = vi.fn(async ({ intent }) => successfulOutcome(intent));
+    const fallbackTransport = vi.fn(async ({ intent }) => successfulOutcome(intent));
+    const previousFactory = globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT_FACTORY__;
+    const previousContext = globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT__;
+    globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT_FACTORY__ = () =>
+      runtimeContextForTransport(fallbackTransport);
+    delete globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT__;
+    try {
+      const { output$obj, datainput$, ctrlinput$ } = initHippocampusFlow({
+        transport: configuredTransport,
+      });
+
+      const output = await runHippocampusTick({
+        output$obj,
+        datainput$,
+        ctrlinput$,
+        dataIn: doBottle("intent", commandIntent(), {
+          eventId: "hippo-explicit-context-1",
+        }),
+      });
+
+      expect(output).toMatchObject({
+        schema: "hippocampus-element-outcome.v1",
+        ok: true,
+        status: "committed",
+      });
+      expect(configuredTransport).toHaveBeenCalledTimes(1);
+      expect(fallbackTransport).not.toHaveBeenCalled();
+    } finally {
+      if (previousFactory === undefined) {
+        delete globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT_FACTORY__;
+      } else {
+        globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT_FACTORY__ = previousFactory;
+      }
+      if (previousContext === undefined) {
+        delete globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT__;
+      } else {
+        globalThis.__LEAFGON_HIPPOCAMPUS_EXECUTION_CONTEXT__ = previousContext;
+      }
+    }
   });
 
   it("executes data-triggered intents and suppresses control/config ticks", async () => {
