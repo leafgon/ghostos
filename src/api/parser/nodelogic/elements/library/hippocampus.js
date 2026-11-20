@@ -26,6 +26,7 @@ const ALPHA_OPERATION_TO_FIELDS = Object.freeze({
     "intentId",
     "operation",
     "deploymentId",
+    "instanceId",
     "payload",
     "options",
   ]),
@@ -34,6 +35,7 @@ const ALPHA_OPERATION_TO_FIELDS = Object.freeze({
     "intentId",
     "operation",
     "deploymentId",
+    "instanceId",
     "table",
     "recordId",
     "options",
@@ -43,6 +45,7 @@ const ALPHA_OPERATION_TO_FIELDS = Object.freeze({
     "intentId",
     "operation",
     "deploymentId",
+    "instanceId",
     "table",
     "payload",
     "options",
@@ -52,6 +55,7 @@ const ALPHA_OPERATION_TO_FIELDS = Object.freeze({
     "intentId",
     "operation",
     "deploymentId",
+    "instanceId",
     "embeddingName",
     "payload",
     "options",
@@ -61,6 +65,7 @@ const ALPHA_OPERATION_TO_FIELDS = Object.freeze({
     "intentId",
     "operation",
     "deploymentId",
+    "instanceId",
     "commandName",
     "payload",
     "options",
@@ -552,6 +557,8 @@ const normalizeAlphaIntentCommand = (raw = {}, { label } = {}) => {
     intentId: assertBoundedId(raw.intentId, "intentId"),
     operation,
     deploymentId: assertUuid(raw.deploymentId, "deploymentId"),
+    instanceId:
+      raw.instanceId === undefined ? undefined : assertUuid(raw.instanceId, "instanceId"),
     options: {
       idempotencyKey:
         options.idempotencyKey === undefined
@@ -809,8 +816,23 @@ const normalizeAlphaTransportResponse = ({ response, jsonBody } = {}) => {
   });
 };
 
-const toAlphaTransportIntent = (command) => {
-  const basePath = `/api/hippocampus/${encodeURIComponent(command.deploymentId)}`;
+const resolveAlphaProxyInstanceId = (command, executionContext = {}) => {
+  const commandInstanceId = maybeTrimString(command.instanceId);
+  if (commandInstanceId && UUID_RE.test(commandInstanceId)) {
+    return commandInstanceId;
+  }
+
+  const runtimeInstanceId = maybeTrimString(executionContext.elementNodeId);
+  if (runtimeInstanceId && UUID_RE.test(runtimeInstanceId)) {
+    return runtimeInstanceId;
+  }
+
+  return command.deploymentId;
+};
+
+const toAlphaTransportIntent = (command, executionContext = {}) => {
+  const proxyInstanceId = resolveAlphaProxyInstanceId(command, executionContext);
+  const basePath = `/api/hippocampus/${encodeURIComponent(proxyInstanceId)}`;
 
   if (command.operation === "configure") {
     return {
@@ -818,6 +840,7 @@ const toAlphaTransportIntent = (command) => {
       intentId: command.intentId,
       operation: command.operation,
       deploymentId: command.deploymentId,
+      instanceId: proxyInstanceId,
       method: "PUT",
       path: `/internal/v2/deployments/${encodeURIComponent(command.deploymentId)}/configuration`,
       payload: command.payload,
@@ -831,6 +854,7 @@ const toAlphaTransportIntent = (command) => {
       intentId: command.intentId,
       operation: command.operation,
       deploymentId: command.deploymentId,
+      instanceId: proxyInstanceId,
       method: "GET",
       path: `${basePath}/records/${encodeURIComponent(command.table)}/${encodeURIComponent(command.recordId)}`,
       options: command.options,
@@ -843,6 +867,7 @@ const toAlphaTransportIntent = (command) => {
       intentId: command.intentId,
       operation: command.operation,
       deploymentId: command.deploymentId,
+      instanceId: proxyInstanceId,
       method: "POST",
       path: `${basePath}/records/${encodeURIComponent(command.table)}:query`,
       payload: command.payload,
@@ -856,6 +881,7 @@ const toAlphaTransportIntent = (command) => {
       intentId: command.intentId,
       operation: command.operation,
       deploymentId: command.deploymentId,
+      instanceId: proxyInstanceId,
       method: "POST",
       path: `${basePath}/search/${encodeURIComponent(command.embeddingName)}`,
       payload: command.payload,
@@ -869,6 +895,7 @@ const toAlphaTransportIntent = (command) => {
       intentId: command.intentId,
       operation: command.operation,
       deploymentId: command.deploymentId,
+      instanceId: proxyInstanceId,
       method: "POST",
       path: `${basePath}/commands/${encodeURIComponent(command.commandName)}:execute`,
       payload: command.payload,
@@ -1112,7 +1139,7 @@ const executeHippocampusIntentCommand = async ({
   });
 
   const transportIntent = isAlphaIntentCommand(normalizedCommand)
-    ? toAlphaTransportIntent(normalizedCommand)
+    ? toAlphaTransportIntent(normalizedCommand, executionContext)
     : normalizedCommand;
 
   try {
@@ -1408,6 +1435,10 @@ const fallbackNormalizedCommandForError = (rawIntent) => {
         maybeTrimString(raw.deploymentId) && UUID_RE.test(raw.deploymentId)
           ? raw.deploymentId
           : defaultUuid(),
+      instanceId:
+        maybeTrimString(raw.instanceId) && UUID_RE.test(raw.instanceId)
+          ? raw.instanceId
+          : undefined,
       inputLabel: isPlainObject(label)
         ? {
             eventId: maybeTrimString(label.eventId),

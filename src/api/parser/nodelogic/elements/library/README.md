@@ -29,6 +29,10 @@ The `hippocampus` leafelement is wired as a side-effecting adapter and consumes 
 `intent` with either legacy schema `hippocampus-element-intent.v1` or draft
 interoperability schema `hippocampus-intent.v1alpha1`.
 
+For `hippocampus-intent.v1alpha1`, `deploymentId` remains required for binding and outcome
+correlation. Data-plane proxy routing can additionally provide `instanceId` (node UUID); when
+present it is used for `/api/hippocampus/{instanceId}/...` path construction.
+
 The adapter rejects unsupported schema versions, malformed operation contracts, missing idempotency
 metadata for `configure` and `command`, and forbidden transport or SQL-like fields from graph input.
 Execution must be host-mediated via an injected adapter function rather than caller-selected URLs.

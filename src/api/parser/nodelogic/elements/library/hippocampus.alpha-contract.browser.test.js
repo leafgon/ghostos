@@ -74,6 +74,66 @@ describe("leafelement:hippocampus v1alpha1 adapter mapping", () => {
     expect(output._label.parentEventId).toBe(inport._label.eventId);
   });
 
+  it("uses instanceId for leaf-server proxy path when provided", async () => {
+    const inport = readFixture("inport.intent.query.success.json");
+    inport._content.instanceId = "ea6598d2-63b6-40ae-a161-2d6311a5bd6c";
+    const leafServerResponse = readFixture("leaf-server.response.query.success.json");
+
+    const transport = vi.fn(async ({ intent }) => {
+      expect(intent).toMatchObject({
+        operation: "query",
+        deploymentId: "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+        instanceId: "ea6598d2-63b6-40ae-a161-2d6311a5bd6c",
+        method: "POST",
+        path: "/api/hippocampus/ea6598d2-63b6-40ae-a161-2d6311a5bd6c/records/notes:query",
+      });
+      return leafServerResponse;
+    });
+
+    const output = await executeElementHippocampusIntent(
+      inport,
+      { requestId: "ctx-request-3" },
+      {
+        transport,
+      },
+    );
+
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(output._content.ok).toBe(true);
+    expect(output._content.deploymentId).toBe("f8d8d870-8815-5e5a-971f-d3c0bad1d504");
+  });
+
+  it("falls back to execution-context elementNodeId when instanceId is omitted", async () => {
+    const inport = readFixture("inport.intent.query.success.json");
+    delete inport._content.instanceId;
+    const leafServerResponse = readFixture("leaf-server.response.query.success.json");
+
+    const transport = vi.fn(async ({ intent }) => {
+      expect(intent).toMatchObject({
+        operation: "query",
+        deploymentId: "f8d8d870-8815-5e5a-971f-d3c0bad1d504",
+        instanceId: "ea6598d2-63b6-40ae-a161-2d6311a5bd6c",
+        method: "POST",
+        path: "/api/hippocampus/ea6598d2-63b6-40ae-a161-2d6311a5bd6c/records/notes:query",
+      });
+      return leafServerResponse;
+    });
+
+    const output = await executeElementHippocampusIntent(
+      inport,
+      {
+        requestId: "ctx-request-4",
+        elementNodeId: "ea6598d2-63b6-40ae-a161-2d6311a5bd6c",
+      },
+      {
+        transport,
+      },
+    );
+
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(output._content.ok).toBe(true);
+  });
+
   it("derives idempotency metadata from alpha command intents", () => {
     const inport = readFixture("inport.intent.command.success.json");
 
