@@ -79,7 +79,7 @@ const getGenericSpellFallbackLabelMetadata = ({ etaTree, nodelambda } = {}) => {
   if (!Array.isArray(nodelambda) || nodelambda.length === 0) return {};
 
   const hostDomain = etaTree?.domain;
-  const leafgraphLambdaSources = nodelambda
+  const lambdaLeafgraphSources = nodelambda
     .map((lambdaNodeuuid) => {
       const leafnode_data =
         etaTree?.leafgraph?.graph?.dataflow?.getNodeAttributes(lambdaNodeuuid)?.leafnode?.data;
@@ -103,10 +103,10 @@ const getGenericSpellFallbackLabelMetadata = ({ etaTree, nodelambda } = {}) => {
     })
     .filter((_) => _);
 
-  if (leafgraphLambdaSources.length === 0) return {};
+  if (lambdaLeafgraphSources.length === 0) return {};
 
   const lambdaLeafgraphNamespaces = [
-    ...new Set(leafgraphLambdaSources.map((_) => _.namespace)),
+    ...new Set(lambdaLeafgraphSources.map((_) => _.namespace)),
   ].filter((_namespace) => typeof _namespace === "string" && _namespace.length > 0);
 
   return {
