@@ -48,6 +48,73 @@ const _lookupSpellBook =
 const GENERIC_SPELL_BNAME = "cast-spell";
 const GENERIC_SPELLNAME = "{*}";
 
+const normalizeText = (value) => (typeof value === "string" ? value.trim() : "");
+
+const normalizeLeafgraphNamespace = ({ hostDomain, graphaddrstr, domain, appid } = {}) => {
+  const host_domain = normalizeText(hostDomain).toLowerCase();
+  const graph_addr = normalizeText(graphaddrstr);
+  const graph_domain = normalizeText(domain).toLowerCase();
+  const graph_appid = normalizeText(appid);
+
+  if (graph_addr) {
+    if (graph_addr.startsWith("/")) {
+      const local_appid = graph_addr.slice(1).trim();
+      if (host_domain && local_appid) return `${host_domain}/${local_appid}`;
+    } else {
+      const slash_index = graph_addr.indexOf("/");
+      if (slash_index > 0 && slash_index < graph_addr.length - 1) {
+        const addr_domain = graph_addr.slice(0, slash_index).trim().toLowerCase();
+        const addr_appid = graph_addr.slice(slash_index + 1).trim();
+        if (addr_domain && addr_appid) return `${addr_domain}/${addr_appid}`;
+      }
+    }
+  }
+
+  if (graph_domain && graph_appid) return `${graph_domain}/${graph_appid}`;
+  if (host_domain && graph_appid) return `${host_domain}/${graph_appid}`;
+  return undefined;
+};
+
+const getGenericSpellFallbackLabelMetadata = ({ etaTree, nodelambda } = {}) => {
+  if (!Array.isArray(nodelambda) || nodelambda.length === 0) return {};
+
+  const hostDomain = etaTree?.domain;
+  const leafgraphLambdaSources = nodelambda
+    .map((lambdaNodeuuid) => {
+      const leafnode_data =
+        etaTree?.leafgraph?.graph?.dataflow?.getNodeAttributes(lambdaNodeuuid)?.leafnode?.data;
+      const leaf_logic = leafnode_data?.leaf?.logic;
+      if (leaf_logic?.type !== "leafgraph") return undefined;
+
+      const leafgraph_args = leaf_logic?.args || {};
+      const graphaddrstr = normalizeText(leafgraph_args.graphaddrstr) || undefined;
+      const namespace = normalizeLeafgraphNamespace({
+        hostDomain,
+        graphaddrstr,
+        domain: leafgraph_args.domain,
+        appid: leafgraph_args.appid,
+      });
+
+      return {
+        nodeuuid: lambdaNodeuuid,
+        namespace,
+        graphaddrstr,
+      };
+    })
+    .filter((_) => _);
+
+  if (leafgraphLambdaSources.length === 0) return {};
+
+  const lambdaLeafgraphNamespaces = [
+    ...new Set(leafgraphLambdaSources.map((_) => _.namespace)),
+  ].filter((_namespace) => typeof _namespace === "string" && _namespace.length > 0);
+
+  return {
+    lambdaLeafgraphSources,
+    lambdaLeafgraphNamespaces,
+  };
+};
+
 const toGenericSpellFallbackError = ({
   spellname,
   refnode,
@@ -55,6 +122,9 @@ const toGenericSpellFallbackError = ({
   error,
   triggerInput,
   emittedInput,
+  runtimeSpellname,
+  runtimeRefnode,
+  metadata,
 }) => {
   const normalizedError =
     error === undefined
@@ -64,16 +134,34 @@ const toGenericSpellFallbackError = ({
           message: error?.message ? `${error.message}` : `${error}`,
         };
 
-  return doBottle("error", {
+  const labelMetadata = {
     code: "generic_spell_fallback",
-    message: "generic spell fallback emitted an error bottle",
     spellname,
     refnode,
     reason,
-    triggerInput,
-    emittedInput,
-    error: normalizedError,
-  });
+    runtimeSpellname,
+    runtimeRefnode,
+    ...(metadata || {}),
+  };
+
+  return doBottle(
+    "error",
+    {
+      code: "generic_spell_fallback",
+      message: "generic spell fallback emitted an error bottle",
+      spellname,
+      refnode,
+      reason,
+      runtimeSpellname,
+      runtimeRefnode,
+      triggerInput,
+      emittedInput,
+      error: normalizedError,
+    },
+    {
+      metadata: labelMetadata,
+    },
+  );
 };
 
 const toGenericSpellFallbackTuple = ({
@@ -84,6 +172,9 @@ const toGenericSpellFallbackTuple = ({
   error,
   triggerInput,
   emittedInput,
+  runtimeSpellname,
+  runtimeRefnode,
+  metadata,
 }) => {
   return [
     combinedIn[0],
@@ -94,6 +185,9 @@ const toGenericSpellFallbackTuple = ({
       error,
       triggerInput,
       emittedInput,
+      runtimeSpellname,
+      runtimeRefnode,
+      metadata,
     }),
   ];
 };
@@ -115,6 +209,10 @@ const _leafspell = {
       // look up the spell from spellbooks in the order of precedence
       const spellname = refnodedata.leaf.logic.args.spellname;
       const is_generic_spell = spellname === GENERIC_SPELLNAME;
+      const genericSpellFallbackMetadata = getGenericSpellFallbackLabelMetadata({
+        etaTree: lambdactrl.gos.etaTree,
+        nodelambda,
+      });
       if (spellname === "menudata") console.log("start debugging");
       let _contextuallambda = contextuallambda;
 
@@ -575,6 +673,9 @@ const _leafspell = {
                             reason: "runtime_spell_unresolved",
                             triggerInput: _data_in,
                             emittedInput: spell_input,
+                            runtimeSpellname: runtime_spellname,
+                            runtimeRefnode: spell_nodeuuid,
+                            metadata: genericSpellFallbackMetadata,
                           }),
                         );
                       } else {
@@ -597,6 +698,9 @@ const _leafspell = {
                                 error: emsg,
                                 triggerInput: _data_in,
                                 emittedInput: spell_input,
+                                runtimeSpellname: runtime_spellname,
+                                runtimeRefnode: spell_nodeuuid,
+                                metadata: genericSpellFallbackMetadata,
                               }),
                             );
                           },
@@ -624,6 +728,9 @@ const _leafspell = {
                           error,
                           triggerInput: _data_in,
                           emittedInput: spell_input,
+                          runtimeSpellname: runtime_spellname,
+                          runtimeRefnode: spell_nodeuuid,
+                          metadata: genericSpellFallbackMetadata,
                         }),
                       );
                     });
