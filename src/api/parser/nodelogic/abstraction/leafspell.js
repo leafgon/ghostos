@@ -4,6 +4,7 @@ import { map, share, switchMap, withLatestFrom, finalize } from "rxjs/operators"
 import { Subject, merge } from "rxjs";
 import { driveDataflowByCtrlflow, timeoutPromise } from "../../leaf.js";
 import { isBottle } from "../../predicates.js";
+import { doBottle } from "../datautils/bottling.js";
 
 const getEtaContext = (_lambda_obj) => {
   const keywordlist = Object.keys(_lambda_obj)
@@ -46,6 +47,56 @@ const _lookupSpellBook =
 
 const GENERIC_SPELL_BNAME = "cast-spell";
 const GENERIC_SPELLNAME = "{*}";
+
+const toGenericSpellFallbackError = ({
+  spellname,
+  refnode,
+  reason,
+  error,
+  triggerInput,
+  emittedInput,
+}) => {
+  const normalizedError =
+    error === undefined
+      ? undefined
+      : {
+          name: error?.name,
+          message: error?.message ? `${error.message}` : `${error}`,
+        };
+
+  return doBottle("error", {
+    code: "generic_spell_fallback",
+    message: "generic spell fallback emitted an error bottle",
+    spellname,
+    refnode,
+    reason,
+    triggerInput,
+    emittedInput,
+    error: normalizedError,
+  });
+};
+
+const toGenericSpellFallbackTuple = ({
+  combinedIn,
+  spellname,
+  refnode,
+  reason,
+  error,
+  triggerInput,
+  emittedInput,
+}) => {
+  return [
+    combinedIn[0],
+    toGenericSpellFallbackError({
+      spellname,
+      refnode,
+      reason,
+      error,
+      triggerInput,
+      emittedInput,
+    }),
+  ];
+};
 
 const _leafspell = {
   dataflow:
@@ -516,8 +567,16 @@ const _leafspell = {
                   _executeSpell(spellprom, relay_ctrl$, relay_data$)
                     .then((spell_output$) => {
                       if (spell_output$ === undefined) {
-                        // fail-open passthrough for unresolved runtime spell references.
-                        spell_output_relay$.next(_combined_in);
+                        spell_output_relay$.next(
+                          toGenericSpellFallbackTuple({
+                            combinedIn: _combined_in,
+                            spellname,
+                            refnode,
+                            reason: "runtime_spell_unresolved",
+                            triggerInput: _data_in,
+                            emittedInput: spell_input,
+                          }),
+                        );
                       } else {
                         spell_subscription = spell_output$.subscribe({
                           next: (_next_out) => {
@@ -529,7 +588,17 @@ const _leafspell = {
                               `leafspell ${spellname} had an error in the subscription stream: ${emsg}`,
                             );
                             spell_subscription = undefined;
-                            spell_output_relay$.next(_combined_in);
+                            spell_output_relay$.next(
+                              toGenericSpellFallbackTuple({
+                                combinedIn: _combined_in,
+                                spellname,
+                                refnode,
+                                reason: "runtime_spell_stream_error",
+                                error: emsg,
+                                triggerInput: _data_in,
+                                emittedInput: spell_input,
+                              }),
+                            );
                           },
                           complete: () => {
                             console.log(`leafspell ${spellname} subscription completed.`);
@@ -546,7 +615,17 @@ const _leafspell = {
                     .catch((error) => {
                       console.error(`leafspell ${spellname} execution failed:`, error);
                       spell_subscription = undefined;
-                      spell_output_relay$.next(_combined_in);
+                      spell_output_relay$.next(
+                        toGenericSpellFallbackTuple({
+                          combinedIn: _combined_in,
+                          spellname,
+                          refnode,
+                          reason: "runtime_spell_execution_error",
+                          error,
+                          triggerInput: _data_in,
+                          emittedInput: spell_input,
+                        }),
+                      );
                     });
                 } else {
                   relay_data$.next(_combined_in[1]);
