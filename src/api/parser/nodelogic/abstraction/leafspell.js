@@ -735,8 +735,25 @@ const _leafspell = {
                       );
                     });
                 } else {
-                  relay_data$.next(_combined_in[1]);
-                  relay_ctrl$.next(_combined_in[0]);
+                  const runtime_target_node_type = refnodedata?.leaf?.logic?.type;
+                  setTimeout(() => {
+                    spell_output_relay$.next(
+                      toGenericSpellFallbackTuple({
+                        combinedIn: _combined_in,
+                        spellname,
+                        refnode,
+                        reason: "runtime_spell_target_invalid",
+                        triggerInput: _data_in,
+                        emittedInput: spell_input,
+                        runtimeSpellname: refnodedata?.leaf?.logic?.args?.spellname,
+                        runtimeRefnode: spell_nodeuuid,
+                        metadata: {
+                          ...genericSpellFallbackMetadata,
+                          runtimeTargetNodeType: runtime_target_node_type,
+                        },
+                      }),
+                    );
+                  }, 1);
                 }
               } else {
                 relay_data$.next(_combined_in[1]);
