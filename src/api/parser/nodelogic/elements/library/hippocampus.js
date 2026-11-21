@@ -557,8 +557,7 @@ const normalizeAlphaIntentCommand = (raw = {}, { label } = {}) => {
     intentId: assertBoundedId(raw.intentId, "intentId"),
     operation,
     deploymentId: assertUuid(raw.deploymentId, "deploymentId"),
-    instanceId:
-      raw.instanceId === undefined ? undefined : assertUuid(raw.instanceId, "instanceId"),
+    instanceId: raw.instanceId === undefined ? undefined : assertUuid(raw.instanceId, "instanceId"),
     options: {
       idempotencyKey:
         options.idempotencyKey === undefined
