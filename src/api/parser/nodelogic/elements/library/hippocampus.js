@@ -6,7 +6,28 @@ import { ElemCacheKeyLUT } from "./index.js";
 import { doUnbottle } from "../../datautils/bottling.js";
 import { createSafeLogger } from "../../../runtime/safeLogging.js";
 
-const runtimeLogger = createSafeLogger({ component: "leafelement.hippocampus" });
+const isTruthyFlag = (value) => {
+  if (value === true || value === 1) {
+    return true;
+  }
+  if (typeof value !== "string") {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+};
+
+const isHippocampusDebugEnabled = () => {
+  return (
+    isTruthyFlag(globalThis.LEAFGON_SAFE_LOGGING) ||
+    isTruthyFlag(globalThis.LEAFGON_HIPPOCAMPUS_DEBUG)
+  );
+};
+
+const runtimeLogger = createSafeLogger({
+  component: "leafelement.hippocampus",
+  enabled: isHippocampusDebugEnabled,
+});
 
 const INTENT_SCHEMA = "hippocampus-element-intent.v1";
 const OUTCOME_SCHEMA = "hippocampus-element-outcome.v1";
@@ -245,6 +266,105 @@ const maybeTrimString = (value) => {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const summarizeValueShape = (value, depth = 0) => {
+  if (value === null) {
+    return "null";
+  }
+  if (value === undefined) {
+    return "undefined";
+  }
+  if (typeof value === "string") {
+    return "string";
+  }
+  if (typeof value === "number") {
+    return "number";
+  }
+  if (typeof value === "boolean") {
+    return "boolean";
+  }
+  if (Array.isArray(value)) {
+    const itemTypes = [
+      ...new Set(value.slice(0, 8).map((item) => summarizeValueShape(item, depth + 1))),
+    ];
+    return {
+      type: "array",
+      length: value.length,
+      itemTypes,
+    };
+  }
+  if (isPlainObject(value)) {
+    const keys = Object.keys(value);
+    const summarizedKeys = keys.slice(0, 20);
+    const keyTypes = Object.fromEntries(
+      summarizedKeys.map((key) => {
+        const nested = value[key];
+        return [key, depth < 1 ? summarizeValueShape(nested, depth + 1) : typeof nested];
+      }),
+    );
+    return {
+      type: "object",
+      keyCount: keys.length,
+      keys: summarizedKeys,
+      keyTypes,
+    };
+  }
+  return typeof value;
+};
+
+const summarizeIntentForDebug = (intent) => {
+  if (!isPlainObject(intent)) {
+    return {
+      type: "non-object",
+      shape: summarizeValueShape(intent),
+    };
+  }
+
+  const payload = Object.hasOwn(intent, "payload") ? intent.payload : intent.input;
+
+  return {
+    schemaVersion: maybeTrimString(intent.schemaVersion ?? intent.schema),
+    intentId: maybeTrimString(intent.intentId),
+    operation: maybeTrimString(intent.operation),
+    operationRef: maybeTrimString(intent.operationRef),
+    deploymentId: maybeTrimString(intent.deploymentId),
+    instanceId: maybeTrimString(intent.instanceId),
+    method: maybeTrimString(intent.method),
+    path: maybeTrimString(intent.path),
+    table: maybeTrimString(intent.table),
+    embeddingName: maybeTrimString(intent.embeddingName),
+    commandName: maybeTrimString(intent.commandName),
+    hasPayload: payload !== undefined,
+    payloadShape: summarizeValueShape(payload),
+    optionsShape: summarizeValueShape(intent.options),
+  };
+};
+
+const resolveDebugRequestId = ({
+  executionContext = {},
+  transportIntent = {},
+  responseBody,
+} = {}) => {
+  return (
+    maybeTrimString(responseBody?.request_id) ??
+    maybeTrimString(executionContext.requestId) ??
+    maybeTrimString(transportIntent.intentId) ??
+    "request-unknown"
+  );
+};
+
+const resolveResponseStatusCode = (response) => {
+  if (response && typeof response.status === "number") {
+    return response.status;
+  }
+  if (isPlainObject(response) && typeof response.httpStatus === "number") {
+    return response.httpStatus;
+  }
+  if (isPlainObject(response) && typeof response.statusCode === "number") {
+    return response.statusCode;
+  }
+  return undefined;
 };
 
 const assertBoundedId = (value, field) => {
@@ -1142,6 +1262,16 @@ const executeHippocampusIntentCommand = async ({
     : normalizedCommand;
 
   try {
+    runtimeLogger.info({
+      event: "hippocampus_transport_request",
+      requestId: resolveDebugRequestId({
+        executionContext,
+        transportIntent,
+      }),
+      intent: summarizeIntentForDebug(transportIntent),
+      timeoutMs,
+    });
+
     const response = await executeIntent({
       intent: transportIntent,
       command: transportIntent,
@@ -1154,6 +1284,17 @@ const executeHippocampusIntentCommand = async ({
     if (isAlphaIntentCommand(normalizedCommand)) {
       if (response && typeof response.json === "function") {
         const jsonBody = await response.json();
+        runtimeLogger.info({
+          event: "hippocampus_transport_response",
+          requestId: resolveDebugRequestId({
+            executionContext,
+            transportIntent,
+            responseBody: jsonBody,
+          }),
+          intent: summarizeIntentForDebug(transportIntent),
+          statusCode: resolveResponseStatusCode(response),
+          responseBodyShape: summarizeValueShape(jsonBody),
+        });
         return normalizeAlphaTransportOutcome({
           command: normalizedCommand,
           response,
@@ -1161,6 +1302,16 @@ const executeHippocampusIntentCommand = async ({
           jsonBody,
         });
       }
+      runtimeLogger.info({
+        event: "hippocampus_transport_response",
+        requestId: resolveDebugRequestId({
+          executionContext,
+          transportIntent,
+        }),
+        intent: summarizeIntentForDebug(transportIntent),
+        statusCode: resolveResponseStatusCode(response),
+        responseBodyShape: summarizeValueShape(response),
+      });
       return normalizeAlphaTransportOutcome({
         command: normalizedCommand,
         response,
@@ -1170,11 +1321,44 @@ const executeHippocampusIntentCommand = async ({
 
     if (response && typeof response.json === "function") {
       const jsonBody = await response.json();
+      runtimeLogger.info({
+        event: "hippocampus_transport_response",
+        requestId: resolveDebugRequestId({
+          executionContext,
+          transportIntent,
+          responseBody: jsonBody,
+        }),
+        intent: summarizeIntentForDebug(transportIntent),
+        statusCode: resolveResponseStatusCode(response),
+        responseBodyShape: summarizeValueShape(jsonBody),
+      });
       return normalizeTransportOutcome(jsonBody, normalizedCommand, executionContext);
     }
+    runtimeLogger.info({
+      event: "hippocampus_transport_response",
+      requestId: resolveDebugRequestId({
+        executionContext,
+        transportIntent,
+      }),
+      intent: summarizeIntentForDebug(transportIntent),
+      statusCode: resolveResponseStatusCode(response),
+      responseBodyShape: summarizeValueShape(response),
+    });
     return normalizeTransportOutcome(response, normalizedCommand, executionContext);
   } catch (error) {
-    throw toRuntimeError(error);
+    const runtimeError = toRuntimeError(error);
+    runtimeLogger.error({
+      event: "hippocampus_transport_error",
+      requestId: resolveDebugRequestId({
+        executionContext,
+        transportIntent,
+      }),
+      intent: summarizeIntentForDebug(transportIntent),
+      statusCode: runtimeError?.details?.status,
+      runtimeError,
+      error,
+    });
+    throw runtimeError;
   }
 };
 
@@ -1465,6 +1649,8 @@ const executeElementHippocampusIntent = async (rawIntent, executionContext, conf
       event: "hippocampus_intent_failed",
       error,
       elementNodeId: executionContext?.elementNodeId,
+      requestId: maybeTrimString(executionContext?.requestId),
+      intent: summarizeIntentForDebug(rawIntent),
     });
     const normalizedCommand = (() => {
       try {
