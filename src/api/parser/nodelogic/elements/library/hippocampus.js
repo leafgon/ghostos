@@ -407,6 +407,14 @@ const assertUuid = (value, field) => {
   return normalized;
 };
 
+const maybeUuid = (value) => {
+  const normalized = maybeTrimString(value);
+  if (!normalized || !UUID_RE.test(normalized)) {
+    return undefined;
+  }
+  return normalized;
+};
+
 const assertTableName = (value, field) => {
   const normalized = maybeTrimString(value);
   if (!normalized || normalized.length > 128 || !TABLE_NAME_RE.test(normalized)) {
@@ -676,7 +684,8 @@ const normalizeAlphaIntentCommand = (raw = {}, { label } = {}) => {
     schemaVersion,
     intentId: assertBoundedId(raw.intentId, "intentId"),
     operation,
-    deploymentId: assertUuid(raw.deploymentId, "deploymentId"),
+    deploymentId:
+      raw.deploymentId === undefined ? undefined : assertUuid(raw.deploymentId, "deploymentId"),
     instanceId: raw.instanceId === undefined ? undefined : assertUuid(raw.instanceId, "instanceId"),
     options: {
       idempotencyKey:
@@ -936,21 +945,57 @@ const normalizeAlphaTransportResponse = ({ response, jsonBody } = {}) => {
 };
 
 const resolveAlphaProxyInstanceId = (command, executionContext = {}) => {
+  const runtimeInstanceId = maybeUuid(executionContext.elementNodeId);
+  if (runtimeInstanceId) {
+    return runtimeInstanceId;
+  }
+
+  const runtimeDeploymentId = maybeUuid(executionContext.deploymentId);
+  if (runtimeDeploymentId) {
+    return runtimeDeploymentId;
+  }
+
   const commandInstanceId = maybeTrimString(command.instanceId);
   if (commandInstanceId && UUID_RE.test(commandInstanceId)) {
     return commandInstanceId;
   }
 
-  const runtimeInstanceId = maybeTrimString(executionContext.elementNodeId);
-  if (runtimeInstanceId && UUID_RE.test(runtimeInstanceId)) {
+  return command.deploymentId;
+};
+
+const resolveAlphaDeploymentId = (command, executionContext = {}) => {
+  const runtimeInstanceId = maybeUuid(executionContext.elementNodeId);
+  if (runtimeInstanceId) {
     return runtimeInstanceId;
   }
 
-  return command.deploymentId;
+  const runtimeDeploymentId = maybeUuid(executionContext.deploymentId);
+  if (runtimeDeploymentId) {
+    return runtimeDeploymentId;
+  }
+
+  const commandDeploymentId = maybeUuid(command.deploymentId);
+  if (commandDeploymentId) {
+    return commandDeploymentId;
+  }
+
+  return maybeUuid(command.instanceId);
 };
 
 const toAlphaTransportIntent = (command, executionContext = {}) => {
   const proxyInstanceId = resolveAlphaProxyInstanceId(command, executionContext);
+  const deploymentId = resolveAlphaDeploymentId(command, executionContext);
+  if (!proxyInstanceId || !deploymentId) {
+    throw new HippocampusRuntimeError("configuration-invalid", undefined, {
+      details: {
+        field: "transport.ids",
+        value: {
+          proxyInstanceId,
+          deploymentId,
+        },
+      },
+    });
+  }
   const basePath = `/api/hippocampus/${encodeURIComponent(proxyInstanceId)}`;
 
   if (command.operation === "configure") {
@@ -958,10 +1003,11 @@ const toAlphaTransportIntent = (command, executionContext = {}) => {
       schemaVersion: command.schemaVersion,
       intentId: command.intentId,
       operation: command.operation,
-      deploymentId: command.deploymentId,
+      deploymentId,
       instanceId: proxyInstanceId,
+      inputLabel: command.inputLabel,
       method: "PUT",
-      path: `/internal/v2/deployments/${encodeURIComponent(command.deploymentId)}/configuration`,
+      path: `/internal/v2/deployments/${encodeURIComponent(deploymentId)}/configuration`,
       payload: command.payload,
       options: command.options,
     };
@@ -972,8 +1018,9 @@ const toAlphaTransportIntent = (command, executionContext = {}) => {
       schemaVersion: command.schemaVersion,
       intentId: command.intentId,
       operation: command.operation,
-      deploymentId: command.deploymentId,
+      deploymentId,
       instanceId: proxyInstanceId,
+      inputLabel: command.inputLabel,
       method: "GET",
       path: `${basePath}/records/${encodeURIComponent(command.table)}/${encodeURIComponent(command.recordId)}`,
       options: command.options,
@@ -985,8 +1032,9 @@ const toAlphaTransportIntent = (command, executionContext = {}) => {
       schemaVersion: command.schemaVersion,
       intentId: command.intentId,
       operation: command.operation,
-      deploymentId: command.deploymentId,
+      deploymentId,
       instanceId: proxyInstanceId,
+      inputLabel: command.inputLabel,
       method: "POST",
       path: `${basePath}/records/${encodeURIComponent(command.table)}:query`,
       payload: command.payload,
@@ -999,8 +1047,9 @@ const toAlphaTransportIntent = (command, executionContext = {}) => {
       schemaVersion: command.schemaVersion,
       intentId: command.intentId,
       operation: command.operation,
-      deploymentId: command.deploymentId,
+      deploymentId,
       instanceId: proxyInstanceId,
+      inputLabel: command.inputLabel,
       method: "POST",
       path: `${basePath}/search/${encodeURIComponent(command.embeddingName)}`,
       payload: command.payload,
@@ -1013,8 +1062,9 @@ const toAlphaTransportIntent = (command, executionContext = {}) => {
       schemaVersion: command.schemaVersion,
       intentId: command.intentId,
       operation: command.operation,
-      deploymentId: command.deploymentId,
+      deploymentId,
       instanceId: proxyInstanceId,
+      inputLabel: command.inputLabel,
       method: "POST",
       path: `${basePath}/commands/${encodeURIComponent(command.commandName)}:execute`,
       payload: command.payload,
@@ -1238,6 +1288,26 @@ const toRuntimeError = (error) => {
   });
 };
 
+const shouldRetryTransportWithProxyDeploymentId = ({
+  error,
+  command,
+  transportIntent,
+} = {}) => {
+  if (!isAlphaIntentCommand(command)) {
+    return false;
+  }
+  if (command.operation === "configure") {
+    return false;
+  }
+  if (maybeTrimString(error?.code) !== "invalid-transport-intent") {
+    return false;
+  }
+
+  const instanceId = maybeTrimString(transportIntent?.instanceId);
+  const deploymentId = maybeTrimString(transportIntent?.deploymentId);
+  return Boolean(instanceId && deploymentId && instanceId !== deploymentId);
+};
+
 const executeHippocampusIntentCommand = async ({
   command,
   transport,
@@ -1260,6 +1330,7 @@ const executeHippocampusIntentCommand = async ({
   const transportIntent = isAlphaIntentCommand(normalizedCommand)
     ? toAlphaTransportIntent(normalizedCommand, executionContext)
     : normalizedCommand;
+  let effectiveTransportIntent = transportIntent;
 
   try {
     runtimeLogger.info({
@@ -1272,14 +1343,48 @@ const executeHippocampusIntentCommand = async ({
       timeoutMs,
     });
 
-    const response = await executeIntent({
-      intent: transportIntent,
-      command: transportIntent,
-      normalizedIntent: normalizedCommand,
-      timeoutMs,
-      executionContext,
-      config,
-    });
+    const invokeTransport = async (intentPayload) => {
+      return executeIntent({
+        intent: intentPayload,
+        command: intentPayload,
+        normalizedIntent: normalizedCommand,
+        timeoutMs,
+        executionContext,
+        config,
+      });
+    };
+
+    let response;
+    try {
+      response = await invokeTransport(effectiveTransportIntent);
+    } catch (error) {
+      if (
+        shouldRetryTransportWithProxyDeploymentId({
+          error,
+          command: normalizedCommand,
+          transportIntent: effectiveTransportIntent,
+        })
+      ) {
+        effectiveTransportIntent = {
+          ...effectiveTransportIntent,
+          deploymentId: effectiveTransportIntent.instanceId,
+        };
+
+        runtimeLogger.info({
+          event: "hippocampus_transport_retry_proxy_deployment_id",
+          requestId: resolveDebugRequestId({
+            executionContext,
+            transportIntent: effectiveTransportIntent,
+          }),
+          intent: summarizeIntentForDebug(effectiveTransportIntent),
+          timeoutMs,
+        });
+
+        response = await invokeTransport(effectiveTransportIntent);
+      } else {
+        throw error;
+      }
+    }
 
     if (isAlphaIntentCommand(normalizedCommand)) {
       if (response && typeof response.json === "function") {
@@ -1288,15 +1393,15 @@ const executeHippocampusIntentCommand = async ({
           event: "hippocampus_transport_response",
           requestId: resolveDebugRequestId({
             executionContext,
-            transportIntent,
+            transportIntent: effectiveTransportIntent,
             responseBody: jsonBody,
           }),
-          intent: summarizeIntentForDebug(transportIntent),
+          intent: summarizeIntentForDebug(effectiveTransportIntent),
           statusCode: resolveResponseStatusCode(response),
           responseBodyShape: summarizeValueShape(jsonBody),
         });
         return normalizeAlphaTransportOutcome({
-          command: normalizedCommand,
+          command: effectiveTransportIntent,
           response,
           executionContext,
           jsonBody,
@@ -1306,14 +1411,14 @@ const executeHippocampusIntentCommand = async ({
         event: "hippocampus_transport_response",
         requestId: resolveDebugRequestId({
           executionContext,
-          transportIntent,
+          transportIntent: effectiveTransportIntent,
         }),
-        intent: summarizeIntentForDebug(transportIntent),
+        intent: summarizeIntentForDebug(effectiveTransportIntent),
         statusCode: resolveResponseStatusCode(response),
         responseBodyShape: summarizeValueShape(response),
       });
       return normalizeAlphaTransportOutcome({
-        command: normalizedCommand,
+        command: effectiveTransportIntent,
         response,
         executionContext,
       });
@@ -1325,10 +1430,10 @@ const executeHippocampusIntentCommand = async ({
         event: "hippocampus_transport_response",
         requestId: resolveDebugRequestId({
           executionContext,
-          transportIntent,
+          transportIntent: effectiveTransportIntent,
           responseBody: jsonBody,
         }),
-        intent: summarizeIntentForDebug(transportIntent),
+        intent: summarizeIntentForDebug(effectiveTransportIntent),
         statusCode: resolveResponseStatusCode(response),
         responseBodyShape: summarizeValueShape(jsonBody),
       });
@@ -1338,9 +1443,9 @@ const executeHippocampusIntentCommand = async ({
       event: "hippocampus_transport_response",
       requestId: resolveDebugRequestId({
         executionContext,
-        transportIntent,
+        transportIntent: effectiveTransportIntent,
       }),
-      intent: summarizeIntentForDebug(transportIntent),
+      intent: summarizeIntentForDebug(effectiveTransportIntent),
       statusCode: resolveResponseStatusCode(response),
       responseBodyShape: summarizeValueShape(response),
     });
@@ -1351,9 +1456,9 @@ const executeHippocampusIntentCommand = async ({
       event: "hippocampus_transport_error",
       requestId: resolveDebugRequestId({
         executionContext,
-        transportIntent,
+        transportIntent: effectiveTransportIntent,
       }),
-      intent: summarizeIntentForDebug(transportIntent),
+      intent: summarizeIntentForDebug(effectiveTransportIntent),
       statusCode: runtimeError?.details?.status,
       runtimeError,
       error,
