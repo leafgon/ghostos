@@ -219,6 +219,18 @@ export const LEAFELEMENT_ADAPTER_REGISTRY: Readonly<{
             post: (data_in: any) => any;
         };
     };
+    hippocampus: (streamCache: any) => {
+        leaflogic: (input$objArr: any, controlflow$obj: any) => {
+            _stream: import("rxjs").Observable<any>;
+            _control: {
+                _stream: any;
+            };
+        };
+        datalogic: {
+            pre: (dataIn: any) => any;
+            post: (dataIn: any) => any;
+        };
+    };
     blob: (streamCache: any) => {
         leaflogic: (input$objArr: any, controlflow$obj: any) => {
             _stream: import("rxjs").Observable<any>;

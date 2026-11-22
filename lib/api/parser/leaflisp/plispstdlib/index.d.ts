@@ -93,7 +93,7 @@ export class PLNumber {
     copy(): PLNumber;
     debugTypeOf(): PLString;
     isInteger(): PLBool;
-    toJSON(): string;
+    toJSON(): number;
 }
 export namespace PLNumber {
     let kind_4: string;
