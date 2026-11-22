@@ -1288,11 +1288,7 @@ const toRuntimeError = (error) => {
   });
 };
 
-const shouldRetryTransportWithProxyDeploymentId = ({
-  error,
-  command,
-  transportIntent,
-} = {}) => {
+const shouldRetryTransportWithProxyDeploymentId = ({ error, command, transportIntent } = {}) => {
   if (!isAlphaIntentCommand(command)) {
     return false;
   }
