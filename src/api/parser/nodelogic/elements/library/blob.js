@@ -465,14 +465,18 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       if (
         (isPatch && (hasInlineJson || !isPatchObject)) ||
         (hasInlineJson && bottlecontent.inlineJson === undefined) ||
-        ["payloadRef", "contentHash", "contentLength"].some((key) => Object.hasOwn(bottlecontent, key)) ||
-        (bottlecontent.contentType !== undefined && bottlecontent.contentType !== "application/json")
+        ["payloadRef", "contentHash", "contentLength"].some((key) =>
+          Object.hasOwn(bottlecontent, key),
+        ) ||
+        (bottlecontent.contentType !== undefined &&
+          bottlecontent.contentType !== "application/json")
       ) {
         throw new BlobRuntimeError("invalid_blob_bottle");
       }
       if (
         operation !== "create" &&
-        (!Number.isSafeInteger(bottlecontent.expectedAssetRevision) || bottlecontent.expectedAssetRevision < 1)
+        (!Number.isSafeInteger(bottlecontent.expectedAssetRevision) ||
+          bottlecontent.expectedAssetRevision < 1)
       ) {
         throw new BlobRuntimeError("asset_revision_mismatch");
       }
@@ -484,13 +488,16 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
         expectedAssetRevision: bottlecontent.expectedAssetRevision,
         idempotencyKey: normalizeIdempotencyKey(
           bottlecontent.idempotencyKey ??
-          executionContext.blobOperationIdFactory?.() ??
-          defaultBlobOperationIdFactory(),
+            executionContext.blobOperationIdFactory?.() ??
+            defaultBlobOperationIdFactory(),
         ),
         description: bottlecontent.description,
         annotations: bottlecontent.annotations,
       });
-      return normalizeBlobMetadata(stored, { blobElementId: bottlecontent.blobElementId, objectId });
+      return normalizeBlobMetadata(stored, {
+        blobElementId: bottlecontent.blobElementId,
+        objectId,
+      });
     }
     const contentType = normalizeContentType(bottlecontent.contentType);
     const contentHash = assertHash(bottlecontent.contentHash);
@@ -923,12 +930,22 @@ const createLeafServerBlobStorageAdapter = ({
     },
     putInlineJson: (input) => {
       const { operation, expectedAssetRevision, correlationId, description, annotations } = input;
-      const value = operation === "merge-json"
-        ? { jsonMergePatch: input.jsonMergePatch }
-        : { inlineJson: input.inlineJson };
-      return putObject(input, {
-        operation, expectedAssetRevision, correlationId, description, annotations, ...value,
-      }, resolveMutationId(input));
+      const value =
+        operation === "merge-json"
+          ? { jsonMergePatch: input.jsonMergePatch }
+          : { inlineJson: input.inlineJson };
+      return putObject(
+        input,
+        {
+          operation,
+          expectedAssetRevision,
+          correlationId,
+          description,
+          annotations,
+          ...value,
+        },
+        resolveMutationId(input),
+      );
     },
     getObject: async (input) => {
       const response = await requestLeafServerBlobStorage({

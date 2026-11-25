@@ -975,10 +975,14 @@ it("sends raw JSON create and merge requests and requests inline fetch explicitl
     .fn()
     .mockResolvedValueOnce(jsonResponse({ body: { ...metadata, assetRevision: 1 } }))
     .mockResolvedValueOnce(jsonResponse({ body: metadata }))
-    .mockResolvedValueOnce(jsonResponse({
-      body: { ...metadata, inlineJson: { records: ["회의"], details: { add: false } } },
-    }));
-  const context = createContext({ blobStorageAdapter: createLeafServerBlobStorageAdapter({ fetchImpl }) });
+    .mockResolvedValueOnce(
+      jsonResponse({
+        body: { ...metadata, inlineJson: { records: ["회의"], details: { add: false } } },
+      }),
+    );
+  const context = createContext({
+    blobStorageAdapter: createLeafServerBlobStorageAdapter({ fetchImpl }),
+  });
   const store = {
     schemaVersion: STORE_SCHEMA_VERSION,
     blobElementId: "blob-node-uuid",
@@ -986,22 +990,33 @@ it("sends raw JSON create and merge requests and requests inline fetch explicitl
   };
   const created = await executeBlobStoreBottle({ ...store, inlineJson: document }, context);
   expect(created.assetRevision).toBe(1);
-  const updated = await executeBlobStoreBottle({
-    ...store,
-    operation: "merge-json",
-    expectedAssetRevision: 1,
-    idempotencyKey: "test-inline-update",
-    jsonMergePatch: patch,
-  }, context);
+  const updated = await executeBlobStoreBottle(
+    {
+      ...store,
+      operation: "merge-json",
+      expectedAssetRevision: 1,
+      idempotencyKey: "test-inline-update",
+      jsonMergePatch: patch,
+    },
+    context,
+  );
   expect(updated.assetRevision).toBe(2);
   expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({
-    operation: "create", correlationId: "corr-a", inlineJson: document,
+    operation: "create",
+    correlationId: "corr-a",
+    inlineJson: document,
   });
   expect(JSON.parse(fetchImpl.mock.calls[1][1].body)).toEqual({
-    operation: "merge-json", correlationId: "corr-a", expectedAssetRevision: 1, jsonMergePatch: patch,
+    operation: "merge-json",
+    correlationId: "corr-a",
+    expectedAssetRevision: 1,
+    jsonMergePatch: patch,
   });
   expect(fetchImpl.mock.calls[1][1].headers["Idempotency-Key"]).toBe("test-inline-update");
-  const fetched = await executeBlobFetchBottle({ ...fetchBottle("records"), inlineJson: true }, context);
+  const fetched = await executeBlobFetchBottle(
+    { ...fetchBottle("records"), inlineJson: true },
+    context,
+  );
   expect(fetchImpl.mock.calls[2][0]).toMatch(/\/records\?inlineJson=true$/);
   expect(fetched.inlineJson).toEqual({ records: ["회의"], details: { add: false } });
 });
