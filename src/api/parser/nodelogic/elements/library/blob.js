@@ -445,7 +445,7 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
     const operation = bottlecontent.operation ?? "create";
-    if (!["create", "overwrite"].includes(operation)) {
+    if (!["create", "overwrite", "merge-json"].includes(operation)) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
     if (
@@ -453,6 +453,44 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       bottlecontent.blobElementId.trim() === ""
     ) {
       throw new BlobRuntimeError("invalid_blob_bottle");
+    }
+    const isPatch = operation === "merge-json";
+    const hasInlineJson = Object.hasOwn(bottlecontent, "inlineJson");
+    const patch = bottlecontent.jsonMergePatch;
+    const isPatchObject = patch !== null && typeof patch === "object" && !Array.isArray(patch);
+    if (!isPatch && Object.hasOwn(bottlecontent, "jsonMergePatch")) {
+      throw new BlobRuntimeError("invalid_blob_bottle");
+    }
+    if (isPatch || hasInlineJson) {
+      if (
+        (isPatch && (hasInlineJson || !isPatchObject)) ||
+        (hasInlineJson && bottlecontent.inlineJson === undefined) ||
+        ["payloadRef", "contentHash", "contentLength"].some((key) => Object.hasOwn(bottlecontent, key)) ||
+        (bottlecontent.contentType !== undefined && bottlecontent.contentType !== "application/json")
+      ) {
+        throw new BlobRuntimeError("invalid_blob_bottle");
+      }
+      if (
+        operation !== "create" &&
+        (!Number.isSafeInteger(bottlecontent.expectedAssetRevision) || bottlecontent.expectedAssetRevision < 1)
+      ) {
+        throw new BlobRuntimeError("asset_revision_mismatch");
+      }
+      const objectId = normalizeBlobObjectId(bottlecontent.requestedObjectId);
+      const stored = await callStorage("putInlineJson", executionContext.blobStorageAdapter, {
+        ...commonStorageInput(executionContext, bottlecontent, objectId),
+        operation,
+        ...(isPatch ? { jsonMergePatch: patch } : { inlineJson: bottlecontent.inlineJson }),
+        expectedAssetRevision: bottlecontent.expectedAssetRevision,
+        idempotencyKey: normalizeIdempotencyKey(
+          bottlecontent.idempotencyKey ??
+          executionContext.blobOperationIdFactory?.() ??
+          defaultBlobOperationIdFactory(),
+        ),
+        description: bottlecontent.description,
+        annotations: bottlecontent.annotations,
+      });
+      return normalizeBlobMetadata(stored, { blobElementId: bottlecontent.blobElementId, objectId });
     }
     const contentType = normalizeContentType(bottlecontent.contentType);
     const contentHash = assertHash(bottlecontent.contentHash);
@@ -576,6 +614,7 @@ const executeBlobFetchBottle = async (rawBottle, executionContext) => {
     const objectId = normalizeBlobObjectId(bottlecontent.objectId);
     const fetched = await callStorage("getObject", executionContext.blobStorageAdapter, {
       ...commonStorageInput(executionContext, bottlecontent, objectId),
+      ...(bottlecontent.inlineJson === true ? { inlineJson: true } : {}),
       expectedAssetRevision: bottlecontent.expectedAssetRevision,
       expectedContentHash: bottlecontent.expectedContentHash,
     });
@@ -591,10 +630,17 @@ const executeBlobFetchBottle = async (rawBottle, executionContext) => {
     ) {
       throw new BlobRuntimeError("hash_mismatch");
     }
-    return normalizeBlobMetadata(fetched, {
+    const metadata = normalizeBlobMetadata(fetched, {
       blobElementId: bottlecontent.blobElementId,
       objectId,
     });
+    if (bottlecontent.inlineJson === true) {
+      if (!Object.hasOwn(fetched, "inlineJson")) {
+        throw new BlobRuntimeError("storage_unavailable", "Inline JSON is unavailable.");
+      }
+      return { ...metadata, inlineJson: fetched.inlineJson };
+    }
+    return metadata;
   } catch (error) {
     return failureFromError(error, executionContext?.correlationId);
   }
@@ -814,6 +860,18 @@ const createLeafServerBlobStorageAdapter = ({
     operationIds.set(input, generated);
     return generated;
   };
+  const putObject = async (input, body, idempotencyKey) => {
+    const response = await requestLeafServerBlobStorage({
+      baseUrl,
+      credentials,
+      fetchImpl: resolvedFetch,
+      method: "PUT",
+      path: leafServerObjectPath(input),
+      headers: { "Idempotency-Key": idempotencyKey },
+      body,
+    });
+    return readLeafServerBlobJson(response);
+  };
   return {
     resolveRuntimeFileRef: async (input) => {
       const ref = encodeLeafServerPathSegment(input.ref);
@@ -861,16 +919,16 @@ const createLeafServerBlobStorageAdapter = ({
       if (input.annotations !== undefined) {
         body.annotations = input.annotations;
       }
-      const response = await requestLeafServerBlobStorage({
-        baseUrl,
-        credentials,
-        fetchImpl: resolvedFetch,
-        method: "PUT",
-        path: leafServerObjectPath(input),
-        headers: { "Idempotency-Key": idempotencyKey },
-        body,
-      });
-      return readLeafServerBlobJson(response);
+      return putObject(input, body, idempotencyKey);
+    },
+    putInlineJson: (input) => {
+      const { operation, expectedAssetRevision, correlationId, description, annotations } = input;
+      const value = operation === "merge-json"
+        ? { jsonMergePatch: input.jsonMergePatch }
+        : { inlineJson: input.inlineJson };
+      return putObject(input, {
+        operation, expectedAssetRevision, correlationId, description, annotations, ...value,
+      }, resolveMutationId(input));
     },
     getObject: async (input) => {
       const response = await requestLeafServerBlobStorage({
@@ -878,7 +936,7 @@ const createLeafServerBlobStorageAdapter = ({
         credentials,
         fetchImpl: resolvedFetch,
         method: "GET",
-        path: leafServerObjectPath(input),
+        path: leafServerObjectPath(input) + (input.inlineJson === true ? "?inlineJson=true" : ""),
       });
       return readLeafServerBlobJson(response);
     },

@@ -960,3 +960,48 @@ describe("leafelement:blob contract helpers", () => {
     ).rejects.toMatchObject({ code: "storage_denied" });
   });
 });
+
+it("sends raw JSON create and merge requests and requests inline fetch explicitly", async () => {
+  const document = { records: ["회의"], details: { remove: true } };
+  const patch = { details: { remove: null, add: false } };
+  const metadata = {
+    objectId: "records",
+    contentType: "application/json",
+    contentLength: 52,
+    contentHash: HASH_A,
+    assetRevision: 2,
+  };
+  const fetchImpl = vi
+    .fn()
+    .mockResolvedValueOnce(jsonResponse({ body: { ...metadata, assetRevision: 1 } }))
+    .mockResolvedValueOnce(jsonResponse({ body: metadata }))
+    .mockResolvedValueOnce(jsonResponse({
+      body: { ...metadata, inlineJson: { records: ["회의"], details: { add: false } } },
+    }));
+  const context = createContext({ blobStorageAdapter: createLeafServerBlobStorageAdapter({ fetchImpl }) });
+  const store = {
+    schemaVersion: STORE_SCHEMA_VERSION,
+    blobElementId: "blob-node-uuid",
+    requestedObjectId: "records",
+  };
+  const created = await executeBlobStoreBottle({ ...store, inlineJson: document }, context);
+  expect(created.assetRevision).toBe(1);
+  const updated = await executeBlobStoreBottle({
+    ...store,
+    operation: "merge-json",
+    expectedAssetRevision: 1,
+    idempotencyKey: "test-inline-update",
+    jsonMergePatch: patch,
+  }, context);
+  expect(updated.assetRevision).toBe(2);
+  expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({
+    operation: "create", correlationId: "corr-a", inlineJson: document,
+  });
+  expect(JSON.parse(fetchImpl.mock.calls[1][1].body)).toEqual({
+    operation: "merge-json", correlationId: "corr-a", expectedAssetRevision: 1, jsonMergePatch: patch,
+  });
+  expect(fetchImpl.mock.calls[1][1].headers["Idempotency-Key"]).toBe("test-inline-update");
+  const fetched = await executeBlobFetchBottle({ ...fetchBottle("records"), inlineJson: true }, context);
+  expect(fetchImpl.mock.calls[2][0]).toMatch(/\/records\?inlineJson=true$/);
+  expect(fetched.inlineJson).toEqual({ records: ["회의"], details: { add: false } });
+});
