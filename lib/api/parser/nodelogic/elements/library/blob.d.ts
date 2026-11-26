@@ -75,6 +75,23 @@ export function createInMemoryBlobStorageAdapter({ accountName, containerName, m
         assetRevision: any;
         lastModifiedAt: string;
     }>;
+    putInlineJson: (input: any) => Promise<{
+        schemaVersion: string;
+        blobElementId: any;
+        objectId: any;
+        objectType: string;
+        contentType: any;
+        contentLength: any;
+        contentHash: any;
+        storage: {
+            accountName: any;
+            containerName: any;
+            blobName: any;
+        };
+        etag: string;
+        assetRevision: any;
+        lastModifiedAt: string;
+    }>;
     getObject: (input: any) => Promise<any>;
     listObjects: (input: any) => Promise<{
         schemaVersion: string;

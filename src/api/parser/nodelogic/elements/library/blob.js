@@ -10,6 +10,7 @@ const DATA_FILE_SCHEMA_VERSION = "ghostos.blob_data_file.v1";
 const DATA_FILE_PAGE_SCHEMA_VERSION = "ghostos.blob_data_file_page.v1";
 const FAILURE_SCHEMA_VERSION = "ghostos.blob_failure.v1";
 const DEFAULT_MAX_OBJECT_BYTES = 10 * 1024 * 1024;
+const MAX_INLINE_JSON_BYTES = 64 * 1024;
 const DEFAULT_BLOB_LIST_LIMIT = 50;
 const MAX_BLOB_LIST_LIMIT = 100;
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
@@ -1108,12 +1109,44 @@ const createMetadata = (input, revision) => {
   return metadata;
 };
 
+const mergeJsonPatch = (value, patch) => {
+  const result = isPlainObject(value) ? { ...value } : {};
+  for (const [key, member] of Object.entries(patch)) {
+    if (member === null) {
+      delete result[key];
+    } else if (isPlainObject(member)) {
+      result[key] = mergeJsonPatch(result[key], member);
+    } else {
+      result[key] = member;
+    }
+  }
+  return result;
+};
+
+const serializeInlineJson = (value, maxBytes) => {
+  let serialized;
+  try {
+    serialized = JSON.stringify(value);
+  } catch (_error) {
+    throw new BlobRuntimeError("invalid_blob_bottle");
+  }
+  if (typeof serialized !== "string") {
+    throw new BlobRuntimeError("invalid_blob_bottle");
+  }
+  const byteLength = new TextEncoder().encode(serialized).byteLength;
+  if (byteLength > maxBytes) {
+    throw new BlobRuntimeError("oversized_object");
+  }
+  return { serialized, byteLength };
+};
+
 const createInMemoryBlobStorageAdapter = ({
   accountName = "test-account",
   containerName = "test-container",
   maxObjectBytes = DEFAULT_MAX_OBJECT_BYTES,
 } = {}) => {
   const objects = new Map();
+  const objectBodies = new Map();
   const runtimeRefs = new Map();
   const executionCounts = {
     resolveRuntimeFileRef: 0,
@@ -1207,6 +1240,72 @@ const createInMemoryBlobStorageAdapter = ({
       objects.set(key, metadata);
       return metadata;
     },
+    putInlineJson: async (input) => {
+      executionCounts.putObject += 1;
+      const key = keyFor(input);
+      const operation = input.operation ?? "create";
+      const original = objects.get(key);
+      if (operation === "create" && original) {
+        throw new BlobRuntimeError("duplicate_object_id");
+      }
+      if (operation !== "create" && operation !== "overwrite" && operation !== "merge-json") {
+        throw new BlobRuntimeError("invalid_blob_bottle");
+      }
+      if (operation !== "create" && !original) {
+        throw new BlobRuntimeError("missing_object");
+      }
+      if (operation !== "create" && original.assetRevision !== input.expectedAssetRevision) {
+        throw new BlobRuntimeError("asset_revision_mismatch");
+      }
+
+      let value = input.inlineJson;
+      if (operation === "merge-json") {
+        if (!isPlainObject(input.jsonMergePatch)) {
+          throw new BlobRuntimeError("invalid_blob_bottle");
+        }
+        const storedBody = objectBodies.get(key);
+        if (typeof storedBody !== "string") {
+          throw new BlobRuntimeError("storage_unavailable");
+        }
+        value = mergeJsonPatch(JSON.parse(storedBody), input.jsonMergePatch);
+      }
+      const { serialized, byteLength } = serializeInlineJson(
+        value,
+        Math.min(MAX_INLINE_JSON_BYTES, maxObjectBytes),
+      );
+      const contentHash = `sha256:${await sha256Hex(serialized)}`;
+
+      // Hashing yields to the event loop, so recheck the revision immediately
+      // before committing to prevent two concurrent patches from overwriting.
+      const current = objects.get(key);
+      if (operation === "create" && current) {
+        throw new BlobRuntimeError("duplicate_object_id");
+      }
+      if (
+        operation !== "create" &&
+        (!current || current.assetRevision !== input.expectedAssetRevision)
+      ) {
+        throw new BlobRuntimeError("asset_revision_mismatch");
+      }
+      const revision = current ? current.assetRevision + 1 : 1;
+      const metadata = createMetadata(
+        {
+          ...input,
+          contentType: "application/json",
+          contentLength: byteLength,
+          contentHash,
+          accountName,
+          containerName,
+          blobName: blobNameFor(input),
+          description: input.description ?? current?.description,
+          annotations: input.annotations ?? current?.annotations,
+        },
+        revision,
+      );
+      objects.set(key, metadata);
+      objectBodies.set(key, serialized);
+      return metadata;
+    },
     getObject: async (input) => {
       executionCounts.getObject += 1;
       const object = objects.get(keyFor(input));
@@ -1224,6 +1323,16 @@ const createInMemoryBlobStorageAdapter = ({
         object.contentHash !== input.expectedContentHash
       ) {
         throw new BlobRuntimeError("hash_mismatch");
+      }
+      if (input.inlineJson === true) {
+        if (object.contentType !== "application/json") {
+          throw new BlobRuntimeError("unsupported_content_type");
+        }
+        const storedBody = objectBodies.get(keyFor(input));
+        if (typeof storedBody !== "string") {
+          throw new BlobRuntimeError("storage_unavailable");
+        }
+        return { ...object, inlineJson: JSON.parse(storedBody) };
       }
       return object;
     },

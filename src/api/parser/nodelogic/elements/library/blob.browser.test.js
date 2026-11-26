@@ -1020,3 +1020,62 @@ it("sends raw JSON create and merge requests and requests inline fetch explicitl
   expect(fetchImpl.mock.calls[2][0]).toMatch(/\/records\?inlineJson=true$/);
   expect(fetched.inlineJson).toEqual({ records: ["회의"], details: { add: false } });
 });
+
+it("stores, merges, and fetches inline JSON through the in-memory adapter", async () => {
+  const context = createContext();
+  const original = {
+    hello: "world",
+    thete: { goes: "elephant" },
+  };
+  const created = await executeBlobStoreBottle(
+    {
+      schemaVersion: STORE_SCHEMA_VERSION,
+      blobElementId: "blob-node-uuid",
+      requestedObjectId: "inline-memory-record",
+      operation: "create",
+      inlineJson: original,
+    },
+    context,
+  );
+  expect(created).toMatchObject({
+    contentType: "application/json",
+    contentLength: new TextEncoder().encode(JSON.stringify(original)).byteLength,
+    assetRevision: 1,
+  });
+
+  const updated = await executeBlobStoreBottle(
+    {
+      schemaVersion: STORE_SCHEMA_VERSION,
+      blobElementId: "blob-node-uuid",
+      requestedObjectId: "inline-memory-record",
+      operation: "merge-json",
+      expectedAssetRevision: created.assetRevision,
+      jsonMergePatch: { there: { goes: "rabbit" } },
+    },
+    context,
+  );
+  expect(updated.assetRevision).toBe(2);
+
+  const fetched = await executeBlobFetchBottle(
+    fetchBottle("inline-memory-record", { inlineJson: true }),
+    context,
+  );
+  expect(fetched.inlineJson).toEqual({
+    hello: "world",
+    thete: { goes: "elephant" },
+    there: { goes: "rabbit" },
+  });
+
+  const stale = await executeBlobStoreBottle(
+    {
+      schemaVersion: STORE_SCHEMA_VERSION,
+      blobElementId: "blob-node-uuid",
+      requestedObjectId: "inline-memory-record",
+      operation: "merge-json",
+      expectedAssetRevision: created.assetRevision,
+      jsonMergePatch: { status: "stale" },
+    },
+    context,
+  );
+  expect(stale.code).toBe("asset_revision_mismatch");
+});
