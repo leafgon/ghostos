@@ -6,6 +6,7 @@ import { doUnbottle } from "../../datautils/bottling.js";
 const STORE_SCHEMA_VERSION = "ghostos.blob_store_bottle.v1";
 const FETCH_SCHEMA_VERSION = "ghostos.blob_fetch_bottle.v1";
 const LIST_SCHEMA_VERSION = "ghostos.blob_list_bottle.v1";
+const DELEGATED_FETCH_SCHEMA_VERSION = "leafgon.blob_delegated_request.v1";
 const DATA_FILE_SCHEMA_VERSION = "ghostos.blob_data_file.v1";
 const DATA_FILE_PAGE_SCHEMA_VERSION = "ghostos.blob_data_file_page.v1";
 const FAILURE_SCHEMA_VERSION = "ghostos.blob_failure.v1";
@@ -428,6 +429,43 @@ const normalizeBlobMetadata = (metadata, { blobElementId, objectId }) => {
   return normalized;
 };
 
+const normalizeOptionalText = (value) => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+};
+
+const resolveDelegatedFetchRequest = (executionContext) => {
+  const providerGraphDomainId = normalizeOptionalText(executionContext?.providerGraphDomainId);
+  const providerGraphAppId = normalizeOptionalText(executionContext?.providerGraphAppId);
+  if (!providerGraphDomainId || !providerGraphAppId) {
+    return undefined;
+  }
+
+  const callerGraphDomainId = normalizeOptionalText(executionContext?.graphDomainId);
+  const callerGraphAppId = normalizeOptionalText(executionContext?.graphAppId);
+  if (!callerGraphDomainId || !callerGraphAppId) {
+    return undefined;
+  }
+
+  if (providerGraphDomainId === callerGraphDomainId && providerGraphAppId === callerGraphAppId) {
+    return undefined;
+  }
+
+  const callerLeafgraphNodeId = normalizeOptionalText(executionContext?.callerLeafgraphNodeId);
+  const callerLeafspellNodeId = normalizeOptionalText(executionContext?.callerLeafspellNodeId);
+  if (!callerLeafgraphNodeId || !callerLeafspellNodeId) {
+    return undefined;
+  }
+
+  return {
+    callerLeafgraphNodeId,
+    callerLeafspellNodeId,
+  };
+};
+
 const commonStorageInput = (executionContext, bottlecontent, objectId) => ({
   tenantId: executionContext.tenantId,
   graphDomainId: executionContext.graphDomainId,
@@ -620,8 +658,10 @@ const executeBlobFetchBottle = async (rawBottle, executionContext) => {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
     const objectId = normalizeBlobObjectId(bottlecontent.objectId);
+    const delegatedRequest = resolveDelegatedFetchRequest(executionContext);
     const fetched = await callStorage("getObject", executionContext.blobStorageAdapter, {
       ...commonStorageInput(executionContext, bottlecontent, objectId),
+      ...(delegatedRequest ? { delegatedRequest } : {}),
       ...(bottlecontent.inlineJson === true ? { inlineJson: true } : {}),
       expectedAssetRevision: bottlecontent.expectedAssetRevision,
       expectedContentHash: bottlecontent.expectedContentHash,
@@ -818,6 +858,32 @@ const createLeafServerHeadMetadata = (input, response) => {
   };
 };
 
+const buildLeafServerDelegatedFetchBody = (input, delegatedRequest) => {
+  const bottle = {
+    schemaVersion: FETCH_SCHEMA_VERSION,
+    blobElementId: input.blobElementId,
+    objectId: input.objectId,
+  };
+  if (input.inlineJson === true) {
+    bottle.inlineJson = true;
+  }
+  if (input.expectedAssetRevision !== undefined) {
+    bottle.expectedAssetRevision = input.expectedAssetRevision;
+  }
+  if (input.expectedContentHash !== undefined) {
+    bottle.expectedContentHash = input.expectedContentHash;
+  }
+  return {
+    schemaVersion: DELEGATED_FETCH_SCHEMA_VERSION,
+    callerGraphDomainId: input.graphDomainId,
+    callerGraphAppId: input.graphAppId,
+    callerLeafgraphNodeId: delegatedRequest.callerLeafgraphNodeId,
+    callerLeafspellNodeId: delegatedRequest.callerLeafspellNodeId,
+    bottle,
+    correlationId: input.correlationId,
+  };
+};
+
 const requestLeafServerBlobStorage = async ({
   baseUrl,
   credentials,
@@ -949,13 +1015,29 @@ const createLeafServerBlobStorageAdapter = ({
       );
     },
     getObject: async (input) => {
-      const response = await requestLeafServerBlobStorage({
-        baseUrl,
-        credentials,
-        fetchImpl: resolvedFetch,
-        method: "GET",
-        path: leafServerObjectPath(input) + (input.inlineJson === true ? "?inlineJson=true" : ""),
-      });
+      const delegatedRequest =
+        isPlainObject(input?.delegatedRequest) &&
+        typeof input.delegatedRequest.callerLeafgraphNodeId === "string" &&
+        typeof input.delegatedRequest.callerLeafspellNodeId === "string"
+          ? input.delegatedRequest
+          : undefined;
+      const response = delegatedRequest
+        ? await requestLeafServerBlobStorage({
+            baseUrl,
+            credentials,
+            fetchImpl: resolvedFetch,
+            method: "POST",
+            path: "api/v1/blob-storage/delegated/objects",
+            body: buildLeafServerDelegatedFetchBody(input, delegatedRequest),
+          })
+        : await requestLeafServerBlobStorage({
+            baseUrl,
+            credentials,
+            fetchImpl: resolvedFetch,
+            method: "GET",
+            path:
+              leafServerObjectPath(input) + (input.inlineJson === true ? "?inlineJson=true" : ""),
+          });
       return readLeafServerBlobJson(response);
     },
     listObjects: async (input) => {
