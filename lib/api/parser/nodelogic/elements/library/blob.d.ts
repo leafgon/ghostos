@@ -75,6 +75,23 @@ export function createInMemoryBlobStorageAdapter({ accountName, containerName, m
         assetRevision: any;
         lastModifiedAt: string;
     }>;
+    putInlineJson: (input: any) => Promise<{
+        schemaVersion: string;
+        blobElementId: any;
+        objectId: any;
+        objectType: string;
+        contentType: any;
+        contentLength: any;
+        contentHash: any;
+        storage: {
+            accountName: any;
+            containerName: any;
+            blobName: any;
+        };
+        etag: string;
+        assetRevision: any;
+        lastModifiedAt: string;
+    }>;
     getObject: (input: any) => Promise<any>;
     listObjects: (input: any) => Promise<{
         schemaVersion: string;
@@ -104,6 +121,7 @@ export function createLeafServerBlobStorageAdapter({ baseUrl, fetchImpl, credent
         lastModifiedAt: any;
     }>;
     putObject: (input: any) => Promise<any>;
+    putInlineJson: (input: any) => Promise<any>;
     getObject: (input: any) => Promise<any>;
     listObjects: (input: any) => Promise<any>;
     deleteObject: (input: any) => Promise<any>;
@@ -161,6 +179,19 @@ export function executeBlobFetchBottle(rawBottle: any, executionContext: any): P
     safeMessage: any;
     correlationId: any;
 } | {
+    schemaVersion: string;
+    blobElementId: any;
+    objectId: any;
+    objectType: any;
+    contentType: any;
+    contentLength: any;
+    contentHash: any;
+    storage: any;
+    etag: any;
+    assetRevision: any;
+    lastModifiedAt: any;
+} | {
+    inlineJson: any;
     schemaVersion: string;
     blobElementId: any;
     objectId: any;

@@ -10,6 +10,7 @@ const DATA_FILE_SCHEMA_VERSION = "ghostos.blob_data_file.v1";
 const DATA_FILE_PAGE_SCHEMA_VERSION = "ghostos.blob_data_file_page.v1";
 const FAILURE_SCHEMA_VERSION = "ghostos.blob_failure.v1";
 const DEFAULT_MAX_OBJECT_BYTES = 10 * 1024 * 1024;
+const MAX_INLINE_JSON_BYTES = 64 * 1024;
 const DEFAULT_BLOB_LIST_LIMIT = 50;
 const MAX_BLOB_LIST_LIMIT = 100;
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
@@ -445,7 +446,7 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
     const operation = bottlecontent.operation ?? "create";
-    if (!["create", "overwrite"].includes(operation)) {
+    if (!["create", "overwrite", "merge-json"].includes(operation)) {
       throw new BlobRuntimeError("invalid_blob_bottle");
     }
     if (
@@ -453,6 +454,51 @@ const executeBlobStoreBottle = async (rawBottle, executionContext) => {
       bottlecontent.blobElementId.trim() === ""
     ) {
       throw new BlobRuntimeError("invalid_blob_bottle");
+    }
+    const isPatch = operation === "merge-json";
+    const hasInlineJson = Object.hasOwn(bottlecontent, "inlineJson");
+    const patch = bottlecontent.jsonMergePatch;
+    const isPatchObject = patch !== null && typeof patch === "object" && !Array.isArray(patch);
+    if (!isPatch && Object.hasOwn(bottlecontent, "jsonMergePatch")) {
+      throw new BlobRuntimeError("invalid_blob_bottle");
+    }
+    if (isPatch || hasInlineJson) {
+      if (
+        (isPatch && (hasInlineJson || !isPatchObject)) ||
+        (hasInlineJson && bottlecontent.inlineJson === undefined) ||
+        ["payloadRef", "contentHash", "contentLength"].some((key) =>
+          Object.hasOwn(bottlecontent, key),
+        ) ||
+        (bottlecontent.contentType !== undefined &&
+          bottlecontent.contentType !== "application/json")
+      ) {
+        throw new BlobRuntimeError("invalid_blob_bottle");
+      }
+      if (
+        operation !== "create" &&
+        (!Number.isSafeInteger(bottlecontent.expectedAssetRevision) ||
+          bottlecontent.expectedAssetRevision < 1)
+      ) {
+        throw new BlobRuntimeError("asset_revision_mismatch");
+      }
+      const objectId = normalizeBlobObjectId(bottlecontent.requestedObjectId);
+      const stored = await callStorage("putInlineJson", executionContext.blobStorageAdapter, {
+        ...commonStorageInput(executionContext, bottlecontent, objectId),
+        operation,
+        ...(isPatch ? { jsonMergePatch: patch } : { inlineJson: bottlecontent.inlineJson }),
+        expectedAssetRevision: bottlecontent.expectedAssetRevision,
+        idempotencyKey: normalizeIdempotencyKey(
+          bottlecontent.idempotencyKey ??
+            executionContext.blobOperationIdFactory?.() ??
+            defaultBlobOperationIdFactory(),
+        ),
+        description: bottlecontent.description,
+        annotations: bottlecontent.annotations,
+      });
+      return normalizeBlobMetadata(stored, {
+        blobElementId: bottlecontent.blobElementId,
+        objectId,
+      });
     }
     const contentType = normalizeContentType(bottlecontent.contentType);
     const contentHash = assertHash(bottlecontent.contentHash);
@@ -576,6 +622,7 @@ const executeBlobFetchBottle = async (rawBottle, executionContext) => {
     const objectId = normalizeBlobObjectId(bottlecontent.objectId);
     const fetched = await callStorage("getObject", executionContext.blobStorageAdapter, {
       ...commonStorageInput(executionContext, bottlecontent, objectId),
+      ...(bottlecontent.inlineJson === true ? { inlineJson: true } : {}),
       expectedAssetRevision: bottlecontent.expectedAssetRevision,
       expectedContentHash: bottlecontent.expectedContentHash,
     });
@@ -591,10 +638,17 @@ const executeBlobFetchBottle = async (rawBottle, executionContext) => {
     ) {
       throw new BlobRuntimeError("hash_mismatch");
     }
-    return normalizeBlobMetadata(fetched, {
+    const metadata = normalizeBlobMetadata(fetched, {
       blobElementId: bottlecontent.blobElementId,
       objectId,
     });
+    if (bottlecontent.inlineJson === true) {
+      if (!Object.hasOwn(fetched, "inlineJson")) {
+        throw new BlobRuntimeError("storage_unavailable", "Inline JSON is unavailable.");
+      }
+      return { ...metadata, inlineJson: fetched.inlineJson };
+    }
+    return metadata;
   } catch (error) {
     return failureFromError(error, executionContext?.correlationId);
   }
@@ -814,6 +868,18 @@ const createLeafServerBlobStorageAdapter = ({
     operationIds.set(input, generated);
     return generated;
   };
+  const putObject = async (input, body, idempotencyKey) => {
+    const response = await requestLeafServerBlobStorage({
+      baseUrl,
+      credentials,
+      fetchImpl: resolvedFetch,
+      method: "PUT",
+      path: leafServerObjectPath(input),
+      headers: { "Idempotency-Key": idempotencyKey },
+      body,
+    });
+    return readLeafServerBlobJson(response);
+  };
   return {
     resolveRuntimeFileRef: async (input) => {
       const ref = encodeLeafServerPathSegment(input.ref);
@@ -861,16 +927,26 @@ const createLeafServerBlobStorageAdapter = ({
       if (input.annotations !== undefined) {
         body.annotations = input.annotations;
       }
-      const response = await requestLeafServerBlobStorage({
-        baseUrl,
-        credentials,
-        fetchImpl: resolvedFetch,
-        method: "PUT",
-        path: leafServerObjectPath(input),
-        headers: { "Idempotency-Key": idempotencyKey },
-        body,
-      });
-      return readLeafServerBlobJson(response);
+      return putObject(input, body, idempotencyKey);
+    },
+    putInlineJson: (input) => {
+      const { operation, expectedAssetRevision, correlationId, description, annotations } = input;
+      const value =
+        operation === "merge-json"
+          ? { jsonMergePatch: input.jsonMergePatch }
+          : { inlineJson: input.inlineJson };
+      return putObject(
+        input,
+        {
+          operation,
+          expectedAssetRevision,
+          correlationId,
+          description,
+          annotations,
+          ...value,
+        },
+        resolveMutationId(input),
+      );
     },
     getObject: async (input) => {
       const response = await requestLeafServerBlobStorage({
@@ -878,7 +954,7 @@ const createLeafServerBlobStorageAdapter = ({
         credentials,
         fetchImpl: resolvedFetch,
         method: "GET",
-        path: leafServerObjectPath(input),
+        path: leafServerObjectPath(input) + (input.inlineJson === true ? "?inlineJson=true" : ""),
       });
       return readLeafServerBlobJson(response);
     },
@@ -1033,12 +1109,86 @@ const createMetadata = (input, revision) => {
   return metadata;
 };
 
+const mergeJsonPatch = (value, patch) => {
+  const result = isPlainObject(value) ? { ...value } : {};
+  for (const [key, member] of Object.entries(patch)) {
+    if (member === null) {
+      delete result[key];
+    } else if (isPlainObject(member)) {
+      const existing = Object.hasOwn(result, key) ? result[key] : undefined;
+      Object.defineProperty(result, key, {
+        value: mergeJsonPatch(existing, member),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    } else {
+      Object.defineProperty(result, key, {
+        value: member,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
+  }
+  return result;
+};
+
+const compareJsonKeys = (left, right) => {
+  const leftCodePoints = Array.from(left, (character) => character.codePointAt(0));
+  const rightCodePoints = Array.from(right, (character) => character.codePointAt(0));
+  const count = Math.min(leftCodePoints.length, rightCodePoints.length);
+  for (let index = 0; index < count; index += 1) {
+    if (leftCodePoints[index] !== rightCodePoints[index]) {
+      return leftCodePoints[index] - rightCodePoints[index];
+    }
+  }
+  return leftCodePoints.length - rightCodePoints.length;
+};
+
+const canonicalizeInlineJson = (value) => {
+  if (Array.isArray(value)) {
+    return `[${value.map((member) => canonicalizeInlineJson(member) ?? "null").join(",")}]`;
+  }
+  if (isPlainObject(value)) {
+    const members = Object.keys(value)
+      .sort(compareJsonKeys)
+      .flatMap((key) => {
+        const encoded = canonicalizeInlineJson(value[key]);
+        return encoded === undefined ? [] : [`${JSON.stringify(key)}:${encoded}`];
+      });
+    return `{${members.join(",")}}`;
+  }
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    return "null";
+  }
+  return JSON.stringify(value);
+};
+
+const serializeInlineJson = (value, maxBytes) => {
+  let serialized;
+  try {
+    serialized = canonicalizeInlineJson(value);
+  } catch (_error) {
+    throw new BlobRuntimeError("invalid_blob_bottle");
+  }
+  if (typeof serialized !== "string") {
+    throw new BlobRuntimeError("invalid_blob_bottle");
+  }
+  const byteLength = new TextEncoder().encode(serialized).byteLength;
+  if (byteLength > maxBytes) {
+    throw new BlobRuntimeError("oversized_object");
+  }
+  return { serialized, byteLength };
+};
+
 const createInMemoryBlobStorageAdapter = ({
   accountName = "test-account",
   containerName = "test-container",
   maxObjectBytes = DEFAULT_MAX_OBJECT_BYTES,
 } = {}) => {
   const objects = new Map();
+  const objectBodies = new Map();
   const runtimeRefs = new Map();
   const executionCounts = {
     resolveRuntimeFileRef: 0,
@@ -1130,6 +1280,74 @@ const createInMemoryBlobStorageAdapter = ({
         revision,
       );
       objects.set(key, metadata);
+      objectBodies.delete(key);
+      return metadata;
+    },
+    putInlineJson: async (input) => {
+      executionCounts.putObject += 1;
+      const key = keyFor(input);
+      const operation = input.operation ?? "create";
+      const original = objects.get(key);
+      if (operation === "create" && original) {
+        throw new BlobRuntimeError("duplicate_object_id");
+      }
+      if (operation !== "create" && operation !== "overwrite" && operation !== "merge-json") {
+        throw new BlobRuntimeError("invalid_blob_bottle");
+      }
+      if (operation !== "create" && !original) {
+        throw new BlobRuntimeError("missing_object");
+      }
+      if (operation !== "create" && original.assetRevision !== input.expectedAssetRevision) {
+        throw new BlobRuntimeError("asset_revision_mismatch");
+      }
+
+      let value = input.inlineJson;
+      if (operation === "merge-json") {
+        if (!isPlainObject(input.jsonMergePatch)) {
+          throw new BlobRuntimeError("invalid_blob_bottle");
+        }
+        serializeInlineJson(input.jsonMergePatch, Math.min(MAX_INLINE_JSON_BYTES, maxObjectBytes));
+        const storedBody = objectBodies.get(key);
+        if (typeof storedBody !== "string") {
+          throw new BlobRuntimeError("storage_unavailable");
+        }
+        value = mergeJsonPatch(JSON.parse(storedBody), input.jsonMergePatch);
+      }
+      const { serialized, byteLength } = serializeInlineJson(
+        value,
+        Math.min(MAX_INLINE_JSON_BYTES, maxObjectBytes),
+      );
+      const contentHash = `sha256:${await sha256Hex(serialized)}`;
+
+      // Hashing yields to the event loop, so recheck the revision immediately
+      // before committing to prevent two concurrent patches from overwriting.
+      const current = objects.get(key);
+      if (operation === "create" && current) {
+        throw new BlobRuntimeError("duplicate_object_id");
+      }
+      if (
+        operation !== "create" &&
+        (!current || current.assetRevision !== input.expectedAssetRevision)
+      ) {
+        throw new BlobRuntimeError("asset_revision_mismatch");
+      }
+      const revision = current ? current.assetRevision + 1 : 1;
+      const metadata = createMetadata(
+        {
+          ...input,
+          contentType: "application/json",
+          contentLength: byteLength,
+          contentHash,
+          accountName,
+          containerName,
+          blobName: blobNameFor(input),
+          description: input.description ?? current?.description,
+          annotations: input.annotations ?? current?.annotations,
+        },
+        revision,
+      );
+      objects.set(key, metadata);
+      objectBodies.set(key, serialized);
       return metadata;
     },
     getObject: async (input) => {
@@ -1149,6 +1367,16 @@ const createInMemoryBlobStorageAdapter = ({
         object.contentHash !== input.expectedContentHash
       ) {
         throw new BlobRuntimeError("hash_mismatch");
+      }
+      if (input.inlineJson === true) {
+        if (object.contentType !== "application/json") {
+          throw new BlobRuntimeError("unsupported_content_type");
+        }
+        const storedBody = objectBodies.get(keyFor(input));
+        if (typeof storedBody !== "string") {
+          throw new BlobRuntimeError("storage_unavailable");
+        }
+        return { ...object, inlineJson: JSON.parse(storedBody) };
       }
       return object;
     },
@@ -1181,6 +1409,7 @@ const createInMemoryBlobStorageAdapter = ({
         throw new BlobRuntimeError("asset_revision_mismatch");
       }
       objects.delete(key);
+      objectBodies.delete(key);
       return object;
     },
   };
