@@ -740,6 +740,162 @@ describe("leafelement:blob contract helpers", () => {
     expect(fetchImpl.mock.calls[4][1].headers["Idempotency-Key"]).toBe("operation-00000001");
   });
 
+  it("routes cross-namespace fetches through delegated blob auth", async () => {
+    const storedMetadata = {
+      schemaVersion: "ghostos.blob_data_file.v1",
+      blobElementId: "provider-blob",
+      objectId: "report",
+      objectType: "file",
+      contentType: "application/json",
+      contentLength: 42,
+      contentHash: HASH_A,
+      assetRevision: 7,
+      inlineJson: { status: "ok" },
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse({ body: storedMetadata }));
+    const adapter = createLeafServerBlobStorageAdapter({
+      baseUrl: "https://www.leafgon.com",
+      fetchImpl,
+    });
+
+    const delegated = await adapter.getObject({
+      tenantId: "caller-domain",
+      graphDomainId: "caller-domain",
+      graphAppId: "caller-app",
+      blobElementId: "provider-blob",
+      objectId: "report",
+      inlineJson: true,
+      expectedAssetRevision: 7,
+      expectedContentHash: HASH_A,
+      correlationId: "corr-a",
+      delegatedRequest: {
+        callerLeafgraphNodeId: "caller-leafgraph",
+        callerLeafspellNodeId: "caller-leafspell",
+      },
+    });
+
+    expect(delegated).toEqual(storedMetadata);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://www.leafgon.com/api/v1/blob-storage/delegated/objects",
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          schemaVersion: "leafgon.blob_delegated_request.v1",
+          callerGraphDomainId: "caller-domain",
+          callerGraphAppId: "caller-app",
+          callerLeafgraphNodeId: "caller-leafgraph",
+          callerLeafspellNodeId: "caller-leafspell",
+          bottle: {
+            schemaVersion: FETCH_SCHEMA_VERSION,
+            blobElementId: "provider-blob",
+            objectId: "report",
+            inlineJson: true,
+            expectedAssetRevision: 7,
+            expectedContentHash: HASH_A,
+          },
+          correlationId: "corr-a",
+        }),
+      },
+    );
+  });
+
+  it("passes delegated caller topology into blob fetch adapter input", async () => {
+    const adapter = {
+      resolveRuntimeFileRef: vi.fn(),
+      putObject: vi.fn(),
+      headObject: vi.fn(),
+      deleteObject: vi.fn(),
+      getObject: vi.fn(async () => ({
+        schemaVersion: "ghostos.blob_data_file.v1",
+        blobElementId: "provider-blob",
+        objectId: "report",
+        objectType: "file",
+        contentType: "application/json",
+        contentLength: 42,
+        contentHash: HASH_A,
+        assetRevision: 1,
+      })),
+    };
+    const context = createContext({
+      graphDomainId: "caller-domain",
+      graphAppId: "caller-app",
+      providerGraphDomainId: "provider-domain",
+      providerGraphAppId: "provider-app",
+      callerLeafgraphNodeId: "caller-leafgraph",
+      callerLeafspellNodeId: "caller-leafspell",
+      blobStorageAdapter: adapter,
+    });
+
+    await executeBlobFetchBottle(
+      fetchBottle("report", { blobElementId: "provider-blob", inlineJson: true }),
+      context,
+    );
+
+    expect(adapter.getObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        graphDomainId: "caller-domain",
+        graphAppId: "caller-app",
+        blobElementId: "provider-blob",
+        objectId: "report",
+        delegatedRequest: {
+          callerLeafgraphNodeId: "caller-leafgraph",
+          callerLeafspellNodeId: "caller-leafspell",
+        },
+      }),
+    );
+  });
+
+  it("executes cross-namespace fetches through delegated leaf-server transport", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        body: {
+          schemaVersion: "ghostos.blob_data_file.v1",
+          blobElementId: "provider-blob",
+          objectId: "report",
+          objectType: "file",
+          contentType: "application/json",
+          contentLength: 42,
+          contentHash: HASH_A,
+          assetRevision: 7,
+          inlineJson: { status: "ok" },
+        },
+      }),
+    );
+    const context = createContext({
+      graphDomainId: "caller-domain",
+      graphAppId: "caller-app",
+      providerGraphDomainId: "provider-domain",
+      providerGraphAppId: "provider-app",
+      callerLeafgraphNodeId: "caller-leafgraph",
+      callerLeafspellNodeId: "caller-leafspell",
+      blobStorageAdapter: createLeafServerBlobStorageAdapter({
+        baseUrl: "https://www.leafgon.com",
+        fetchImpl,
+      }),
+    });
+
+    await executeBlobFetchBottle(
+      fetchBottle("report", {
+        blobElementId: "provider-blob",
+        inlineJson: true,
+        expectedAssetRevision: 7,
+        expectedContentHash: HASH_A,
+      }),
+      context,
+    );
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://www.leafgon.com/api/v1/blob-storage/delegated/objects",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+      }),
+    );
+  });
+
   it("keeps mutation IDs stable across transport retries and rejects unsafe metadata", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ body: { assetRevision: 1 } }));
     const operationIdFactory = vi
