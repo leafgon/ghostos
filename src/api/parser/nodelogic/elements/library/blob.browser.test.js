@@ -1043,6 +1043,35 @@ it("stores, merges, and fetches inline JSON through the in-memory adapter", asyn
     assetRevision: 1,
   });
 
+  const keyOrderA = await executeBlobStoreBottle(
+    {
+      schemaVersion: STORE_SCHEMA_VERSION,
+      blobElementId: "blob-node-uuid",
+      requestedObjectId: "inline-memory-order-a",
+      operation: "create",
+      inlineJson: { z: 1, a: 2 },
+    },
+    context,
+  );
+  const keyOrderB = await executeBlobStoreBottle(
+    {
+      schemaVersion: STORE_SCHEMA_VERSION,
+      blobElementId: "blob-node-uuid",
+      requestedObjectId: "inline-memory-order-b",
+      operation: "create",
+      inlineJson: { a: 2, z: 1 },
+    },
+    context,
+  );
+  expect(keyOrderA.contentHash).toBe(keyOrderB.contentHash);
+  const canonicalDigest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode('{"a":2,"z":1}'),
+  );
+  expect(keyOrderA.contentHash).toBe(
+    `sha256:${Array.from(new Uint8Array(canonicalDigest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`,
+  );
+
   const updated = await executeBlobStoreBottle(
     {
       schemaVersion: STORE_SCHEMA_VERSION,
@@ -1050,7 +1079,7 @@ it("stores, merges, and fetches inline JSON through the in-memory adapter", asyn
       requestedObjectId: "inline-memory-record",
       operation: "merge-json",
       expectedAssetRevision: created.assetRevision,
-      jsonMergePatch: { there: { goes: "rabbit" } },
+      jsonMergePatch: JSON.parse('{"there":{"goes":"rabbit"},"__proto__":{"preserved":true}}'),
     },
     context,
   );
@@ -1060,11 +1089,31 @@ it("stores, merges, and fetches inline JSON through the in-memory adapter", asyn
     fetchBottle("inline-memory-record", { inlineJson: true }),
     context,
   );
-  expect(fetched.inlineJson).toEqual({
-    hello: "world",
-    thete: { goes: "elephant" },
-    there: { goes: "rabbit" },
+  expect(fetched.inlineJson).toEqual(
+    JSON.parse(
+      '{"__proto__":{"preserved":true},"hello":"world","thete":{"goes":"elephant"},"there":{"goes":"rabbit"}}',
+    ),
+  );
+  expect(Object.hasOwn(fetched.inlineJson, "__proto__")).toBe(true);
+  expect(Object.getPrototypeOf(fetched.inlineJson)).toBe(Object.prototype);
+
+  await context.blobStorageAdapter.putObject({
+    tenantId: context.tenantId,
+    graphDomainId: context.graphDomainId,
+    graphAppId: context.graphAppId,
+    blobElementId: "blob-node-uuid",
+    objectId: "inline-memory-record",
+    operation: "overwrite",
+    expectedAssetRevision: updated.assetRevision,
+    contentType: "application/json",
+    contentLength: 1,
+    contentHash: HASH_B,
   });
+  const unavailableInlineFetch = await executeBlobFetchBottle(
+    fetchBottle("inline-memory-record", { inlineJson: true }),
+    context,
+  );
+  expect(unavailableInlineFetch.code).toBe("storage_unavailable");
 
   const stale = await executeBlobStoreBottle(
     {
@@ -1078,4 +1127,31 @@ it("stores, merges, and fetches inline JSON through the in-memory adapter", asyn
     context,
   );
   expect(stale.code).toBe("asset_revision_mismatch");
+});
+
+it("enforces the inline JSON limit on merge patch input", async () => {
+  const context = createContext();
+  const stored = await executeBlobStoreBottle(
+    {
+      schemaVersion: STORE_SCHEMA_VERSION,
+      blobElementId: "blob-node-uuid",
+      requestedObjectId: "inline-large-deletion-patch",
+      operation: "create",
+      inlineJson: { keep: true },
+    },
+    context,
+  );
+  const oversizedPatch = { ["x".repeat(64 * 1024)]: null };
+  const result = await executeBlobStoreBottle(
+    {
+      schemaVersion: STORE_SCHEMA_VERSION,
+      blobElementId: "blob-node-uuid",
+      requestedObjectId: "inline-large-deletion-patch",
+      operation: "merge-json",
+      expectedAssetRevision: stored.assetRevision,
+      jsonMergePatch: oversizedPatch,
+    },
+    context,
+  );
+  expect(result.code).toBe("oversized_object");
 });

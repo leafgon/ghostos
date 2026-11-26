@@ -1115,18 +1115,60 @@ const mergeJsonPatch = (value, patch) => {
     if (member === null) {
       delete result[key];
     } else if (isPlainObject(member)) {
-      result[key] = mergeJsonPatch(result[key], member);
+      const existing = Object.hasOwn(result, key) ? result[key] : undefined;
+      Object.defineProperty(result, key, {
+        value: mergeJsonPatch(existing, member),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     } else {
-      result[key] = member;
+      Object.defineProperty(result, key, {
+        value: member,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
   return result;
 };
 
+const compareJsonKeys = (left, right) => {
+  const leftCodePoints = Array.from(left, (character) => character.codePointAt(0));
+  const rightCodePoints = Array.from(right, (character) => character.codePointAt(0));
+  const count = Math.min(leftCodePoints.length, rightCodePoints.length);
+  for (let index = 0; index < count; index += 1) {
+    if (leftCodePoints[index] !== rightCodePoints[index]) {
+      return leftCodePoints[index] - rightCodePoints[index];
+    }
+  }
+  return leftCodePoints.length - rightCodePoints.length;
+};
+
+const canonicalizeInlineJson = (value) => {
+  if (Array.isArray(value)) {
+    return `[${value.map((member) => canonicalizeInlineJson(member) ?? "null").join(",")}]`;
+  }
+  if (isPlainObject(value)) {
+    const members = Object.keys(value)
+      .sort(compareJsonKeys)
+      .flatMap((key) => {
+        const encoded = canonicalizeInlineJson(value[key]);
+        return encoded === undefined ? [] : [`${JSON.stringify(key)}:${encoded}`];
+      });
+    return `{${members.join(",")}}`;
+  }
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    return "null";
+  }
+  return JSON.stringify(value);
+};
+
 const serializeInlineJson = (value, maxBytes) => {
   let serialized;
   try {
-    serialized = JSON.stringify(value);
+    serialized = canonicalizeInlineJson(value);
   } catch (_error) {
     throw new BlobRuntimeError("invalid_blob_bottle");
   }
@@ -1238,6 +1280,7 @@ const createInMemoryBlobStorageAdapter = ({
         revision,
       );
       objects.set(key, metadata);
+      objectBodies.delete(key);
       return metadata;
     },
     putInlineJson: async (input) => {
@@ -1263,6 +1306,7 @@ const createInMemoryBlobStorageAdapter = ({
         if (!isPlainObject(input.jsonMergePatch)) {
           throw new BlobRuntimeError("invalid_blob_bottle");
         }
+        serializeInlineJson(input.jsonMergePatch, Math.min(MAX_INLINE_JSON_BYTES, maxObjectBytes));
         const storedBody = objectBodies.get(key);
         if (typeof storedBody !== "string") {
           throw new BlobRuntimeError("storage_unavailable");
@@ -1365,6 +1409,7 @@ const createInMemoryBlobStorageAdapter = ({
         throw new BlobRuntimeError("asset_revision_mismatch");
       }
       objects.delete(key);
+      objectBodies.delete(key);
       return object;
     },
   };
